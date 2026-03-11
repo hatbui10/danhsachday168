@@ -1,181 +1,215 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<title>Luật số</title>
+<title>ABC Logic</title>
 
 <style>
-
 body{
 background:#0f172a;
 font-family:Arial;
-color:white;
 display:flex;
 justify-content:center;
-margin-top:60px;
+align-content:flex-start;
+margin-top:80px;
+color:white;
 }
 
-.box{
-background:#1e293b;
-padding:25px;
-border-radius:12px;
-width:360px;
-}
+.panel{background:#1e293b;padding:25px;border-radius:12px}
+
+.row{display:flex;gap:15px}
+
+.box{display:flex;flex-direction:column;align-items:center}
+
+label{margin-bottom:6px;font-weight:bold}
 
 input{
-width:30%;
-padding:12px;
-font-size:22px;
-text-align:center;
-margin-bottom:10px;
-border-radius:6px;
-border:none;
+width:70px;height:70px;font-size:26px;text-align:center;
+border:none;border-radius:8px
 }
 
-#kq{
-font-size:17px;
-line-height:1.6;
-white-space:pre-line;
-margin-top:10px;
-color:#22c55e;
+.result{
+margin-top:25px;font-size:40px;font-weight:bold;text-align:center;color:#22c55e
 }
-
 </style>
 </head>
 
 <body>
 
+<div class="panel">
+
+<div class="row">
+<div class="box"><label>A</label><input id="A" readonly></div>
+<div class="box"><label>B</label><input id="B" readonly></div>
+<div class="box"><label>C</label><input id="C" readonly></div>
 <div class="box">
+<label>D</label>
+<input id="D" type="tel" inputmode="numeric" pattern="[0-9]*">
+</div>
+</div>
 
-<input 
-id="inputSo"
-maxlength="1"
-inputmode="numeric"
-pattern="[0-9]*"
-placeholder="Nhập số">
-
-<input id="copySo" readonly placeholder="Số đã copy">
-
-<div id="kq"></div>
+<div id="result" class="result">WAIT</div>
 
 </div>
 
 <script>
 
-let input=document.getElementById("inputSo");
-let copy=document.getElementById("copySo");
+const A=document.getElementById("A")
+const B=document.getElementById("B")
+const C=document.getElementById("C")
+const D=document.getElementById("D")
+const result=document.getElementById("result")
 
-window.onload=()=>{
-input.focus();
+window.onload=()=>D.focus()
+
+D.addEventListener("input",()=>{
+
+let v=parseInt(D.value)
+if(isNaN(v)) return
+
+A.value=B.value
+B.value=C.value
+C.value=v
+
+D.value=""
+D.focus()
+
+let a=parseInt(A.value)
+let b=parseInt(B.value)
+let c=parseInt(C.value)
+
+if(!isNaN(a)&&!isNaN(b)&&!isNaN(c)){
+result.textContent=logic(a,b,c)
 }
 
-input.addEventListener("input",function(){
+})
 
-let v=input.value;
+function logic(a,b,c){
 
-if(!/^[0-9]$/.test(v)){
-input.value="";
-return;
+switch(c){
+////////////////////////////////////////////////////////////////
+case 0:
+
+// gặp 000
+if(a==0 && b==0 && c==0) return 0
+
+// trước 0 có 2 số <5
+if(a<5 && b<5) return 0
+
+// trước 0 có 2 số >5
+if(a>5 && b>5) return 1
+
+// trước 0 có 1 số <5
+if( b<5) return 1
+
+// sau 0 mà >7
+if(c>7) return 1
+
+// còn lại
+return 0
+
+////////////////////////////////////////////////////////////////
+case 1: return 1
+////////////////////////////////////////////////////////////////
+case 2:
+
+// có 2 số <5
+if(a<5 && b<5) return 0
+
+// có 2 số >5
+if(a>5 && b>5) return 0
+
+// một lớn một nhỏ
+return 1
+
+////////////////////////////////////////////////////////////////
+case 3:
+
+// gặp 33
+if(b==3 && c==3) return 0
+
+// trước số 3 có 2 số <5
+if(a<5 && b<5) return 1
+
+// còn lại
+return 0
+
+////////////////////////////////////////////////////////////////
+case 4:
+
+// trước số 4 có 2 số <5
+if(a < 5 && b < 5) return 1
+
+// còn lại
+return 0
+
+////////////////////////////////////////////////////////////////
+case 5: return 1
+
+////////////////////////////////////////////////////////////////
+
+case 6:
+
+// hai số đều >5
+if(a > 5 && b > 5) return 1
+
+// hai số đều <5
+if(a < 5 && b < 5) return 1
+
+// một lớn một nhỏ
+return 0
+
+////////////////////////////////////////////////////////////////
+case 7:
+
+// 3 số liên tiếp đều >7
+if(a > 7 && b > 7) return 1
+
+// trước 7 có 2 số <5
+if(a < 5 && b < 5) return 0
+
+// còn lại
+return 0
+
+////////////////////////////////////////////////////////////////
+case 8:
+
+// trước đó là 000
+if(a==0 && b==0) return 1
+
+// hai số giống nhau
+if(a==b){
+    if(a<5) return 1
+    if(a>5) return 0
 }
 
-copy.value=v;
+// một số lớn một số nhỏ
+if((a>5 && b<5) || (a<5 && b>5)) return 0
 
-navigator.clipboard.writeText(v);
+// còn lại
+return 0
 
-hienLuat(Number(v));
+////////////////////////////////////////////////////////////////
+case 9:
 
-setTimeout(()=>{
-input.value="";
-input.focus();
-},50);
+// có ít nhất một số <5
+if(a < 5 || b < 5) return 1
 
-});
+// còn lại
+return 0
 
-function hienLuat(n){
+////////////////////////////////////////////////////////////////
 
-let text="";
-
-if(n==0){
-text=`
-Sau 0 mà là >7 đánh lớn
-Trước 0 mà <5 đánh lớn
-Nếu có 2 cái <5 thì đánh nhỏ
-Nếu gặp 000 thì đắnh nhỏ
-Trước 0 có 2 cái >5 đánh lớn
-Còn lại đánh nhỏ`;
 }
 
-else if(n==1){
-text=`Gặp số 1 là đánh lớn. True`;
-}
-
-else if(n==2){
-text=`Trước số 2 mà 
->5 đánh nhỏ , 
-<5 đánh lớn 
-Nhưng có 2 cái <5 thì đánh nhỏ`;
-}
-
-else if(n==3){
-text=`Trước số 3 
-  có 2 cái <5 đánh lớn;
-  Gặp 33 đánh nhỏ
-  Còn lại đánh nhỏ`
-}
-
-else if(n==4){
-text=`Trước số 4 
-có 2 cái <5 đánh lớn, 
-còn lại đánh nhỏ. True`;
-}
-
-else if(n==5){
-text=`Gặp số 5 đánh lớn. True`;
-}
-
-else if(n==6){
-text=`
-Trước 6 mà >5 đánh lớn True
-Trước 6 có 2 cái <5 đánh lớn
-Trước số 6 là 1 lớn 1 nhỏ thì đánh nhỏ`;
-}
-
-else if(n==7){
-text=`3 số liên tiếp đều >7 thì đánh lớn
-Trước sô 7 
-có 2 cái <5  thì đánh nhỏ`;
-}
-
-else if(n==8){
-text=`Trước 8 có 2 số giống nhau 
-<5 đánh lớn
->5 đánh nhỏ
-Trước 8 có 3 cái nhỏ thì đánh lớn
-Trước 8 mà 1 lớn 1 nhỏ thì đánh nhỏ`;
-}
-
-else if(n==9){
-text=`
-Trước 9 có 2 cái <5 đánh lớn True
-Trước 9 mà 1 lớn 1 nhỏ thì đánh lớn`;
-}
-
-document.getElementById("kq").innerText=text;
-
+return 0
 }
 
 </script>
 
 </body>
 </html>
-
-
-
-
-
-
-
-
 
 
 
