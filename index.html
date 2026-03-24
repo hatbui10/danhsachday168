@@ -96,8 +96,21 @@
 
 <script>
     const DATA_MAP = {
-        "00": { d1: "Lớn", d2: "Nhỏ", d3: "Bình thường", d4: "Ghi chú A" },
-        "01": { d1: "Sản phẩm A", d2: "10k", d3: "Kho 1", d4: "Sẵn hàng" }
+       
+        "00": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x", d4: "x" },    
+"01": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x", d4: "x" },    
+"02": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=2  => dùng Lớn", d4: "x =7  => dùng Lớn" },    
+"03": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=2  => dùng Lớn", d4: "x =7  => dùng Nhỏ" },    
+"04": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=0  => dùng Lớn", d4: "x =9  => dùng Nhỏ" },    
+"05": { d1: "x > 5  => dùng Nhỏ", d2: "x < 5 => dùng Lớn", d3: "x=1  => dùng Lớn", d4: "x =7  => dùng Lớn" },    
+"06": { d1: " dùng Lớn", d2: "dùng Lớn", d3: "x=3  => dùng Nhỏ", d4: "Qqq"},    
+"07": { d1: " dùng Lớn", d2: "x = 0 => dùng Nhỏ", d3: "Bình thường", d4: "Ghi chú A" },    
+"08": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "ggg", d4: "hhh"},    
+"09": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=8 => dùng Nhỏ", d4: "hhh"},    
+"10": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=5  => dùng Nhỏ", d4: "x =9  => dùng Nhỏ"},    
+"11": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=4  => dùng Lớn", d4: "x =9  => dùng Nhỏ" },    
+"12": { d1: "x > 5  => dùng Lớn", d2: "x < 5 => dùng Nhỏ", d3: "x=6 => dùng  Lớn - Nhỏ - Nhỏ", d4: "hhh" }   
+    
     };
 
     const inputEl = document.getElementById('numInput');
