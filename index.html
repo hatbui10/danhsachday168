@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tìm kiếm theo khối số</title>
+    <title>Tìm kiếm khối số</title>
     <style>
         html, body {
             margin: 0; padding: 0;
             width: 100%; min-height: 100vh;
             display: flex; justify-content: center;
             font-family: 'Segoe UI', sans-serif;
-            background: #101216;
+            background: #0d0f13;
             color: #fff;
         }
 
@@ -24,59 +24,66 @@
         /* Vùng tải file */
         .file-upload {
             background: #1c1f26;
-            padding: 15px;
+            padding: 12px;
             border-radius: 10px;
             border: 1px dashed #444;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
-        input[type="file"] { font-size: 0.8rem; color: #888; }
+        input[type="file"] { font-size: 0.75rem; color: #888; }
 
-        /* Ô nhập số to giữa màn hình */
+        /* Ô nhập số */
         #numInput {
-            width: 80%;
-            height: 80px;
-            font-size: 3.5rem;
+            width: 85%;
+            height: 90px;
+            font-size: 4rem;
             font-weight: bold;
             text-align: center;
-            border: 3px solid #ff4757;
-            border-radius: 15px;
+            border: 3px solid #00d2ff;
+            border-radius: 20px;
             background: #000;
-            color: #ff4757;
+            color: #00d2ff;
             outline: none;
             margin-bottom: 20px;
-            box-shadow: 0 0 20px rgba(255, 71, 87, 0.2);
+            box-shadow: 0 0 25px rgba(0, 210, 255, 0.2);
         }
 
-        /* Khu vực hiển thị kết quả quét được */
+        /* Khu vực kết quả */
         #resultArea {
             text-align: left;
-            background: #252a33;
+            background: #1c1f26;
             border-radius: 12px;
             padding: 5px 15px;
-            display: none; /* Chỉ hiện khi có kết quả */
+            display: none;
             border: 1px solid #333;
+            max-height: 400px;
+            overflow-y: auto;
         }
 
         .result-item {
             padding: 12px 0;
-            border-bottom: 1px solid #383e4a;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 1.2rem;
-            letter-spacing: 1px;
+            border-bottom: 1px solid #2d323a;
+            font-family: 'Consolas', monospace;
+            font-size: 1.15rem;
         }
         .result-item:last-child { border-bottom: none; }
 
-        /* Đánh dấu 2 số đầu dòng cho dễ nhìn */
-        .highlight { color: #ffbc00; font-weight: bold; }
+        .highlight { color: #ff4757; font-weight: bold; margin-right: 5px; }
 
-        .status-msg { color: #666; font-size: 0.8rem; margin-top: 10px; }
+        .status-bar { 
+            background: #252a33;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-top: 10px;
+            color: #00ff88;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="file-upload">
-        <div style="margin-bottom: 10px; font-size: 0.9rem;">Nạp dữ liệu từ file .txt</div>
+        <div style="margin-bottom: 8px; font-size: 0.8rem; color: #aaa;">Tải tệp mới để cập nhật dữ liệu:</div>
         <input type="file" id="fileInput" accept=".txt">
     </div>
 
@@ -84,17 +91,32 @@
     
     <div id="resultArea"></div>
 
-    <div class="status-msg" id="infoText">Vui lòng chọn file trước khi nhập</div>
+    <div class="status-bar" id="statusMsg">Đang kiểm tra dữ liệu cũ...</div>
 </div>
 
 <script>
-    let allLines = []; // Lưu danh sách các dòng từ file
+    let allLines = [];
+    const STORAGE_KEY = 'my_txt_data'; // Khóa để lưu vào trình duyệt
+
     const fileInput = document.getElementById('fileInput');
     const numInput = document.getElementById('numInput');
     const resultArea = document.getElementById('resultArea');
-    const infoText = document.getElementById('infoText');
+    const statusMsg = document.getElementById('statusMsg');
 
-    // 1. Đọc và xử lý file khi người dùng chọn
+    // 1. Hàm khởi tạo: Kiểm tra xem LocalStorage có dữ liệu cũ không
+    window.onload = function() {
+        const savedData = localStorage.getItem(STORAGE_KEY);
+        if (savedData) {
+            allLines = JSON.parse(savedData);
+            statusMsg.innerText = "Sẵn sàng! (Đã nạp " + allLines.length + " dòng từ bộ nhớ)";
+        } else {
+            statusMsg.innerText = "Chưa có dữ liệu. Vui lòng tải tệp .txt";
+            statusMsg.style.color = "#ff4757";
+        }
+        numInput.focus();
+    };
+
+    // 2. Xử lý khi người dùng chọn Tệp mới (Cập nhật dữ liệu)
     fileInput.addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -102,41 +124,44 @@
         const reader = new FileReader();
         reader.onload = function(e) {
             const content = e.target.result;
-            // Tách file thành mảng các dòng, lọc bỏ dòng trống
+            // Xử lý nội dung file thành mảng các dòng
             allLines = content.split(/\r?\n/).filter(line => line.trim() !== "");
-            alert("Đã nạp thành công " + allLines.length + " dòng dữ liệu!");
-            infoText.innerText = "Dữ liệu sẵn sàng. Hãy nhập 2 số.";
+            
+            // Lưu mảng này vào LocalStorage dưới dạng chuỗi JSON
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(allLines));
+            
+            alert("Đã cập nhật dữ liệu mới!");
+            statusMsg.innerText = "Đã cập nhật " + allLines.length + " dòng mới.";
+            statusMsg.style.color = "#00ff88";
             numInput.focus();
         };
         reader.readAsText(file);
     });
 
-    // 2. Xử lý logic khi nhập vào ô input
+    // 3. Xử lý khi nhập 2 số
     numInput.addEventListener('input', function() {
-        this.value = this.value.replace(/\D/g, ''); // Chỉ cho phép nhập số
-        
+        this.value = this.value.replace(/\D/g, '');
         const searchVal = this.value;
 
-        // Khi đã nhập đủ 2 chữ số
         if (searchVal.length === 2) {
             if (allLines.length === 0) {
-                alert("Bạn chưa nạp file dữ liệu!");
+                alert("Dữ liệu trống! Hãy tải tệp .txt");
                 this.value = "";
                 return;
             }
 
-            // Tìm các dòng bắt đầu bằng searchVal
+            // Quét tìm dòng khớp
             const matches = allLines.filter(line => line.trim().startsWith(searchVal));
 
             if (matches.length > 0) {
-                resultArea.innerHTML = ""; // Xóa kết quả cũ
+                resultArea.innerHTML = "";
                 resultArea.style.display = "block";
 
                 matches.forEach(line => {
                     const div = document.createElement('div');
                     div.className = 'result-item';
                     
-                    // Highlight 2 số đầu
+                    // Tách 2 số đầu để tô màu
                     const prefix = line.substring(0, 2);
                     const rest = line.substring(2);
                     div.innerHTML = `<span class="highlight">${prefix}</span>${rest}`;
@@ -144,26 +169,26 @@
                     resultArea.appendChild(div);
                 });
 
-                // Tự động copy "[Số]x" như yêu cầu cũ của bạn
-                const copyStr = searchVal + "x";
-                navigator.clipboard.writeText(copyStr).then(() => {
-                    infoText.innerHTML = `Đã tìm thấy ${matches.length} dòng. <b style="color:#00ff88">Copy: ${copyStr}</b>`;
+                // Tự động Copy số đó + "x"
+                const copyText = searchVal + "x";
+                navigator.clipboard.writeText(copyText).then(() => {
+                    statusMsg.innerHTML = `Đã tìm thấy ${matches.length} dòng. <b>Copy: ${copyText}</b>`;
                 });
 
             } else {
                 resultArea.style.display = "none";
-                infoText.innerText = "Không tìm thấy khối: " + searchVal;
+                statusMsg.innerText = "Không tìm thấy khối: " + searchVal;
             }
 
-            // Tự động xóa để nhập lượt mới sau 1 giây
+            // Xóa ô nhập sau 800ms để nhập lượt mới
             setTimeout(() => {
                 this.value = "";
                 this.focus();
-            }, 1000);
+            }, 800);
         }
     });
 
-    // Luôn giữ focus vào ô nhập
+    // Luôn focus
     document.addEventListener('click', (e) => {
         if (e.target !== fileInput) numInput.focus();
     });
