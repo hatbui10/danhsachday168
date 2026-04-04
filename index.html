@@ -1,221 +1,227 @@
-
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Quản Lý Số - Bảo Mật & Lưu Trữ</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trình Lọc Dãy Số MM-Ab-XXXXXX</title>
     <style>
         :root {
-            --bg-body: #0a0a0a;
-            --bg-card: #161616;
-            --text-main: #e0e0e0;
-            --border-color: #2a2a2a;
-            --accent-small: #00ff88;
-            --accent-large: #ff4d4d;
-            --input-bg: #222;
+            --bg-color: #0f0f0f;
+            --card-bg: #1a1a1a;
+            --accent: #00e676;
+            --text: #efefef;
+            --border: #333;
         }
 
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            background-color: var(--bg-body); 
-            padding: 20px; 
-            color: var(--text-main); 
+        body {
+            background-color: var(--bg-color);
+            color: var(--text);
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
         }
 
-        .security-section {
-            max-width: 700px; margin: 0 auto 15px; 
-            background: #1a1a1a; color: white;
-            padding: 15px; border-radius: 12px; text-align: center; 
-            display: flex; justify-content: center; align-items: center; gap: 10px;
-            border: 1px solid var(--border-color);
+        .container {
+            width: 100%;
+            max-width: 650px;
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.7);
         }
 
-        .input-section { 
-            text-align: center; margin-bottom: 25px; 
-            background: var(--bg-card); padding: 20px; 
-            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); 
-            max-width: 700px; margin-left: auto; margin-right: auto;
-            border: 1px solid var(--border-color);
+        .section {
+            border: 1px solid var(--border);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 10px;
         }
-        
-        input, select, button { 
-            padding: 12px; font-size: 16px; border-radius: 6px; 
-            border: 1px solid var(--border-color); 
-            outline: none; margin: 5px; 
-            background: var(--input-bg); color: white;
-        }
-        
-        .btn-save { background-color: #007bff; color: white; border: none; cursor: pointer; font-weight: bold; padding: 12px 30px; }
-        .btn-save:disabled { background-color: #333; color: #666; cursor: not-allowed; }
-        .btn-undo { background-color: #444; color: #ffcc00; border: none; cursor: pointer; font-weight: bold; }
-        .btn-undo:disabled { background-color: #333; color: #666; cursor: not-allowed; }
 
-        .container { display: flex; gap: 20px; max-width: 1000px; margin: 0 auto; align-items: flex-start; }
-        .column { 
-            flex: 1; background: var(--bg-card); 
-            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
-            overflow: hidden; border: 1px solid var(--border-color);
+        .label {
+            font-size: 0.75rem;
+            color: var(--accent);
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
         }
-        
-        .header { padding: 15px; text-align: center; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid var(--border-color); }
-        .bg-large { color: var(--accent-large); }
-        .bg-small { color: var(--accent-small); }
-        
-        .group-row { padding: 12px 15px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; }
-        .group-row:last-child { border-bottom: none; }
-        
-        .tens-label { 
-            background: #2a2a2a; color: #888; 
-            padding: 4px 8px; border-radius: 4px; font-size: 12px; 
-            margin-right: 15px; min-width: 45px; text-align: center; font-weight: bold; 
+
+        /* Nút Upload */
+        input[type="file"] { display: none; }
+        .upload-btn {
+            display: inline-block;
+            background: #222;
+            padding: 10px 20px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
         }
-        .numbers-list { font-size: 20px; font-weight: 600; color: #fff; letter-spacing: 1px; line-height: 1.5; }
-        
-        #lock-status { font-weight: bold; margin-right: 10px; }
-        .status-locked { color: var(--accent-large); }
-        .status-unlocked { color: var(--accent-small); }
+        .upload-btn:hover { border-color: var(--accent); background: #2a2a2a; }
+
+        /* Ô nhập số */
+        #abInput {
+            background: #000;
+            border: 2px solid var(--border);
+            color: var(--accent);
+            font-size: 3rem;
+            width: 130px;
+            text-align: center;
+            border-radius: 10px;
+            outline: none;
+            display: block;
+            margin: 0 auto;
+        }
+        #abInput:focus { border-color: var(--accent); box-shadow: 0 0 15px rgba(0,230,118,0.2); }
+
+        /* Danh sách kết quả */
+        #result-list {
+            margin-top: 10px;
+            max-height: 500px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+        }
+
+        .row {
+            padding: 12px;
+            margin: 8px 0;
+            background: #222;
+            border-radius: 6px;
+            font-size: 1.3rem;
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .mm { color: #888; font-weight: bold; }
+        .ab { color: var(--accent); font-weight: bold; text-decoration: underline; }
+        .xxx { color: #fff; letter-spacing: 2px; }
+        .sep { color: #444; }
+
+        .info { font-size: 0.8rem; color: #555; margin-top: 5px; text-align: center; }
     </style>
 </head>
 <body>
 
-<div class="security-section">
-    <span id="lock-status" class="status-locked">🔒 ĐANG KHÓA (CHỈ XEM)</span>
-    <input type="password" id="pinInput" placeholder="Mã PIN..." maxlength="6" style="width: 110px;">
-    <button onclick="unlockApp()" style="background: #333;">XÁC THỰC</button>
-    <button onclick="lockApp()" style="background: #000; font-size: 11px;">KHÓA LẠI</button>
-</div>
-
-<div class="input-section">
-    <h2 style="color: #fff; margin-top: 0;">HỆ THỐNG PHÂN LOẠI SỐ</h2>
-    <input type="text" id="numInput" placeholder="Nhập số..." disabled>
-    <select id="typeSelect" disabled>
-        <option value="small">Cột NHỎ</option>
-        <option value="large">Cột LỚN</option>
-    </select>
-    <button class="btn-save" id="saveBtn" onclick="addData()" disabled>LƯU</button>
-    <button class="btn-undo" id="undoBtn" onclick="undo()" disabled>HOÀN TÁC</button>
-</div>
-
 <div class="container">
-    <div class="column">
-        <div class="header bg-large">Nhóm Lớn</div>
-        <div id="largeList"></div>
+    <div class="section">
+        <div class="label">Bước 1: Tải file & Lưu dữ liệu</div>
+        <label class="upload-btn">
+            Chọn file dữ liệu (.txt)
+            <input type="file" id="fileInput" accept=".txt">
+        </label>
+        <div id="fileStatus" class="info">Chưa có dữ liệu trong LocalStorage.</div>
     </div>
-    <div class="column">
-        <div class="header bg-small">Nhóm Nhỏ</div>
-        <div id="smallList"></div>
+
+    <div class="section">
+        <div class="label">Bước 2 & 3: Nhập 2 số (Ab)</div>
+        <input type="text" id="abInput" maxlength="2" placeholder="--" autocomplete="off">
+        <div class="info">Nhập đủ 2 số để tự động hiện kết quả</div>
     </div>
+
+    <div id="result-list"></div>
 </div>
 
 <script>
-    localStorage.clear();
-    
-    const MY_PIN = "123456"; 
+    const fileInput = document.getElementById('fileInput');
+    const abInput = document.getElementById('abInput');
+    const resultList = document.getElementById('result-list');
+    const fileStatus = document.getElementById('fileStatus');
 
-    // 1. Định nghĩa dữ liệu gốc
-    let defaultSmall = ["00", "02", "14", "21", "22", "30", "32", "33", "40", "44", "56", "57", "65", "66", "70", "75", "86", "89", "95", "98", "210", "390", "480", "490", "891", "993"];
-    let defaultLarge = ["10", "11", "20", "50", "55", "60", "62", "77", "80", "84", "85", "88", "90", "99", "570", "610"];
-
-    // 2. Kiểm tra xem có dữ liệu đã lưu chưa, nếu CHƯA có thì mới nạp dữ liệu gốc
-    if (!localStorage.getItem('smallData')) {
-        localStorage.setItem('smallData', JSON.stringify(defaultSmall));
-    }
-    if (!localStorage.getItem('largeData')) {
-        localStorage.setItem('largeData', JSON.stringify(defaultLarge));
-    }
-
-    // 3. Đọc dữ liệu từ bộ nhớ máy (LocalStorage)
-    let smallNumbers = JSON.parse(localStorage.getItem('smallData'));
-    let largeNumbers = JSON.parse(localStorage.getItem('largeData'));
-    let historyStack = [];
-
-    function unlockApp() {
-        if(document.getElementById('pinInput').value === MY_PIN) {
-            document.getElementById('lock-status').innerText = "🔓 ĐÃ MỞ QUYỀN SỬA";
-            document.getElementById('lock-status').className = "status-unlocked";
-            document.getElementById('numInput').disabled = false;
-            document.getElementById('typeSelect').disabled = false;
-            document.getElementById('saveBtn').disabled = false;
-            document.getElementById('undoBtn').disabled = false;
-            document.getElementById('pinInput').style.display = 'none';
-        } else {
-            alert("Sai mã PIN!");
+    // Khởi tạo trang
+    window.onload = () => {
+        const savedData = localStorage.getItem('fileContent');
+        if (savedData) {
+            fileStatus.innerText = "Dữ liệu đã sẵn sàng. Bạn có thể nhập số.";
         }
-    }
+        abInput.focus(); // Tự động focus ô nhập
+    };
 
-    // SỬA LỖI: Khóa lại không làm load lại trang để tránh mất đồng bộ
-    function lockApp() {
-        document.getElementById('lock-status').innerText = "🔒 ĐANG KHÓA (CHỈ XEM)";
-        document.getElementById('lock-status').className = "status-locked";
-        document.getElementById('numInput').disabled = true;
-        document.getElementById('typeSelect').disabled = true;
-        document.getElementById('saveBtn').disabled = true;
-        document.getElementById('undoBtn').disabled = true;
-        document.getElementById('pinInput').style.display = 'inline-block';
-        document.getElementById('pinInput').value = "";
-    }
+    // BƯỚC 1: Tải file và lưu LocalStorage
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    function render() {
-        // Cập nhật vào bộ nhớ trình duyệt
-        localStorage.setItem('smallData', JSON.stringify(smallNumbers));
-        localStorage.setItem('largeData', JSON.stringify(largeNumbers));
+        const text = await file.text();
+        // Nối tất cả thành 1 chuỗi số liên tục (xóa khoảng trắng, xuống dòng)
+        const cleanData = text.replace(/\s+/g, '');
         
-        renderColumn('smallList', smallNumbers);
-        renderColumn('largeList', largeNumbers);
-    }
+        localStorage.setItem('fileContent', cleanData);
+        fileStatus.innerText = `Đã lưu file: ${file.name}`;
+        
+        abInput.focus();
+        if (abInput.value.length === 2) performSearch(abInput.value);
+    });
 
-    function renderColumn(elementId, numberArray) {
-        const container = document.getElementById(elementId);
-        container.innerHTML = '';
-        const sortedArray = [...numberArray].sort((a, b) => parseInt(a) - parseInt(b));
-        const groups = {};
-        sortedArray.forEach(num => {
-            const val = parseInt(num, 10);
-            const key = isNaN(val) ? "?" : Math.floor(val / 10);
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(num);
-        });
+    // BƯỚC 2 & 3: Nhập và tự động hiện kết quả
+    abInput.addEventListener('input', (e) => {
+        let val = e.target.value.replace(/\D/g, ''); // Chỉ cho phép nhập số
+        e.target.value = val;
 
-        Object.keys(groups).sort((a, b) => parseInt(a) - parseInt(b)).forEach(key => {
-            const row = document.createElement('div');
-            row.className = 'group-row';
-            row.innerHTML = `<span class="tens-label">${key}x</span>
-                             <span class="numbers-list">${groups[key].join(' - ')}</span>`;
-            container.appendChild(row);
-        });
-    }
-
-    function addData() {
-        const input = document.getElementById('numInput');
-        const value = input.value.trim();
-
-        if (value === "" || isNaN(value)) return;
-
-        historyStack.push({ s: [...smallNumbers], l: [...largeNumbers] });
-        if(historyStack.length > 30) historyStack.shift();
-
-        if (document.getElementById('typeSelect').value === 'small') {
-            smallNumbers.push(value);
+        if (val.length === 2) {
+            performSearch(val);
         } else {
-            largeNumbers.push(value);
+            resultList.innerHTML = '';
+        }
+    });
+
+    function performSearch(targetAb) {
+        const data = localStorage.getItem('fileContent');
+        if (!data) {
+            alert("Vui lòng tải file ở Bước 1 trước!");
+            return;
         }
 
-        input.value = '';
-        render(); // Gọi render để lưu ngay vào localStorage
-    }
+        resultList.innerHTML = '';
+        let found = false;
 
-    function undo() {
-        if(historyStack.length > 0) {
-            let last = historyStack.pop();
-            smallNumbers = last.s; 
-            largeNumbers = last.l;
-            render();
+        // Quét dữ liệu theo phương pháp xét 10 số 1 lần (i += 10)
+        for (let i = 0; i <= data.length - 10; i += 10) {
+            const chunk = data.substring(i, i + 10);
+            
+            // Nếu cụm 10 số có chứa số Ab
+            if (chunk.includes(targetAb)) {
+                found = true;
+                
+                // Xác định vị trí chính xác của Ab trong chuỗi tổng thể
+                const abPosInChunk = chunk.indexOf(targetAb);
+                const globalAbIndex = i + abPosInChunk;
+
+                // MM: 2 số phía trước Ab
+                const mm = data.substring(globalAbIndex - 2, globalAbIndex);
+                
+                // xxxxxx: 6 số phía sau Ab
+                const xxx = data.substring(globalAbIndex + 2, globalAbIndex + 8);
+
+                // Chỉ hiển thị nếu có đủ 2 số phía trước (tránh trường hợp Ab nằm ở đầu file)
+                if (mm.length === 2) {
+                    renderRow(mm, targetAb, xxx.padEnd(6, '-'));
+                }
+            }
+        }
+
+        if (!found) {
+            resultList.innerHTML = `<div style="text-align:center; color:#444; padding:20px;">Không tìm thấy dãy nào phù hợp.</div>`;
         }
     }
 
-    // Chạy lần đầu khi mở trang
-    render();
+    function renderRow(mm, ab, xxx) {
+        const div = document.createElement('div');
+        div.className = 'row';
+        
+        // Định dạng: MM- Ab -xxxxxx
+        div.innerHTML = `
+            <span class="mm">${mm}</span>
+            <span class="sep">-</span>
+            <span class="ab">${ab}</span>
+            <span class="sep">-</span>
+            <span class="xxx">${xxx}</span>
+        `;
+        resultList.appendChild(div);
+    }
 </script>
+
 </body>
 </html>
