@@ -161,6 +161,13 @@
         }
         #mainInput::placeholder { color: #555; }
 
+        .btn-undo {
+            padding: 8px 14px; background-color: #17a2b8; color: white; border: none;
+            border-radius: 4px; cursor: pointer; font-size: 13px;
+        }
+        .btn-undo:hover { background-color: #138496; }
+        .btn-undo:disabled { background-color: #444; cursor: not-allowed; }
+
         .btn-reset {
             padding: 8px 14px; background-color: #dc3545; color: white; border: none;
             border-radius: 4px; cursor: pointer; font-size: 13px;
@@ -187,6 +194,7 @@
         <div class="oa-section">
             <span class="oa-label">Ô A</span>
             <input type="tel" inputmode="numeric" pattern="[01]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0/1">
+            <button class="btn-undo" onclick="undo()">Hoàn tác</button>
             <button class="btn-reset" onclick="resetAll()">Làm mới</button>
         </div>
     </div>
@@ -202,6 +210,9 @@
 
         // Mỗi ô: { stt, value, valEl, sttEl }
         let cells = [];
+
+        // Lịch sử trạng thái để HOÀN TÁC
+        let undoStack = [];
 
         // Bộ đếm stt liên tục (không bị giới hạn ở 80) - dùng cho bit mới
         let nextStt = 1;
@@ -229,8 +240,9 @@
                     valEl.maxLength = 1;
                     valEl.className = 'val-input';
 
-                    // Sửa thủ công trên bảng
+                    // Sửa thủ công trên bảng (lưu trạng thái để hoàn tác)
                     valEl.addEventListener('input', () => {
+                        undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
                         let v = valEl.value;
                         if (v !== '0' && v !== '1') valEl.value = '';
                         cells[li(r,c)].value = valEl.value;
@@ -255,8 +267,40 @@
             for (let i = 0; i < TOTAL; i++) renderCell(i);
         }
 
+        // 2b. Chụp trạng thái hiện tại (giá trị + stt từng ô) để hoàn tác
+        function snapshot() {
+            const snap = [];
+            for (let i = 0; i < TOTAL; i++) {
+                snap.push({ value: cells[i].value, stt: cells[i].stt });
+            }
+            return snap;
+        }
+
+        // 2c. Áp dụng một trạng thái đã chụp
+        function applySnapshot(snap) {
+            for (let i = 0; i < TOTAL; i++) {
+                cells[i].value = snap[i].value;
+                cells[i].stt = snap[i].stt;
+            }
+        }
+
+        // 2d. Hoàn tác: quay lại trạng thái trước thao tác nhập gần nhất
+        function undo() {
+            if (undoStack.length === 0) return;
+            const prev = undoStack.pop();
+            applySnapshot(prev.snap);
+            nextStt = prev.nextStt;
+            sttInput.value = prev.sttInput;
+            renderAll();
+            searchPattern();
+            mainInput.focus();
+        }
+
         // 3. Chèn 1 bit mới vào ô cuối (hàng 8 ô 10), toàn bộ dịch trái, ô đầu (hàng1 ô1) bị đẩy ra
         function pushBit(bit) {
+            // Lưu trạng thái hiện tại vào lịch sử để hoàn tác
+            undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
+
             // N - stt cho bit mới: ưu tiên lấy từ ô nhập STT; nếu không có thì dùng bộ đếm liên tục
             let N = parseInt(sttInput.value, 10);
             if (!(Number.isInteger(N) && N >= 1)) {
@@ -336,6 +380,7 @@
 
         // 7. Làm mới toàn bộ
         function resetAll() {
+            undoStack = []; // xoá lịch sử hoàn tác
             for (let i = 0; i < TOTAL; i++) {
                 cells[i].stt = null;
                 cells[i].value = '';
