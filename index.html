@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bảng 8x10 Nhị Phân & Dịch Trái + STT</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --surface: #1e1e1e;
+            --surface2: #2a2a2a;
+            --border: #3a3a3a;
+            --text: #e0e0e0;
+            --text-dim: #999;
+            --accent: #4da3ff;
+            --accent-strong: #007bff;
+            --stt-purple: #b78aff;
+            --stt-border: #9d7bff;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: var(--bg);
+            color: var(--text);
+        }
+
+        h2 { color: var(--text); margin-bottom: 5px; text-align: center; }
+        p.desc { font-size: 13px; color: var(--text-dim); margin-bottom: 15px; text-align: center; }
+
+        /* Ô nhập STT phía trên 8 hàng */
+        .stt-header {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            width: 100%;
+            background: transparent;
+            padding: 0;
+            margin-bottom: 6px;
+        }
+        .stt-header label { font-size: 12px; color: var(--stt-purple); }
+        #sttInput {
+            width: 52px;
+            height: 30px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: bold;
+            border: 2px solid var(--stt-border);
+            border-radius: 4px;
+            outline: none;
+            background-color: var(--surface2);
+            color: var(--text);
+        }
+        #sttInput:focus { background-color: #3a2a55; }
+
+        /* Bảng 8x10 - kích thước nhỏ để vừa màn hình điện thoại */
+        .grid-table {
+            display: grid;
+            grid-template-columns: repeat(10, 28px);
+            grid-gap: 3px;
+            margin-bottom: 20px;
+            background: var(--surface);
+            padding: 8px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            max-width: 100%;
+        }
+
+        .grid-cell {
+            width: 28px;
+            height: 32px;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            background: var(--surface2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            box-sizing: border-box;
+            padding: 1px;
+        }
+        .grid-cell .stt-label {
+            font-size: 7px;
+            color: #ffeb3b;
+            height: 10px;
+            line-height: 10px;
+            width: 100%;
+            text-align: center;
+            user-select: none;
+            overflow: hidden;
+        }
+        .grid-cell .val-input {
+            width: 24px;
+            height: 19px;
+            text-align: center;
+            font-size: 13px;
+            font-weight: bold;
+            border: none;
+            outline: none;
+            background: transparent;
+            color: var(--text);
+        }
+        .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
+
+        .highlight {
+            background-color: #8a6d00 !important;
+            border-color: #fbc02d !important;
+        }
+        .highlight .val-input { color: #ffeb3b; }
+
+        /* Vùng điều khiển bên dưới */
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            background: var(--surface);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            width: 360px;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        /* Ô A - nằm ngay phía trên 5 ô mẫu */
+        .oa-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+        .oa-label {
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--accent-strong);
+        }
+        #mainInput {
+            width: 60px;
+            height: 40px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            border: 2px solid var(--accent-strong);
+            border-radius: 4px;
+            outline: none;
+            background-color: var(--surface2);
+            color: var(--text);
+        }
+        #mainInput::placeholder { color: #555; }
+
+        .sub-inputs-container { display: flex; gap: 6px; justify-content: center; }
+        .sub-cell {
+            width: 32px; height: 32px; text-align: center; font-size: 16px; font-weight: bold;
+            border: 1px dashed var(--accent-strong); background-color: #22252c; border-radius: 4px; outline: none;
+            color: var(--text);
+        }
+        .sub-cell:focus { border-color: #28a745; background-color: #1f3327; }
+
+        .btn-reset {
+            padding: 8px 14px; background-color: #dc3545; color: white; border: none;
+            border-radius: 4px; cursor: pointer; font-size: 13px;
+        }
+        .btn-reset:hover { background-color: #c82333; }
+    </style>
+</head>
+<body>
+
+    <h2>Bảng 8x10 Nhị Phân (Dịch Trái + Số Thứ Tự)</h2>
+    <p class="desc">Gõ 0/1 ở Ô A -> bit mới vào ô (hàng 8, ô 10), toàn bộ dịch trái. stt dịch sang trái cùng giá trị ô.</p>
+
+    <!-- Bảng chính 8x10 -->
+    <div id="gridContainer" class="grid-table"></div>
+
+    <div class="control-panel">
+        <!-- Ô nhập STT cho ô mới (hàng 8, ô 10): nằm ngay phía trên Ô A, phía bên phải -->
+        <div class="stt-header">
+            <label for="sttInput">STT (8,10):</label>
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
+        </div>
+
+        <!-- Ô A: nằm phía trên 5 ô mẫu. Nhập 0/1 -> nhảy vào ô (hàng 8, ô 10) rồi dịch trái -->
+        <div class="oa-section">
+            <span class="oa-label">Ô A</span>
+            <input type="tel" inputmode="numeric" pattern="[01]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0/1">
+            <button class="btn-reset" onclick="resetAll()">Làm mới</button>
+        </div>
+
+        <!-- 5 ô mẫu nằm ngay dưới Ô A -->
+        <div style="font-size: 13px; color: #999;">5 ô mẫu (gõ được 2 ô là bắt đầu tìm):</div>
+        <div class="sub-inputs-container" id="subContainer">
+            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub0">
+            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub1">
+            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub2">
+            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub3">
+            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub4">
+        </div>
+    </div>
+
+    <script>
+        const ROWS = 8;
+        const COLS = 10;
+        const TOTAL = ROWS * COLS; // 80
+
+        const gridContainer = document.getElementById('gridContainer');
+        const mainInput = document.getElementById('mainInput');
+        const sttInput = document.getElementById('sttInput');
+        const subInputs = [
+            document.getElementById('sub0'), document.getElementById('sub1'),
+            document.getElementById('sub2'), document.getElementById('sub3'), document.getElementById('sub4')
+        ];
+
+        // Mỗi ô: { stt, value, valEl, sttEl }
+        let cells = [];
+
+        // Bộ đếm stt liên tục (không bị giới hạn ở 80) - dùng cho bit mới
+        let nextStt = 1;
+
+        const li = (r, c) => r * COLS + c;
+
+        // 1. Khởi tạo bảng 8x10
+        function initGrid() {
+            gridContainer.innerHTML = '';
+            cells = [];
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    const box = document.createElement('div');
+                    box.className = 'grid-cell';
+
+                    const sttEl = document.createElement('span');
+                    sttEl.className = 'stt-label';
+
+                    const valEl = document.createElement('input');
+                    valEl.type = 'tel';
+                    valEl.inputMode = 'numeric';
+                    valEl.pattern = '[01]';
+                    valEl.maxLength = 1;
+                    valEl.className = 'val-input';
+
+                    // Sửa thủ công trên bảng
+                    valEl.addEventListener('input', () => {
+                        let v = valEl.value;
+                        if (v !== '0' && v !== '1') valEl.value = '';
+                        cells[li(r,c)].value = valEl.value;
+                        searchPattern();
+                    });
+
+                    box.appendChild(sttEl);
+                    box.appendChild(valEl);
+                    gridContainer.appendChild(box);
+
+                    cells.push({ stt: null, value: '', valEl: valEl, sttEl: sttEl });
+                }
+            }
+        }
+
+        // 2. Đổ lại DOM từ dữ liệu cells
+        function renderCell(i) {
+            cells[i].valEl.value = cells[i].value;
+            cells[i].sttEl.textContent = cells[i].stt === null ? '' : cells[i].stt;
+        }
+        function renderAll() {
+            for (let i = 0; i < TOTAL; i++) renderCell(i);
+        }
+
+        // 3. Chèn 1 bit mới vào ô cuối (hàng 8 ô 10), toàn bộ dịch trái, ô đầu (hàng1 ô1) bị đẩy ra
+        function pushBit(bit) {
+            // N - stt cho bit mới: ưu tiên lấy từ ô nhập STT; nếu không có thì dùng bộ đếm liên tục
+            let N = parseInt(sttInput.value, 10);
+            if (!(Number.isInteger(N) && N >= 1)) {
+                N = nextStt;
+            }
+
+            // Dịch trái: mỗi ô nhận dữ liệu từ ô bên phải, stt cũng DỊCH SANG TRÁI CÙNG giá trị (không trừ 1)
+            for (let i = 0; i < TOTAL - 1; i++) {
+                cells[i].value = cells[i + 1].value;
+                cells[i].stt = cells[i + 1].stt;
+            }
+
+            // Bit mới luôn đặt vào ô cuối (hàng 8, ô 10)
+            cells[TOTAL - 1].value = bit;
+            cells[TOTAL - 1].stt = N;
+
+            renderAll();
+
+            // TĂNG stt cho lần nhập sau: bộ đếm luôn tiến lên 1 (không đứng im, không bị giới hạn 80)
+            nextStt = N + 1;
+            sttInput.value = nextStt;
+
+            searchPattern();
+        }
+
+        // 4. Ô 1 số: gõ 0/1 -> dịch trái
+        mainInput.addEventListener('keyup', function(e) {
+            let val = mainInput.value.trim();
+            if (val === '') return;
+            if (val !== '0' && val !== '1') { mainInput.value = ''; return; }
+            mainInput.value = '';
+            pushBit(val);
+            mainInput.focus();
+        });
+
+        // 5. 5 ô mẫu: gõ xong 1 ô tự focus sang ô kế tiếp
+        subInputs.forEach((input, idx) => {
+            input.addEventListener('input', () => {
+                let v = input.value;
+                if (v !== '0' && v !== '1') {
+                    input.value = '';
+                } else {
+                    // Tự focus sang ô kế tiếp (nếu còn)
+                    if (idx < 4) subInputs[idx + 1].focus();
+                }
+                searchPattern();
+            });
+        });
+
+        // 6. Tìm chuỗi mẫu trong 8 hàng - mỗi ô chỉ được xét 1 lần (các đoạn khớp không chồng nhau)
+        function searchPattern() {
+            clearHighlights();
+            const pattern = [];
+            for (let i = 0; i < 5; i++) {
+                const v = subInputs[i].value;
+                if (v === '0' || v === '1') pattern.push(v); else break;
+            }
+            if (pattern.length < 2) return;
+            const len = pattern.length;
+
+            for (let r = 0; r < ROWS; r++) {
+                let c = 0;
+                while (c <= COLS - len) {
+                    let matched = true;
+                    for (let i = 0; i < len; i++) {
+                        if (cells[li(r, c + i)].value !== pattern[i]) { matched = false; break; }
+                    }
+                    if (matched) {
+                        // Tô vàng đoạn khớp
+                        for (let i = 0; i < len; i++) {
+                            cells[li(r, c + i)].valEl.parentElement.classList.add('highlight');
+                        }
+                        // Các ô trong đoạn này không được xét lại -> nhảy qua đoạn
+                        c += len;
+                    } else {
+                        c += 1;
+                    }
+                }
+            }
+        }
+
+        function clearHighlights() {
+            for (let i = 0; i < TOTAL; i++) {
+                cells[i].valEl.parentElement.classList.remove('highlight');
+            }
+        }
+
+        // 7. Làm mới toàn bộ
+        function resetAll() {
+            for (let i = 0; i < TOTAL; i++) {
+                cells[i].stt = null;
+                cells[i].value = '';
+            }
+            subInputs.forEach(input => input.value = '');
+            mainInput.value = '';
+            nextStt = 1;
+            sttInput.value = '1';
+            renderAll();
+            mainInput.focus();
+        }
+
+        // Khởi chạy
+        initGrid();
+        nextStt = 1;
+        sttInput.value = '1';
+        mainInput.focus();
+    </script>
+</body>
+</html>
