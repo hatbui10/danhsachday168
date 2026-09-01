@@ -112,6 +112,14 @@
         }
         .highlight .val-input { color: #ffeb3b; }
 
+        /* 4 ô 7-10 hàng 8: ô tham chiếu - tô XANH, không tính vào kết quả */
+        .reference {
+            background-color: #0b3d66 !important;
+            border-color: #4da3ff !important;
+        }
+        .reference .val-input { color: #cfe8ff; }
+        .reference .stt-label { color: #ffeb3b; }
+
         /* Vùng điều khiển bên dưới */
         .control-panel {
             display: flex;
@@ -153,14 +161,6 @@
         }
         #mainInput::placeholder { color: #555; }
 
-        .sub-inputs-container { display: flex; gap: 6px; justify-content: center; }
-        .sub-cell {
-            width: 32px; height: 32px; text-align: center; font-size: 16px; font-weight: bold;
-            border: 1px dashed var(--accent-strong); background-color: #22252c; border-radius: 4px; outline: none;
-            color: var(--text);
-        }
-        .sub-cell:focus { border-color: #28a745; background-color: #1f3327; }
-
         .btn-reset {
             padding: 8px 14px; background-color: #dc3545; color: white; border: none;
             border-radius: 4px; cursor: pointer; font-size: 13px;
@@ -171,7 +171,7 @@
 <body>
 
     <h2>Bảng 8x10 Nhị Phân (Dịch Trái + Số Thứ Tự)</h2>
-    <p class="desc">Gõ 0/1 ở Ô A -> bit mới vào ô (hàng 8, ô 10), toàn bộ dịch trái. stt dịch sang trái cùng giá trị ô.</p>
+    <p class="desc">Gõ 0/1 ở Ô A -> bit mới vào ô (hàng 8, ô 10), toàn bộ dịch trái. Tự tô màu các vị trí trùng dãy ô 7-10 hàng 8.</p>
 
     <!-- Bảng chính 8x10 -->
     <div id="gridContainer" class="grid-table"></div>
@@ -183,21 +183,11 @@
             <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
         </div>
 
-        <!-- Ô A: nằm phía trên 5 ô mẫu. Nhập 0/1 -> nhảy vào ô (hàng 8, ô 10) rồi dịch trái -->
+        <!-- Ô A: nhập 0/1 -> nhảy vào ô (hàng 8, ô 10) rồi dịch trái -->
         <div class="oa-section">
             <span class="oa-label">Ô A</span>
             <input type="tel" inputmode="numeric" pattern="[01]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0/1">
             <button class="btn-reset" onclick="resetAll()">Làm mới</button>
-        </div>
-
-        <!-- 5 ô mẫu nằm ngay dưới Ô A -->
-        <div style="font-size: 13px; color: #999;">5 ô mẫu (gõ được 2 ô là bắt đầu tìm):</div>
-        <div class="sub-inputs-container" id="subContainer">
-            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub0">
-            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub1">
-            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub2">
-            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub3">
-            <input type="tel" inputmode="numeric" pattern="[01]" class="sub-cell" id="sub4">
         </div>
     </div>
 
@@ -209,10 +199,6 @@
         const gridContainer = document.getElementById('gridContainer');
         const mainInput = document.getElementById('mainInput');
         const sttInput = document.getElementById('sttInput');
-        const subInputs = [
-            document.getElementById('sub0'), document.getElementById('sub1'),
-            document.getElementById('sub2'), document.getElementById('sub3'), document.getElementById('sub4')
-        ];
 
         // Mỗi ô: { stt, value, valEl, sttEl }
         let cells = [];
@@ -230,6 +216,8 @@
                 for (let c = 0; c < COLS; c++) {
                     const box = document.createElement('div');
                     box.className = 'grid-cell';
+                    // 4 ô 7-10 hàng 8: đánh dấu làm ô tham chiếu (màu xanh)
+                    if (r === ROWS - 1 && c >= 6) box.classList.add('reference');
 
                     const sttEl = document.createElement('span');
                     sttEl.className = 'stt-label';
@@ -304,30 +292,18 @@
             mainInput.focus();
         });
 
-        // 5. 5 ô mẫu: gõ xong 1 ô tự focus sang ô kế tiếp
-        subInputs.forEach((input, idx) => {
-            input.addEventListener('input', () => {
-                let v = input.value;
-                if (v !== '0' && v !== '1') {
-                    input.value = '';
-                } else {
-                    // Tự focus sang ô kế tiếp (nếu còn)
-                    if (idx < 4) subInputs[idx + 1].focus();
-                }
-                searchPattern();
-            });
-        });
-
-        // 6. Tìm chuỗi mẫu trong 8 hàng - mỗi ô chỉ được xét 1 lần (các đoạn khớp không chồng nhau)
+        // 5. Luôn tô màu các vị trí trùng dãy giá trị ô 7-10 hàng 8 (không cần nhập mẫu)
+        //    Dãy mẫu = 4 giá trị của hàng 8, cột 7-10 (đọc trái -> phải: ô7 cũ nhất -> ô10 mới nhất)
         function searchPattern() {
             clearHighlights();
+
             const pattern = [];
-            for (let i = 0; i < 5; i++) {
-                const v = subInputs[i].value;
-                if (v === '0' || v === '1') pattern.push(v); else break;
+            for (let k = 6; k <= 9; k++) { // cột 7,8,9,10 (index 6..9) của hàng 8 (index 7)
+                pattern.push(cells[li(7, k)].value);
             }
-            if (pattern.length < 2) return;
-            const len = pattern.length;
+            // Nếu dãy chưa đủ 0/1 thì không tô
+            if (pattern.some(v => v !== '0' && v !== '1')) return;
+            const len = pattern.length; // 4
 
             for (let r = 0; r < ROWS; r++) {
                 let c = 0;
@@ -337,12 +313,14 @@
                         if (cells[li(r, c + i)].value !== pattern[i]) { matched = false; break; }
                     }
                     if (matched) {
-                        // Tô vàng đoạn khớp
+                        // Tô vàng nhưng KHÔNG tính 4 ô tham chiếu (hàng 8, cột 7-10) - chúng luôn tô xanh
                         for (let i = 0; i < len; i++) {
-                            cells[li(r, c + i)].valEl.parentElement.classList.add('highlight');
+                            const idx = li(r, c + i);
+                            if (!cells[idx].valEl.parentElement.classList.contains('reference')) {
+                                cells[idx].valEl.parentElement.classList.add('highlight');
+                            }
                         }
-                        // Các ô trong đoạn này không được xét lại -> nhảy qua đoạn
-                        c += len;
+                        c += len; // mỗi ô chỉ xét 1 lần
                     } else {
                         c += 1;
                     }
@@ -362,7 +340,6 @@
                 cells[i].stt = null;
                 cells[i].value = '';
             }
-            subInputs.forEach(input => input.value = '');
             mainInput.value = '';
             nextStt = 1;
             sttInput.value = '1';
