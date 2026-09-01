@@ -264,6 +264,7 @@
                 <label for="tokenInput">Token API (dán token mới mỗi khi đăng nhập):</label>
                 <input type="text" id="tokenInput" placeholder="eyJhbGciOiJIUzI1NiIs..." autocomplete="off" spellcheck="false">
                 <div class="token-btns">
+                    <button class="btn-fetch" onclick="getTokenFromClipboard()">📋 Lấy token tự động</button>
                     <button class="btn-undo" onclick="saveToken()">Lưu token</button>
                     <label><input type="checkbox" id="rememberToken" checked> Nhớ token</label>
                 </div>
@@ -472,6 +473,33 @@
             const el = document.getElementById('tokenInput');
             if (el) el.value = saved;
             currentToken = saved.trim();
+        }
+
+        // Nút "Lấy token tự động": lấy token từ clipboard (script Tampermonkey đã tự copy)
+        // Lưu ý: cần tool chạy trên https/http hoặc trình duyệt cho phép đọc clipboard.
+        async function getTokenFromClipboard() {
+            try {
+                const text = await navigator.clipboard.readText();
+                const tok = (text || '').trim();
+                if (tok && tok.indexOf('eyJ') !== -1) {
+                    const el = document.getElementById('tokenInput');
+                    if (el) el.value = tok;
+                    currentToken = tok;
+                    // tự lưu nếu tích "Nhớ token"
+                    const remember = document.getElementById('rememberToken');
+                    if (remember && remember.checked) {
+                        try { localStorage.setItem('vn168_token', tok); } catch (e) {}
+                    }
+                    setStatus('✓ Đã lấy token từ clipboard!');
+                } else {
+                    setStatus('Clipboard không có token hợp lệ (eyJ...). Bấm nút bên dưới để xem cách làm.');
+                    showRaw('Bấm "Lấy token tự động" mà báo không có token?\n\nCách làm:\n1. Mở trang 383vn, mở 1 vòng xổ số.\n2. Script (Tampermonkey) sẽ tự copy token vào clipboard + hiện thông báo xanh.\n3. Quay lại tool này, bấm "Lấy token tự động".');
+                }
+            } catch (e) {
+                // file:// thường bị chặn đọc clipboard
+                setStatus('⚠️ Trình duyệt chặn đọc clipboard (file://). Dùng Ctrl+V hoặc mở tool qua https.');
+                showRaw('Lỗi đọc clipboard: ' + e.message + '\n\nTrên file:// trình duyệt thường không cho đọc clipboard.\n→ Bấm vào ô token rồi Ctrl+V để dán, hoặc host file này lên https.');
+            }
         }
 
         function apiPost(url, body) {
