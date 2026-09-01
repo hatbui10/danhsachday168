@@ -300,16 +300,18 @@
         // Bộ đếm stt liên tục (không bị giới hạn ở 80) - dùng cho bit mới
         let nextStt = 1;
 
+        // Kỳ (issue) cao nhất đã đưa vào bảng - dùng để chỉ đưa kết quả MỚI khi tự cập nhật
+        let lastInsertedIssue = null;
+
         // ===== CẤU HÌNH API =====
         // Lưu ý: token giờ được dán vào Ô NHẬP TOKEN trên giao diện (tiện mỗi lần đăng nhập).
         const CFG = {
             arOrigin: "https://373vn.com",
             apiResult: "https://vn168api.com/api/webapi/GetNoaverageEmerdList",
             apiIssue: "https://vn168api.com/api/webapi/GetGameIssue",
-            // Số trang lịch sử cần lấy (5 trang x 20 kết quả = 100, giữ lại 80 mới nhất)
-            pages: 5,
-            // Body gửi kèm (điều chỉnh khi cần). pageNo sẽ được gắn thêm khi gọi.
-            payloadBase: { typeId: 30, language: 2, random: "4d3fb5ed4f834fdb9bdfa7e947510b21", signature: "F7752055ADB99E86DBC8B0DAC9AA224D", timestamp: 1772716919 }
+            // Body gốc đúng với signature đã cho (KHÔNG được thêm trường vì làm hỏng signature).
+            // Lấy nhiều trang cần biết cách API nhận số trang + cách tạo signature mới.
+            payload: { typeId: 30, language: 2, random: "4d3fb5ed4f834fdb9bdfa7e947510b21", signature: "F7752055ADB99E86DBC8B0DAC9AA224D", timestamp: 1772716919 }
         };
 
         // Token đang dùng (lấy từ ô nhập / bộ nhớ)
@@ -593,34 +595,37 @@
                 return;
             }
             try {
-                setStatus(`Đang lấy ${CFG.pages} trang lịch sử...`);
+                setStatus('Đang lấy kết quả...');
 
-                // Gọi nhiều trang (pageNo 1..N) và gộp tất cả kết quả
-                const allRows = [];
-                let lastRaw = null;
-                for (let pg = 1; pg <= CFG.pages; pg++) {
-                    const body = Object.assign({}, CFG.payloadBase, { pageNo: pg });
-                    const res = await apiPost(CFG.apiResult, body);
-                    lastRaw = res;
-                    const rows = findRows(res);
-                    if (rows.length) allRows.push(...rows);
-                }
-                showRaw(lastRaw);
+                // Gọi 1 lần với body gốc (signature đúng)
+                const res = await apiPost(CFG.apiResult, CFG.payload);
+                showRaw(res);
+                const allRows = findRows(res);
 
                 if (allRows.length === 0) {
                     setStatus('Không tìm thấy dữ liệu kết quả. Bấm "Xem log" để kiểm tra JSON thô, báo lại tôi để tinh chỉnh.');
                     return;
                 }
 
-                // Sắp theo issue giảm dần (mới nhất đứng đầu) để lấy 80 kỳ mới nhất
+                // Sắp theo issue giảm dần (mới nhất đứng đầu)
                 allRows.sort((a, b) => (String(rowIssue(b)) > String(rowIssue(a)) ? 1 : -1));
-                const use = allRows.slice(0, 80);
+
+                // Lọc: nếu đã từng đưa thì chỉ lấy các kỳ MỚI hơn kỳ cao nhất đã đưa
+                let toPush;
+                if (lastInsertedIssue === null) {
+                    toPush = allRows; // lần đầu: đưa tất cả (20 kết quả)
+                } else {
+                    toPush = allRows.filter(r => String(rowIssue(r)) > String(lastInsertedIssue));
+                }
+                if (toPush.length === 0) {
+                    setStatus(`Không có kết quả mới. Kỳ hiện tại vẫn là: ${rowIssue(allRows[0])}`);
+                    return;
+                }
 
                 let filled = 0, skipped = 0;
-                // Duyệt NGƯỢC (kỳ cũ nhất -> mới nhất) để kỳ có issue CAO NHẤT được đưa cuối cùng
-                // => kỳ mới nhất nằm đúng ô (8,10), các kỳ cũ lùi dần sang trái.
-                for (let i = use.length - 1; i >= 0; i--) {
-                    const row = use[i];
+                // Duyệt NGƯỢC (cũ -> mới) để kỳ cao nhất nằm đúng ô (8,10), cũ lùi dần trái
+                for (let i = toPush.length - 1; i >= 0; i--) {
+                    const row = toPush[i];
                     const bit = valueToBit(rowBitValue(row));
                     const issue = rowIssue(row);
                     if (bit === null) { skipped++; continue; }
@@ -629,7 +634,11 @@
                     pushBitRaw(bit, sttNum);
                     filled++;
                 }
-                setStatus(`Đã lấy ${CFG.pages} trang, đưa ${filled} kết quả vào bảng${skipped ? ' (bỏ ' + skipped + ' không xác định)' : ''}. Kỳ mới nhất (ô 10 hàng 8): ${rowIssue(use[0])}`);
+
+                // Cập nhật kỳ cao nhất đã đưa (kỳ mới nhất trong toPush)
+                if (toPush.length) lastInsertedIssue = String(rowIssue(toPush[0]));
+
+                setStatus(`Đã đưa ${filled} kết quả${skipped ? ' (bỏ ' + skipped + ' không xác định)' : ''}. Kỳ mới nhất (ô 10 hàng 8): ${rowIssue(allRows[0])}`);
             } catch (err) {
                 setStatus('Lỗi: ' + err.message);
                 showRaw(err.message);
@@ -692,6 +701,7 @@
         // 7. Làm mới toàn bộ
         function resetAll() {
             undoStack = []; // xoá lịch sử hoàn tác
+            lastInsertedIssue = null; // lần sau sẽ lấy lại 20 kết quả đầu
             for (let i = 0; i < TOTAL; i++) {
                 cells[i].stt = null;
                 cells[i].value = '';
