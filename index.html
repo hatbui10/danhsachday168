@@ -300,6 +300,7 @@
                     <input type="checkbox" id="autoRefresh" checked> Tự cập nhật mỗi 15s
                 </label>
                 <button class="btn-undo" onclick="toggleLog()">Xem log</button>
+                <button class="btn-reset" onclick="resetAll()">🧹 Làm mới</button>
             </div>
             <div class="status" id="apiStatus">Chưa lấy dữ liệu.</div>
             <div id="rawLog"></div>
@@ -326,6 +327,9 @@
 
         // Kỳ (issue) cao nhất đã đưa vào bảng - dùng để chỉ đưa kết quả MỚI khi tự cập nhật
         let lastInsertedIssue = null;
+
+        // Chặn chạy trùng khi bấm nút + tự cập nhật (15s) cùng lúc
+        let fetchInProgress = false;
 
         // ===== CẤU HÌNH API =====
         // Lưu ý: token giờ được dán vào Ô NHẬP TOKEN trên giao diện (tiện mỗi lần đăng nhập).
@@ -474,11 +478,21 @@
         }
 
         // ===== TÍCH HỢP API XỔ SỐ =====
+        // Tách chuỗi JWT (eyJ...) khỏi text bất kỳ (vd clipboard lẫn chữ tiếng Việt).
+        // Header fetch chỉ chấp nhận ký tự ISO-8859-1 nên phải loại ký tự lạ trước khi dùng.
+        function extractToken(str) {
+            const s = String(str || '');
+            const m = s.match(/eyJ[A-Za-z0-9\-_]+(?:\.[A-Za-z0-9\-_]+){1,3}/);
+            if (m) return m[0]; // chuỗi JWT sạch: header.payload.signature
+            // Không có JWT rõ ràng -> chỉ giữ ký tự ASCII (loại chữ tiếng Việt có dấu)
+            return s.replace(/[^\x00-\x7F]/g, '').trim();
+        }
+
         // Lấy token hiện tại từ ô nhập
         function getToken() {
             const el = document.getElementById('tokenInput');
             const val = el ? el.value.trim() : '';
-            if (val) currentToken = val;
+            if (val) currentToken = extractToken(val);
             return currentToken;
         }
 
@@ -487,12 +501,12 @@
             const el = document.getElementById('tokenInput');
             const remember = document.getElementById('rememberToken');
             if (!el) return;
-            currentToken = el.value.trim();
+            currentToken = extractToken(el.value);
             if (!currentToken) { setStatus('⚠️ Ô token đang trống.'); return; }
             if (remember && remember.checked) {
                 try { localStorage.setItem('vn168_token', currentToken); } catch (e) {}
             }
-            // Gửi luôn lên Firebase để các thiết bị/trang khác đồng bộ
+            // Gửi luôn lên Firebase để các trang/thiết bị khác đồng bộ
             if (fbDB && !applyingRemote) writeToFirebase();
             setStatus('Đã lưu token ✓' + (fbDB ? ' (đã gửi lên Firebase)' : ''));
         }
@@ -503,7 +517,7 @@
             try { saved = localStorage.getItem('vn168_token') || ''; } catch (e) {}
             const el = document.getElementById('tokenInput');
             if (el) el.value = saved;
-            currentToken = saved.trim();
+            currentToken = extractToken(saved);
         }
 
         // Xoá token: làm trống ô nhập + xoá bộ nhớ trình duyệt + đồng bộ xoá lên Firebase
@@ -649,24 +663,23 @@
                 await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
                     token: currentToken || getToken(),
                     lastUpdated: Date.now(),
+                    lastIssue: lastInsertedIssue || null, // lưu MỐC kỳ đã đưa để khi mở lại không đưa trùng
                     cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
                 }, { merge: true }); // merge để không xoá các trường khác (vd lastTokenAt do tamper ghi)
             } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
         }
 
-        // Áp dữ liệu remote (từ Firestore) vào bảng + token.
-        // Hỗ trợ cả trường hợp tamper CHỈ GỬI MỖI TOKEN (chưa có cells) -> vẫn đồng bộ vào ô nhập token.
+        // Áp dữ liệu remote (từ Firestore) vào bảng + token
         function applyRemoteData(d) {
             if (!d) return;
             applyingRemote = true;
             try {
-                // 1) Đồng bộ token vào ô nhập (ưu tiên làm trước)
+                // 1) Đồng bộ token vào ô nhập (kể cả tamper CHỈ GỬI MỖI TOKEN, chưa có cells)
                 if ('token' in d) {
                     const tok = extractToken(d.token);
                     currentToken = tok;
                     const el = document.getElementById('tokenInput');
                     if (el) el.value = tok;
-                    // Nếu tích "Nhớ token" thì lưu luôn vào bộ nhớ trình duyệt
                     const remember = document.getElementById('rememberToken');
                     if (remember && remember.checked) {
                         try {
@@ -686,6 +699,16 @@
                     }
                     renderAll();
                     searchPattern();
+
+                    // KHÔI PHỤC mốc kỳ đã đưa -> tránh lần fetch đầu tiên đưa lại kỳ cũ (gây trùng STT)
+                    if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
+
+                    // Khôi phục bộ đếm STT nhập tay theo ô cuối (hàng 8 ô 10)
+                    const ls = cells[TOTAL - 1].stt;
+                    if (ls !== null && ls !== '') {
+                        const n = parseInt(ls, 10);
+                        if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
+                    }
                 }
             } finally {
                 applyingRemote = false;
@@ -711,14 +734,15 @@
 
         // Hàm chính: lấy kết quả và đưa vào bảng
         async function fetchAndFill() {
+            if (fetchInProgress) return; // tránh chạy trùng (bấm nút + tự cập nhật 15s)
+            fetchInProgress = true;
             const btn = document.getElementById('btnFetch');
             if (btn) btn.disabled = true;
-            if (!getToken()) {
-                setStatus('⚠️ Chưa có token. Dán token vào ô "Token API" rồi bấm "Lưu token".');
-                if (btn) btn.disabled = false;
-                return;
-            }
             try {
+                if (!getToken()) {
+                    setStatus('⚠️ Chưa có token. Dán token vào ô "Token API" rồi bấm "Lưu token".');
+                    return;
+                }
                 setStatus('Đang lấy kết quả...');
 
                 // Gọi 1 lần với body gốc (signature đúng)
@@ -731,42 +755,65 @@
                     return;
                 }
 
-                // Sắp theo issue giảm dần (mới nhất đứng đầu)
-                allRows.sort((a, b) => (String(rowIssue(b)) > String(rowIssue(a)) ? 1 : -1));
-
-                // Lọc: nếu đã từng đưa thì chỉ lấy các kỳ MỚI hơn kỳ cao nhất đã đưa
-                let toPush;
-                if (lastInsertedIssue === null) {
-                    toPush = allRows; // lần đầu: đưa tất cả (20 kết quả)
-                } else {
-                    toPush = allRows.filter(r => String(rowIssue(r)) > String(lastInsertedIssue));
+                // Tìm ĐÚNG 1 kỳ MỚI NHẤT (issue lớn nhất). So theo SỐ, nếu issue không phải số thì so chuỗi.
+                let latestRow = null, latestNum = -Infinity, latestStr = '';
+                for (const r of allRows) {
+                    const raw = String(rowIssue(r) || '').trim();
+                    if (!raw) continue;
+                    const num = parseInt(raw, 10);
+                    const key = Number.isFinite(num) ? num : -Infinity;
+                    if (key > latestNum || (key === latestNum && raw > latestStr)) {
+                        latestNum = key; latestStr = raw; latestRow = r;
+                    }
                 }
-                if (toPush.length === 0) {
-                    setStatus(`Không có kết quả mới. Kỳ hiện tại vẫn là: ${rowIssue(allRows[0])}`);
+                if (!latestRow) {
+                    setStatus('Không xác định được kỳ xổ trong JSON.');
                     return;
                 }
 
-                let filled = 0, skipped = 0;
-                // Duyệt NGƯỢC (cũ -> mới) để kỳ cao nhất nằm đúng ô (8,10), cũ lùi dần trái
-                for (let i = toPush.length - 1; i >= 0; i--) {
-                    const row = toPush[i];
-                    const bit = valueToBit(rowBitValue(row));
-                    const issue = rowIssue(row);
-                    if (bit === null) { skipped++; continue; }
-                    // stt = 3 số cuối của kỳ xổ, GIỮ NGUYÊN chuỗi (vd kỳ 0005 -> "005", không đổi thành "5")
-                    const stt = String(issue).slice(-3);
-                    const sttVal = /^\d+$/.test(stt) ? stt : String(nextStt);
-                    pushBitRaw(bit, sttVal);
-                    filled++;
+                const latestIssue = String(rowIssue(latestRow));
+
+                // So sánh với kỳ đã đưa lần trước: chỉ đưa khi CÓ KỲ MỚI hơn
+                if (lastInsertedIssue !== null) {
+                    const lastNum = parseInt(lastInsertedIssue, 10);
+                    const curNum = parseInt(latestIssue, 10);
+                    const isNewer = Number.isFinite(lastNum) && Number.isFinite(curNum)
+                        ? curNum > lastNum
+                        : String(latestIssue) > String(lastInsertedIssue);
+                    if (!isNewer) {
+                        setStatus(`Chưa có kết quả mới. Kỳ hiện tại vẫn là: ${latestIssue}`);
+                        return;
+                    }
                 }
 
-                // Cập nhật kỳ cao nhất đã đưa (kỳ mới nhất trong toPush)
-                if (toPush.length) lastInsertedIssue = String(rowIssue(toPush[0]));
+                // Chuyển kết quả -> bit 0/1
+                const bit = valueToBit(rowBitValue(latestRow));
+                if (bit === null) {
+                    setStatus('Kết quả mới không xác định được lớn/nhỏ. Bấm "Xem log" để xem JSON thô.');
+                    return;
+                }
 
-                // Tô màu lại cho chính xác theo 4 ô cuối (7-10) hàng 8 hiện tại
+                // STT = 3 số cuối của issue (pad cho đủ 3 chữ số, vd kỳ 5 -> "005")
+                const stt = String(latestIssue).padStart(3, '0').slice(-3);
+
+                // CHẶN TRÙNG STT: nếu ô cuối (hàng 8, ô 10) đang mang đúng STT này thì không đưa lại
+                const prevStt = cells[TOTAL - 1].stt;
+                if (prevStt !== null && String(prevStt) === stt) {
+                    lastInsertedIssue = latestIssue; // cập nhật mốc để khỏi lặp cảnh báo
+                    setStatus(`Kỳ ${latestIssue} (STT ${stt}) đã nằm ở ô 10 hàng 8. Chờ kết quả mới.`);
+                    return;
+                }
+
+                // Đưa bit mới vào ô cuối (hàng 8, ô 10), toàn bộ bảng dịch trái 1 ô
+                pushBitRaw(bit, stt);
+                lastInsertedIssue = latestIssue;
+
+                // Đồng bộ bộ đếm nhập tay để không trùng STT của API
+                const numStt = parseInt(stt, 10);
+                if (Number.isInteger(numStt)) { nextStt = numStt + 1; sttInput.value = String(nextStt); }
+
                 searchPattern();
-
-                setStatus(`Đã đưa ${filled} kết quả${skipped ? ' (bỏ ' + skipped + ' không xác định)' : ''}. Kỳ mới nhất (ô 10 hàng 8): ${rowIssue(allRows[0])}`);
+                setStatus(`✓ Kết quả mới (kỳ ${latestIssue}) vào ô 10 hàng 8, STT = ${stt}. Bảng dịch trái.`);
 
                 // Tự ghi lên Firebase để đồng bộ thời gian thực (nếu có mạng Firebase)
                 if (!applyingRemote) writeToFirebase();
@@ -774,6 +821,7 @@
                 setStatus('Lỗi: ' + err.message);
                 showRaw(err.message);
             } finally {
+                fetchInProgress = false;
                 if (btn) btn.disabled = false;
             }
         }
@@ -846,10 +894,11 @@
             }
         }
 
-        // 7. Làm mới toàn bộ
+        // 7. Làm mới toàn bộ: xoá sạch bảng + dữ liệu cũ trên Firebase (giữ token)
         function resetAll() {
             undoStack = []; // xoá lịch sử hoàn tác
-            lastInsertedIssue = null; // lần sau sẽ lấy lại 20 kết quả đầu
+            lastInsertedIssue = null; // bỏ mốc kỳ -> lần sau chỉ lấy 1 kỳ mới nhất làm mốc
+            fetchInProgress = false;
             for (let i = 0; i < TOTAL; i++) {
                 cells[i].stt = null;
                 cells[i].value = '';
@@ -858,7 +907,28 @@
             nextStt = 1;
             sttInput.value = '1';
             renderAll();
+            searchPattern();
             mainInput.focus();
+
+            // Xoá luôn dữ liệu cũ trên Firebase để khi mở lại không khôi phục bảng cũ.
+            // Không đụng tới token (merge:true, không set token).
+            if (fbDB && !applyingRemote) {
+                fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
+                    {
+                        lastIssue: null,
+                        lastUpdated: Date.now(),
+                        cells: cells.map(c => ({ v: '', s: '' }))
+                    },
+                    { merge: true }
+                ).then(() => {
+                    setStatus('Đã làm mới bảng và xoá dữ liệu cũ trên Firebase ✓');
+                }).catch(err => {
+                    console.log('[FB] Lỗi xoá dữ liệu:', err.message);
+                    setStatus('Đã làm mới bảng (Firebase chưa xoá được).');
+                });
+            } else {
+                setStatus('Đã làm mới bảng ✓');
+            }
         }
 
         // Khởi chạy
