@@ -261,8 +261,8 @@
 </head>
 <body>
 
-    <h2>Bảng 8x10 Nhị Phân</h2>
-    
+    <h2>Bảng 8x10 Nhị Phân (Dịch Trái + Số Thứ Tự)</h2>
+    <p class="desc">Gõ 0/1 ở Ô A -> bit mới vào ô (hàng 8, ô 10), toàn bộ dịch trái. Tự tô màu các vị trí trùng dãy ô 7-10 hàng 8.</p>
 
     <!-- Bảng chính 8x10 -->
     <div id="gridContainer" class="grid-table"></div>
@@ -331,6 +331,9 @@
         // Chặn chạy trùng khi bấm nút + tự cập nhật (15s) cùng lúc
         let fetchInProgress = false;
 
+        // Cờ "vừa bấm Làm mới": ngăn dữ liệu cũ từ Firebase hồi sinh lại bảng sau khi xoá
+        let boardCleared = false;
+
         // ===== CẤU HÌNH API =====
         // Lưu ý: token giờ được dán vào Ô NHẬP TOKEN trên giao diện (tiện mỗi lần đăng nhập).
         const CFG = {
@@ -370,12 +373,14 @@
 
                     // Sửa thủ công trên bảng (lưu trạng thái để hoàn tác)
                     valEl.addEventListener('input', () => {
+                        boardCleared = false;
                         undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
                         let v = valEl.value;
                         if (v !== '0' && v !== '1') valEl.value = '';
                         cells[li(r,c)].value = valEl.value;
                         searchPattern();
                         saveBoardLocal();
+                        writeToFirebase();
                     });
 
                     box.appendChild(sttEl);
@@ -427,6 +432,7 @@
 
         // 3. Chèn 1 bit mới vào ô cuối (hàng 8 ô 10), toàn bộ dịch trái, ô đầu (hàng1 ô1) bị đẩy ra
         function pushBit(bit) {
+            boardCleared = false;
             // Lưu trạng thái hiện tại vào lịch sử để hoàn tác
             undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
 
@@ -454,6 +460,7 @@
 
             searchPattern();
             saveBoardLocal();
+            writeToFirebase();
         }
 
         // 4. Ô 1 số: gõ 0/1 -> dịch trái
@@ -468,6 +475,7 @@
 
         // 4b. Đẩy trực tiếp 1 bit với stt cho sẵn (dùng cho kết quả từ API)
         function pushBitRaw(bit, stt) {
+            boardCleared = false;
             undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
             for (let i = 0; i < TOTAL - 1; i++) {
                 cells[i].value = cells[i + 1].value;
@@ -478,6 +486,7 @@
             renderAll();
             searchPattern();
             saveBoardLocal();
+            writeToFirebase();
         }
 
         // ===== TÍCH HỢP API XỔ SỐ =====
@@ -715,25 +724,30 @@
             searchPattern();
         }
 
-        // Ghi token lên Firestore (KHÔNG ghi bảng nữa)
+        // Ghi token + bảng lên Firestore (merge: KHÔNG xoá trường của tamper như lastTokenAt)
         async function writeToFirebase() {
             if (!fbDB) return;
             try {
                 await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
                     token: currentToken || getToken(),
-                    lastUpdated: Date.now()
-                }, { merge: true }); // merge để không xoá trường của tamper (vd lastTokenAt)
+                    lastUpdated: Date.now(),
+                    board: {
+                        lastIssue: lastInsertedIssue || null,
+                        cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
+                    }
+                }, { merge: true });
             } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
         }
 
-        // Nhận dữ liệu từ Firestore: CHỈ đồng bộ TOKEN vào ô nhập (tamper gửi token -> ô nhập tự điền)
+        // Nhận dữ liệu từ Firestore: đồng bộ TOKEN + BẢNG (2 chiều an toàn)
         function applyRemoteData(d) {
             if (!d) return;
             applyingRemote = true;
             try {
+                // 1) TOKEN: tamper gửi token -> tự điền vào ô nhập (đây là tính năng chính)
                 if ('token' in d) {
                     const tok = extractToken(d.token);
-                    if (tok !== currentToken) { // chỉ làm khi token thực sự đổi, tránh nhấp nháy
+                    if (tok !== currentToken) { // chỉ làm khi token thực sự đổi
                         currentToken = tok;
                         const el = document.getElementById('tokenInput');
                         if (el) el.value = tok;
@@ -747,6 +761,41 @@
                         setStatus(tok
                             ? '✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!'
                             : 'Token đã bị xoá (đồng bộ từ Firebase).');
+                    }
+                }
+
+                // 2) BẢNG: chỉ áp khi bảng remote MỚI HƠN bảng local (so lastIssue dạng chuỗi).
+                //    -> Không còn cảnh dữ liệu cũ đè lên bảng mới (gây trùng STT / kết quả biến mất).
+                const rb = d.board;
+                if (rb && Array.isArray(rb.cells) && rb.cells.length === TOTAL) {
+                    const remoteLast = rb.lastIssue ? String(rb.lastIssue) : null;
+                    const localLast = lastInsertedIssue ? String(lastInsertedIssue) : null;
+                    const localEmpty = cells.every(c => c.value === '');
+
+                    let apply = false;
+                    if (boardCleared) {
+                        apply = false; // vừa bấm "Làm mới": không cho dữ liệu cũ hồi sinh
+                    } else if (remoteLast) {
+                        if (!localLast) {
+                            apply = localEmpty; // mới mở trang & bảng trống -> lấy bảng từ Firebase (vd điện thoại)
+                        } else {
+                            apply = isNewerIssue(remoteLast, localLast); // remote mới hơn -> áp
+                        }
+                    }
+
+                    if (apply) {
+                        for (let i = 0; i < TOTAL; i++) {
+                            cells[i].value = rb.cells[i].v;
+                            cells[i].stt = rb.cells[i].s === '' ? null : rb.cells[i].s;
+                        }
+                        if (remoteLast) lastInsertedIssue = remoteLast;
+                        const ls = cells[TOTAL - 1].stt;
+                        if (ls !== null && ls !== '') {
+                            const n = parseInt(ls, 10);
+                            if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
+                        }
+                        renderAll();
+                        searchPattern();
                     }
                 }
             } finally {
@@ -837,9 +886,11 @@
                     return;
                 }
 
+                // Cập nhật mốc kỳ TRƯỚC khi đưa bit vào, để ghi Firebase đúng mốc mới
+                lastInsertedIssue = latestIssue;
+
                 // Đưa bit mới vào ô cuối (hàng 8, ô 10), toàn bộ bảng dịch trái 1 ô
                 pushBitRaw(bit, stt);
-                lastInsertedIssue = latestIssue;
 
                 // Đồng bộ bộ đếm nhập tay để không trùng STT của API
                 const numStt = parseInt(stt, 10);
@@ -926,6 +977,7 @@
 
         // 7. Làm mới toàn bộ: xoá sạch bảng + dữ liệu cũ trên Firebase (giữ token)
         function resetAll() {
+            boardCleared = true; // chặn dữ liệu cũ từ Firebase hồi sinh lại bảng
             undoStack = []; // xoá lịch sử hoàn tác
             lastInsertedIssue = null; // bỏ mốc kỳ -> lần sau chỉ lấy 1 kỳ mới nhất làm mốc
             fetchInProgress = false;
@@ -944,10 +996,13 @@
             try { localStorage.removeItem(LS_BOARD); } catch (e) {}
             saveBoardLocal(); // lưu bảng trống mới
 
-            // Xoá luôn dữ liệu bảng cũ trên Firebase (cells/lastIssue cũ). Không đụng token.
+            // Xoá luôn dữ liệu bảng cũ trên Firebase (board rỗng). Không đụng token.
             if (fbDB && !applyingRemote) {
                 fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
-                    { lastIssue: null, lastUpdated: Date.now() },
+                    {
+                        lastUpdated: Date.now(),
+                        board: { lastIssue: null, cells: cells.map(c => ({ v: '', s: '' })) }
+                    },
                     { merge: true }
                 ).then(() => {
                     setStatus('Đã làm mới bảng và xoá dữ liệu cũ trên Firebase ✓');
