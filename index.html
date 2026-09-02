@@ -487,10 +487,13 @@
             const remember = document.getElementById('rememberToken');
             if (!el) return;
             currentToken = el.value.trim();
+            if (!currentToken) { setStatus('⚠️ Ô token đang trống.'); return; }
             if (remember && remember.checked) {
                 try { localStorage.setItem('vn168_token', currentToken); } catch (e) {}
             }
-            setStatus('Đã lưu token ✓');
+            // Gửi luôn lên Firebase để các thiết bị/trang khác đồng bộ
+            if (fbDB && !applyingRemote) writeToFirebase();
+            setStatus('Đã lưu token ✓' + (fbDB ? ' (đã gửi lên Firebase)' : ''));
         }
 
         // Nạp token đã lưu khi mở trang
@@ -517,7 +520,9 @@
                     if (remember && remember.checked) {
                         try { localStorage.setItem('vn168_token', tok); } catch (e) {}
                     }
-                    setStatus('✓ Đã lấy token từ clipboard!');
+                    // Gửi luôn lên Firebase để đồng bộ
+                    if (fbDB && !applyingRemote) writeToFirebase();
+                    setStatus('✓ Đã lấy token từ clipboard!' + (fbDB ? ' (đã gửi lên Firebase)' : ''));
                 } else {
                     setStatus('Clipboard không có token hợp lệ (eyJ...). Bấm nút bên dưới để xem cách làm.');
                     showRaw('Bấm "Lấy token tự động" mà báo không có token?\n\nCách làm:\n1. Mở trang 383vn, mở 1 vòng xổ số.\n2. Script (Tampermonkey) sẽ tự copy token vào clipboard + hiện thông báo xanh.\n3. Quay lại tool này, bấm "Lấy token tự động".');
@@ -626,26 +631,38 @@
                     token: currentToken || getToken(),
                     lastUpdated: Date.now(),
                     cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
-                });
+                }, { merge: true }); // merge để không xoá các trường khác (vd lastTokenAt do tamper ghi)
             } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
         }
 
-        // Áp dữ liệu remote (từ Firestore) vào bảng + token
+        // Áp dữ liệu remote (từ Firestore) vào bảng + token.
+        // Hỗ trợ cả trường hợp tamper CHỈ GỬI MỖI TOKEN (chưa có cells) -> vẫn đồng bộ vào ô nhập token.
         function applyRemoteData(d) {
-            if (!d || !d.cells || d.cells.length !== TOTAL) return;
+            if (!d) return;
             applyingRemote = true;
             try {
-                if (d.token) {
-                    currentToken = d.token;
+                // 1) Đồng bộ token vào ô nhập (ưu tiên làm trước)
+                if (d.token && typeof d.token === 'string' && d.token.trim()) {
+                    const tok = d.token.trim();
+                    currentToken = tok;
                     const el = document.getElementById('tokenInput');
-                    if (el) el.value = d.token;
+                    if (el) el.value = tok;
+                    // Nếu tích "Nhớ token" thì lưu luôn vào bộ nhớ trình duyệt
+                    const remember = document.getElementById('rememberToken');
+                    if (remember && remember.checked) {
+                        try { localStorage.setItem('vn168_token', tok); } catch (e) {}
+                    }
+                    setStatus('✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!');
                 }
-                for (let i = 0; i < TOTAL; i++) {
-                    cells[i].value = d.cells[i].v;
-                    cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
+                // 2) Chỉ áp bảng khi có đủ 80 ô (cells)
+                if (d.cells && Array.isArray(d.cells) && d.cells.length === TOTAL) {
+                    for (let i = 0; i < TOTAL; i++) {
+                        cells[i].value = d.cells[i].v;
+                        cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
+                    }
+                    renderAll();
+                    searchPattern();
                 }
-                renderAll();
-                searchPattern();
             } finally {
                 applyingRemote = false;
             }
