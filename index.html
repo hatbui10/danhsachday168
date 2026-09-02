@@ -245,14 +245,12 @@
     <div id="gridContainer" class="grid-table"></div>
 
     <div class="control-panel">
-        <!-- Ô nhập STT cho ô mới (hàng 8, ô 10): nằm ngay phía trên Ô A, phía bên phải -->
-        <div class="stt-header">
+        <!-- Các phần tử điều khiển cũ (STT, Ô A, Hoàn tác, Làm mới) - ẨN, chỉ giữ để JS không lỗi -->
+        <div class="stt-header" style="display:none">
             <label for="sttInput">STT (8,10):</label>
             <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
         </div>
-
-        <!-- Ô A: nhập 0/1 -> nhảy vào ô (hàng 8, ô 10) rồi dịch trái -->
-        <div class="oa-section">
+        <div class="oa-section" style="display:none">
             <span class="oa-label">Ô A</span>
             <input type="tel" inputmode="numeric" pattern="[01]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0/1">
             <button class="btn-undo" onclick="undo()">Hoàn tác</button>
