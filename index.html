@@ -177,17 +177,18 @@
             }
             
             /* Dòng kết quả đơn lẻ định dạng mới */
-            .summary-row {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                background: #0d0d0d;
-                padding: 6px 10px;
-                border-radius: 6px;
-                border: 1px solid var(--border);
-                font-size: 12px;
-                font-family: monospace;
-            }
+                    .summary-row {
+            display: flex;
+            align-items: center;
+            justify-content: center; /* Đổi từ space-between thành center */
+            gap: 6px;                 /* Khoảng cách vừa phải giữa các phần tử */
+            background: #0d0d0d;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 12px;
+            font-family: monospace;
+                    }
             .summary-pattern {
                 color: #ffeb3b;
                 font-weight: bold;
@@ -966,7 +967,6 @@
                             let firstStt = segmentStts[0];
                             let lastStt = segmentStts[segmentStts.length - 1];
                             let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
-            
                             let nextVal = 'Hết';
                             let nextIdx = i + len;
                             if (nextIdx < TOTAL) {
