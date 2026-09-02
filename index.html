@@ -872,3 +872,27 @@
     </script>
 </body>
 </html>
+�c
+            lastInsertedIssue = null; // lần sau sẽ lấy lại 20 kết quả đầu
+            for (let i = 0; i < TOTAL; i++) {
+                cells[i].stt = null;
+                cells[i].value = '';
+            }
+            mainInput.value = '';
+            nextStt = 1;
+            sttInput.value = '1';
+            renderAll();
+            mainInput.focus();
+        }
+
+        // Khởi chạy
+        initGrid();
+        nextStt = 1;
+        sttInput.value = '1';
+        mainInput.focus();
+
+        // Bật đồng bộ thời gian thực với Firebase (tự nhận/tự gửi)
+        startRealtimeSync();
+    </script>
+</body>
+</html>
