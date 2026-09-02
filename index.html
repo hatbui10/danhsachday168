@@ -662,25 +662,31 @@
         // Nạp token đã lưu khi mở trang
         loadToken();
 
-        // 5. Tô màu các vị trí trùng dãy 4 ô cuối hàng 8 (cột 7-10).
-        //    Quét theo DÃY LIÊN TỤC 1 chiều (80 ô nối tiếp nhau) => 4 ô khớp có thể vắt qua 2 hàng vẫn được tô.
+        // 5. Tô màu các vị trí trùng dãy cuối cùng hàng 8.
+        //    Lấy pattern từ cuối hàng 8 lùi về trái qua các ô có giá trị 0/1 liên tiếp (tối đa 4).
+        //    Chỉ cần >=2 ô có giá trị là bắt đầu so sánh và tô màu (kể cả khi chưa đầy 80 ô).
+        //    Quét theo DÃY LIÊN TỤC 1 chiều (80 ô) => đoạn khớp có thể vắt qua 2 hàng.
         //    Mỗi ô chỉ dùng 1 lần (khi khớp thì nhảy qua đoạn, không chồng lấn).
         function searchPattern() {
             clearHighlights();
 
-            // Dãy tham chiếu = 4 ô cuối hàng 8: index 76,77,78,79
-            const p0 = 76; // (7,6) -> ô 7
-            const pattern = [
-                cells[p0].value,
-                cells[p0 + 1].value,
-                cells[p0 + 2].value,
-                cells[p0 + 3].value
-            ];
-            // Nếu dãy chưa đủ 0/1 thì không tô
-            if (pattern.some(v => v !== '0' && v !== '1')) return;
-            const len = 4;
+            // Gom dãy từ cuối hàng 8 (ô 10) lùi về trái qua các ô có 0/1 liên tiếp,
+            // NHƯNG chỉ lấy TỐI ĐA 4 ô (4 ô cuối cùng hàng 8).
+            let pattern = [];
+            for (let i = 79; i >= 0 && pattern.length < 4; i--) {
+                const v = cells[i].value;
+                if (v === '0' || v === '1') {
+                    pattern.unshift(v);
+                } else {
+                    break; // gặp ô trống thì dừng
+                }
+            }
+            // Cần ít nhất 2 ô có giá trị mới bắt đầu so sánh
+            if (pattern.length < 2) return;
+            const len = pattern.length;
+            const p0 = 80 - len; // index bắt đầu của đoạn tham chiếu trong dãy
 
-            // Quét toàn bộ dãy 1 chiều (i từ 0 đến TOTAL-len), không giới hạn theo từng hàng
+            // Quét toàn bộ dãy 1 chiều, tìm các đoạn liên tiếp trùng pattern
             let i = 0;
             while (i <= TOTAL - len) {
                 let matched = true;
@@ -688,12 +694,10 @@
                     if (cells[i + k].value !== pattern[k]) { matched = false; break; }
                 }
                 if (matched) {
-                    // Tô vàng đoạn khớp, NHƯNG không tô 4 ô tham chiếu cuối (index 76-79)
-                    for (let k = 0; k < len; k++) {
-                        const idx = i + k;
-                        // bỏ qua nếu trùng đúng 4 ô tham chiếu (i===76)
-                        if (i !== p0) {
-                            cells[idx].valEl.parentElement.classList.add('highlight');
+                    // Tô vàng đoạn khớp, NHƯNG bỏ qua chính đoạn tham chiếu cuối (i===p0)
+                    if (i !== p0) {
+                        for (let k = 0; k < len; k++) {
+                            cells[i + k].valEl.parentElement.classList.add('highlight');
                         }
                     }
                     i += len; // mỗi ô chỉ dùng 1 lần
