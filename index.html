@@ -261,8 +261,8 @@
 </head>
 <body>
 
-    <h2>Bảng 8x10 Nhị Phân (Dịch Trái + Số Thứ Tự)</h2>
-    <p class="desc">Gõ 0/1 ở Ô A -> bit mới vào ô (hàng 8, ô 10), toàn bộ dịch trái. Tự tô màu các vị trí trùng dãy ô 7-10 hàng 8.</p>
+    <h2>Bảng 8x10 Nhị Phân</h2>
+    
 
     <!-- Bảng chính 8x10 -->
     <div id="gridContainer" class="grid-table"></div>
@@ -375,6 +375,7 @@
                         if (v !== '0' && v !== '1') valEl.value = '';
                         cells[li(r,c)].value = valEl.value;
                         searchPattern();
+                        saveBoardLocal();
                     });
 
                     box.appendChild(sttEl);
@@ -452,6 +453,7 @@
             sttInput.value = nextStt;
 
             searchPattern();
+            saveBoardLocal();
         }
 
         // 4. Ô 1 số: gõ 0/1 -> dịch trái
@@ -475,6 +477,7 @@
             cells[TOTAL - 1].stt = stt;
             renderAll();
             searchPattern();
+            saveBoardLocal();
         }
 
         // ===== TÍCH HỢP API XỔ SỐ =====
@@ -635,18 +638,28 @@
             return row.issueNumber || row.issue || row.Issue || row.issueNo || row.issue_number || row.no || row.No || '';
         }
 
+        // So 2 issue xem "a" có LỚN HƠN "b" không.
+        // QUAN TRỌNG: issue là số 17 chữ số (vd "20260902100050489") -> parseInt bị MẤT CHÍNH XÁC,
+        // nên phải so theo CHUỖI. Với chuỗi số cùng độ dài, so chuỗi = so số (chính xác tuyệt đối).
+        function issueGreater(a, b) {
+            a = String(a || '').trim();
+            b = String(b || '').trim();
+            if (!b) return true;
+            if (!a) return false;
+            const aNum = /^\d+$/.test(a), bNum = /^\d+$/.test(b);
+            if (aNum && bNum) {
+                if (a.length !== b.length) return a.length > b.length; // nhiều chữ số hơn = lớn hơn
+                return a > b; // cùng độ dài -> so chuỗi chuẩn, khớp với so số
+            }
+            return a > b;
+        }
+
         // So 2 kỳ (issue) xem "cur" có MỚI HƠN "last" không.
-        // - Giống hệt chuỗi -> không mới.
-        // - Cả 2 đều là số nguyên thuần -> so theo SỐ (tránh "999" > "1000" kiểu chuỗi).
-        // - Còn lại -> so theo chuỗi (độ dài bằng nhau thì so lexicographic chuẩn).
         function isNewerIssue(cur, last) {
             cur = String(cur || '').trim();
             last = String(last || '').trim();
             if (!cur || cur === last) return false;
-            const curIsNum = /^\d+$/.test(cur);
-            const lastIsNum = /^\d+$/.test(last);
-            if (curIsNum && lastIsNum) return parseInt(cur, 10) > parseInt(last, 10);
-            return cur > last;
+            return issueGreater(cur, last);
         }
         function rowBitValue(row) {
             // number là 1 chữ số 0-9: dùng làm lớn/nhỏ
@@ -664,78 +677,76 @@
             return null;
         }
 
-        // ===== ĐỒNG BỘ FIREBASE (THỜI GIAN THỰC) =====
+        // ===== ĐỒNG BỘ FIREBASE (CHỈ CHO TOKEN) =====
+        // Bảng 80 ô KHÔNG đồng bộ qua Firebase nữa (đây là nguyên nhân gây trùng STT / kết quả biến mất).
+        // Bảng được lưu cục bộ vào localStorage để khi F5 không mất.
         const FB_COLLECTION = 'vn168';
         const FB_DOC = 'data';
-        const FB_SCHEMA_VERSION = 2; // tăng khi đổi cấu trúc. Dữ liệu cũ (thiếu version) sẽ bị BỎ QUA để tránh khôi phục bảng lỗi.
         let applyingRemote = false; // chặn vòng lặp khi nhận dữ liệu remote rồi ghi ngược
         let remoteUnsub = null;
 
-        // Ghi token + bảng lên Firestore (KHÔNG kích hoạt listener ngược lại)
+        // ===== LƯU BẢNG CỤC BỘ (localStorage) =====
+        const LS_BOARD = 'vn168_board_v3';
+
+        function saveBoardLocal() {
+            try {
+                localStorage.setItem(LS_BOARD, JSON.stringify({
+                    lastIssue: lastInsertedIssue,
+                    cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
+                }));
+            } catch (e) {}
+        }
+
+        function loadBoardLocal() {
+            let d = null;
+            try { d = JSON.parse(localStorage.getItem(LS_BOARD) || 'null'); } catch (e) {}
+            if (!d || !d.cells || d.cells.length !== TOTAL) return;
+            for (let i = 0; i < TOTAL; i++) {
+                cells[i].value = d.cells[i].v;
+                cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
+            }
+            if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
+            const ls = cells[TOTAL - 1].stt;
+            if (ls !== null && ls !== '') {
+                const n = parseInt(ls, 10);
+                if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
+            }
+            renderAll();
+            searchPattern();
+        }
+
+        // Ghi token lên Firestore (KHÔNG ghi bảng nữa)
         async function writeToFirebase() {
             if (!fbDB) return;
             try {
                 await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
                     token: currentToken || getToken(),
-                    lastUpdated: Date.now(),
-                    lastIssue: lastInsertedIssue || null, // lưu MỐC kỳ đã đưa để khi mở lại không đưa trùng
-                    schemaVersion: FB_SCHEMA_VERSION,
-                    cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
-                }, { merge: true }); // merge để không xoá các trường khác (vd lastTokenAt do tamper ghi)
+                    lastUpdated: Date.now()
+                }, { merge: true }); // merge để không xoá trường của tamper (vd lastTokenAt)
             } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
         }
 
-        // Áp dữ liệu remote (từ Firestore) vào bảng + token
+        // Nhận dữ liệu từ Firestore: CHỈ đồng bộ TOKEN vào ô nhập (tamper gửi token -> ô nhập tự điền)
         function applyRemoteData(d) {
             if (!d) return;
             applyingRemote = true;
             try {
-                // 1) Đồng bộ token vào ô nhập (kể cả tamper CHỈ GỬI MỖI TOKEN, chưa có cells)
                 if ('token' in d) {
                     const tok = extractToken(d.token);
-                    currentToken = tok;
-                    const el = document.getElementById('tokenInput');
-                    if (el) el.value = tok;
-                    const remember = document.getElementById('rememberToken');
-                    if (remember && remember.checked) {
-                        try {
-                            if (tok) localStorage.setItem('vn168_token', tok);
-                            else localStorage.removeItem('vn168_token');
-                        } catch (e) {}
-                    }
-                    setStatus(tok
-                        ? '✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!'
-                        : 'Token đã bị xoá (đồng bộ từ Firebase).');
-                }
-                // 2) Chỉ áp bảng khi có đủ 80 ô (cells) VÀ đúng phiên bản cấu trúc.
-                //    Dữ liệu cũ (không có schemaVersion) là bảng của code lỗi trước -> BỎ QUA, không khôi phục,
-                //    để tránh "2 ô cạnh nhau trùng STT" cứ hiện lại sau mỗi lần mở trang.
-                if (d.cells && Array.isArray(d.cells) && d.cells.length === TOTAL) {
-                    if (d.schemaVersion === FB_SCHEMA_VERSION) {
-                        for (let i = 0; i < TOTAL; i++) {
-                            cells[i].value = d.cells[i].v;
-                            cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
+                    if (tok !== currentToken) { // chỉ làm khi token thực sự đổi, tránh nhấp nháy
+                        currentToken = tok;
+                        const el = document.getElementById('tokenInput');
+                        if (el) el.value = tok;
+                        const remember = document.getElementById('rememberToken');
+                        if (remember && remember.checked) {
+                            try {
+                                if (tok) localStorage.setItem('vn168_token', tok);
+                                else localStorage.removeItem('vn168_token');
+                            } catch (e) {}
                         }
-                        renderAll();
-                        searchPattern();
-
-                        // KHÔI PHỤC mốc kỳ đã đưa -> tránh lần fetch đầu tiên đưa lại kỳ cũ (gây trùng STT)
-                        if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
-
-                        // Khôi phục bộ đếm STT nhập tay theo ô cuối (hàng 8 ô 10)
-                        const ls = cells[TOTAL - 1].stt;
-                        if (ls !== null && ls !== '') {
-                            const n = parseInt(ls, 10);
-                            if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
-                        }
-                    } else {
-                        // Dữ liệu cũ -> tự dọn: xoá cells/lastIssue cũ trên Firebase, giữ token
-                        console.log('[FB] Phát hiện dữ liệu cũ (thiếu schemaVersion). Tự dọn bảng cũ.');
-                        fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
-                            { lastIssue: null, schemaVersion: FB_SCHEMA_VERSION, cells: cells.map(c => ({ v: '', s: '' })) },
-                            { merge: true }
-                        ).catch(e => console.log('[FB] Lỗi dọn dữ liệu cũ:', e.message));
-                        setStatus('Đã bỏ qua bảng cũ (dữ liệu phiên bản trước). Bấm "Tự động lấy kết quả" để chạy lại.');
+                        setStatus(tok
+                            ? '✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!'
+                            : 'Token đã bị xoá (đồng bộ từ Firebase).');
                     }
                 }
             } finally {
@@ -783,15 +794,14 @@
                     return;
                 }
 
-                // Tìm ĐÚNG 1 kỳ MỚI NHẤT (issue lớn nhất). So theo SỐ, nếu issue không phải số thì so chuỗi.
-                let latestRow = null, latestNum = -Infinity, latestStr = '';
+                // Tìm ĐÚNG 1 kỳ MỚI NHẤT (issue lớn nhất). So theo CHUỖI để không mất chính xác với số 17 chữ số.
+                let latestRow = null, latestKey = '';
                 for (const r of allRows) {
                     const raw = String(rowIssue(r) || '').trim();
                     if (!raw) continue;
-                    const num = parseInt(raw, 10);
-                    const key = Number.isFinite(num) ? num : -Infinity;
-                    if (key > latestNum || (key === latestNum && raw > latestStr)) {
-                        latestNum = key; latestStr = raw; latestRow = r;
+                    if (!latestRow || issueGreater(raw, latestKey)) {
+                        latestRow = r;
+                        latestKey = raw;
                     }
                 }
                 if (!latestRow) {
@@ -837,9 +847,6 @@
 
                 searchPattern();
                 setStatus(`✓ Kết quả mới (kỳ ${latestIssue}) vào ô 10 hàng 8, STT = ${stt}. Bảng dịch trái.`);
-
-                // Tự ghi lên Firebase để đồng bộ thời gian thực (nếu có mạng Firebase)
-                if (!applyingRemote) writeToFirebase();
             } catch (err) {
                 setStatus('Lỗi: ' + err.message);
                 showRaw(err.message);
@@ -933,16 +940,14 @@
             searchPattern();
             mainInput.focus();
 
-            // Xoá luôn dữ liệu cũ trên Firebase để khi mở lại không khôi phục bảng cũ.
-            // Không đụng tới token (merge:true, không set token).
+            // Xoá bảng đã lưu cục bộ (localStorage)
+            try { localStorage.removeItem(LS_BOARD); } catch (e) {}
+            saveBoardLocal(); // lưu bảng trống mới
+
+            // Xoá luôn dữ liệu bảng cũ trên Firebase (cells/lastIssue cũ). Không đụng token.
             if (fbDB && !applyingRemote) {
                 fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
-                    {
-                        lastIssue: null,
-                        lastUpdated: Date.now(),
-                        schemaVersion: FB_SCHEMA_VERSION,
-                        cells: cells.map(c => ({ v: '', s: '' }))
-                    },
+                    { lastIssue: null, lastUpdated: Date.now() },
                     { merge: true }
                 ).then(() => {
                     setStatus('Đã làm mới bảng và xoá dữ liệu cũ trên Firebase ✓');
@@ -959,6 +964,7 @@
         initGrid();
         nextStt = 1;
         sttInput.value = '1';
+        loadBoardLocal(); // khôi phục bảng đã lưu cục bộ (nếu có)
         mainInput.focus();
 
         // Bật đồng bộ thời gian thực với Firebase (tự nhận/tự gửi)
