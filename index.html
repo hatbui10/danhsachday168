@@ -106,11 +106,13 @@
         }
         .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
 
+        /* Ô trùng dãy 4 ô cuối hàng 8 - tô VÀNG nổi bật */
         .highlight {
-            background-color: #8a6d00 !important;
-            border-color: #fbc02d !important;
+            background-color: #f9a825 !important;  /* vàng đậm dễ thấy */
+            border: 2px solid #ffd54f !important;
         }
-        .highlight .val-input { color: #ffeb3b; }
+        .highlight .val-input { color: #1a1a1a; font-weight: bold; }
+        .highlight .stt-label { color: #3e2723; }
 
         /* 4 ô 7-10 hàng 8: ô tham chiếu - tô XANH, không tính vào kết quả */
         .reference {
@@ -629,9 +631,10 @@
                     const bit = valueToBit(rowBitValue(row));
                     const issue = rowIssue(row);
                     if (bit === null) { skipped++; continue; }
+                    // stt = 3 số cuối của kỳ xổ, GIỮ NGUYÊN chuỗi (vd kỳ 0005 -> "005", không đổi thành "5")
                     const stt = String(issue).slice(-3);
-                    const sttNum = /^\d+$/.test(stt) ? parseInt(stt, 10) : nextStt;
-                    pushBitRaw(bit, sttNum);
+                    const sttVal = /^\d+$/.test(stt) ? stt : String(nextStt);
+                    pushBitRaw(bit, sttVal);
                     filled++;
                 }
 
