@@ -337,6 +337,10 @@
         // Cờ "vừa bấm Làm mới": ngăn dữ liệu cũ từ Firebase hồi sinh lại bảng sau khi xoá
         let boardCleared = false;
 
+        // Dấu thời gian lần xoá gần nhất + số thứ tự phiên để huỷ fetch cũ đang chạy dở
+        let localClearedAt = 0;
+        let resetEpoch = 0;
+
         // ===== CẤU HÌNH API =====
         // Lưu ý: token giờ được dán vào Ô NHẬP TOKEN trên giao diện (tiện mỗi lần đăng nhập).
         const CFG = {
@@ -726,6 +730,7 @@
                     lastUpdated: Date.now(),
                     board: {
                         lastIssue: lastInsertedIssue || null,
+                        clearedAt: localClearedAt || 0,
                         cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
                     }
                 }, { merge: true });
@@ -764,10 +769,13 @@
                     const remoteLast = rb.lastIssue ? String(rb.lastIssue) : null;
                     const localLast = lastInsertedIssue ? String(lastInsertedIssue) : null;
                     const localEmpty = cells.every(c => c.value === '');
+                    const remoteClearedAt = rb.clearedAt ? Number(rb.clearedAt) : 0;
 
                     let apply = false;
                     if (boardCleared) {
                         apply = false; // vừa bấm "Làm mới": không cho dữ liệu cũ hồi sinh
+                    } else if (localClearedAt && remoteClearedAt && remoteClearedAt < localClearedAt) {
+                        apply = false; // dữ liệu remote được ghi TRƯỚC lúc ta xoá -> bỏ qua (dữ liệu cũ)
                     } else if (remoteLast) {
                         if (!localLast) {
                             apply = localEmpty; // mới mở trang & bảng trống -> lấy bảng từ Firebase (vd điện thoại)
@@ -782,6 +790,7 @@
                             cells[i].stt = rb.cells[i].s === '' ? null : rb.cells[i].s;
                         }
                         if (remoteLast) lastInsertedIssue = remoteLast;
+                        if (remoteClearedAt > localClearedAt) localClearedAt = remoteClearedAt;
                         const ls = cells[TOTAL - 1].stt;
                         if (ls !== null && ls !== '') {
                             const n = parseInt(ls, 10);
@@ -817,6 +826,7 @@
         async function fetchAndFill() {
             if (fetchInProgress) return; // tránh chạy trùng (bấm nút + tự cập nhật 15s)
             fetchInProgress = true;
+            const epoch = resetEpoch; // ghi nhớ phiên: nếu người dùng bấm "Làm mới" giữa chừng thì huỷ kết quả cũ
             const btn = document.getElementById('btnFetch');
             if (btn) btn.disabled = true;
             try {
@@ -828,6 +838,7 @@
 
                 // Gọi 1 lần với body gốc (signature đúng)
                 const res = await apiPost(CFG.apiResult, CFG.payload);
+                if (epoch !== resetEpoch) return; // đã bị reset giữa chừng -> bỏ kết quả cũ
                 showRaw(res);
                 const allRows = findRows(res);
 
@@ -854,7 +865,6 @@
 
                 // ===== LẦN ĐẦU / BẢNG TRỐNG: nạp 20 kết quả mới nhất vào bảng =====
                 if (lastInsertedIssue === null) {
-                    boardCleared = false;
                     const take = Math.min(20, sorted.length);          // tối đa 20 kết quả
                     const batch = sorted.slice(sorted.length - take);   // 20 kỳ mới nhất, thứ tự cũ -> mới
 
@@ -884,8 +894,13 @@
                     renderAll();
                     searchPattern();
                     saveBoardLocal();
-                    writeToFirebase();
-                    setStatus(`✓ Đã nạp ${batch.length} kết quả gần nhất. Kỳ mới nhất (ô 10 hàng 8): ${lastInsertedIssue}`);
+
+                    // Giữ boardCleared = true SUỐT lúc nạp + ghi, chỉ tắt SAU khi đã ghi xong lên Firebase,
+                    // để dữ liệu cũ trên Firebase KHÔNG thể đè lên bảng mới trong lúc này.
+                    await writeToFirebase();
+                    boardCleared = false;
+
+                    setStatus(`✓ Đã làm mới xong. Nạp ${batch.length} kết quả mới nhất. Kỳ mới nhất (ô 10 hàng 8): ${lastInsertedIssue}`);
                     return;
                 }
 
@@ -1001,11 +1016,14 @@
             }
         }
 
-        // 7. Làm mới toàn bộ: xoá sạch bảng + dữ liệu cũ trên Firebase (giữ token)
+        // 7. Làm mới toàn bộ: xoá sạch bảng + dữ liệu cũ trên Firebase (giữ token),
+        //    sau đó NẠP NGAY 20 kết quả mới nhất (không để bảng trống chờ 15s).
         function resetAll() {
-            boardCleared = true; // chặn dữ liệu cũ từ Firebase hồi sinh lại bảng
-            undoStack = []; // xoá lịch sử hoàn tác
-            lastInsertedIssue = null; // bỏ mốc kỳ -> lần sau chỉ lấy 1 kỳ mới nhất làm mốc
+            resetEpoch++;               // huỷ mọi fetch đang chạy dở (kết quả cũ bị bỏ)
+            localClearedAt = Date.now();// đánh dấu thời điểm xoá -> chặn dữ liệu cũ trên Firebase
+            boardCleared = true;        // chặn dữ liệu cũ từ Firebase hồi sinh lại bảng
+            undoStack = [];             // xoá lịch sử hoàn tác
+            lastInsertedIssue = null;   // bỏ mốc kỳ -> lần sau chỉ lấy 1 kỳ mới nhất làm mốc
             fetchInProgress = false;
             for (let i = 0; i < TOTAL; i++) {
                 cells[i].stt = null;
@@ -1022,23 +1040,23 @@
             try { localStorage.removeItem(LS_BOARD); } catch (e) {}
             saveBoardLocal(); // lưu bảng trống mới
 
-            // Xoá luôn dữ liệu bảng cũ trên Firebase (board rỗng). Không đụng token.
-            if (fbDB && !applyingRemote) {
+            // Xoá luôn dữ liệu bảng cũ trên Firebase (board rỗng, kèm clearedAt). Không đụng token.
+            if (fbDB) {
                 fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
                     {
                         lastUpdated: Date.now(),
-                        board: { lastIssue: null, cells: cells.map(c => ({ v: '', s: '' })) }
+                        board: {
+                            lastIssue: null,
+                            clearedAt: localClearedAt,
+                            cells: cells.map(c => ({ v: '', s: '' }))
+                        }
                     },
                     { merge: true }
-                ).then(() => {
-                    setStatus('Đã làm mới bảng và xoá dữ liệu cũ trên Firebase ✓');
-                }).catch(err => {
-                    console.log('[FB] Lỗi xoá dữ liệu:', err.message);
-                    setStatus('Đã làm mới bảng (Firebase chưa xoá được).');
-                });
-            } else {
-                setStatus('Đã làm mới bảng ✓');
+                ).catch(err => console.log('[FB] Lỗi xoá dữ liệu:', err.message));
             }
+
+            setStatus('Đã xoá dữ liệu cũ. Đang nạp 20 kết quả mới nhất...');
+            fetchAndFill(); // nạp ngay 20 kết quả mới nhất (nhánh "lần đầu")
         }
 
         // Khởi chạy
@@ -1051,5 +1069,5 @@
         // Bật đồng bộ thời gian thực với Firebase (tự nhận/tự gửi)
         startRealtimeSync();
     </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a349e7664a3e1113',t:'MTc4ODMyNDczMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
