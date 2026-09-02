@@ -972,7 +972,7 @@
                             if (nextIdx < TOTAL) {
                                 let valNext = cells[nextIdx].value !== '' ? cells[nextIdx].value : '?';
                                 let sttNext = cells[nextIdx].stt !== null ? cells[nextIdx].stt : '?';
-                                nextCellInfo = `Val: ${valNext} (STT: ${sttNext})`;
+                                nextCellInfo = `${valNext} (STT: ${sttNext})`;
                             }
             
                             resultsList.push(`STT [${segmentStts.join(', ')}] -> Ô kế tiếp: ${nextCellInfo}`);
