@@ -686,7 +686,9 @@
             const len = pattern.length;
             const p0 = 80 - len; // index bắt đầu của đoạn tham chiếu trong dãy
 
-            // Quét toàn bộ dãy 1 chiều, tìm các đoạn liên tiếp trùng pattern
+            // Quét toàn bộ dãy 1 chiều từ trái sang phải.
+            // Quy tắc "MỖI Ô CHỈ DÙNG 1 LẦN": khi một đoạn khớp được tô thì nhảy qua cả đoạn
+            // (i += len), nên các ô trong đoạn đã dùng không được dùng lại cho đoạn tiếp theo.
             let i = 0;
             while (i <= TOTAL - len) {
                 let matched = true;
