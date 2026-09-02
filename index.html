@@ -634,6 +634,20 @@
         function rowIssue(row) {
             return row.issueNumber || row.issue || row.Issue || row.issueNo || row.issue_number || row.no || row.No || '';
         }
+
+        // So 2 kỳ (issue) xem "cur" có MỚI HƠN "last" không.
+        // - Giống hệt chuỗi -> không mới.
+        // - Cả 2 đều là số nguyên thuần -> so theo SỐ (tránh "999" > "1000" kiểu chuỗi).
+        // - Còn lại -> so theo chuỗi (độ dài bằng nhau thì so lexicographic chuẩn).
+        function isNewerIssue(cur, last) {
+            cur = String(cur || '').trim();
+            last = String(last || '').trim();
+            if (!cur || cur === last) return false;
+            const curIsNum = /^\d+$/.test(cur);
+            const lastIsNum = /^\d+$/.test(last);
+            if (curIsNum && lastIsNum) return parseInt(cur, 10) > parseInt(last, 10);
+            return cur > last;
+        }
         function rowBitValue(row) {
             // number là 1 chữ số 0-9: dùng làm lớn/nhỏ
             if ('number' in row && row.number !== '') return row.number;
@@ -653,6 +667,7 @@
         // ===== ĐỒNG BỘ FIREBASE (THỜI GIAN THỰC) =====
         const FB_COLLECTION = 'vn168';
         const FB_DOC = 'data';
+        const FB_SCHEMA_VERSION = 2; // tăng khi đổi cấu trúc. Dữ liệu cũ (thiếu version) sẽ bị BỎ QUA để tránh khôi phục bảng lỗi.
         let applyingRemote = false; // chặn vòng lặp khi nhận dữ liệu remote rồi ghi ngược
         let remoteUnsub = null;
 
@@ -664,6 +679,7 @@
                     token: currentToken || getToken(),
                     lastUpdated: Date.now(),
                     lastIssue: lastInsertedIssue || null, // lưu MỐC kỳ đã đưa để khi mở lại không đưa trùng
+                    schemaVersion: FB_SCHEMA_VERSION,
                     cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
                 }, { merge: true }); // merge để không xoá các trường khác (vd lastTokenAt do tamper ghi)
             } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
@@ -691,23 +707,35 @@
                         ? '✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!'
                         : 'Token đã bị xoá (đồng bộ từ Firebase).');
                 }
-                // 2) Chỉ áp bảng khi có đủ 80 ô (cells)
+                // 2) Chỉ áp bảng khi có đủ 80 ô (cells) VÀ đúng phiên bản cấu trúc.
+                //    Dữ liệu cũ (không có schemaVersion) là bảng của code lỗi trước -> BỎ QUA, không khôi phục,
+                //    để tránh "2 ô cạnh nhau trùng STT" cứ hiện lại sau mỗi lần mở trang.
                 if (d.cells && Array.isArray(d.cells) && d.cells.length === TOTAL) {
-                    for (let i = 0; i < TOTAL; i++) {
-                        cells[i].value = d.cells[i].v;
-                        cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
-                    }
-                    renderAll();
-                    searchPattern();
+                    if (d.schemaVersion === FB_SCHEMA_VERSION) {
+                        for (let i = 0; i < TOTAL; i++) {
+                            cells[i].value = d.cells[i].v;
+                            cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
+                        }
+                        renderAll();
+                        searchPattern();
 
-                    // KHÔI PHỤC mốc kỳ đã đưa -> tránh lần fetch đầu tiên đưa lại kỳ cũ (gây trùng STT)
-                    if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
+                        // KHÔI PHỤC mốc kỳ đã đưa -> tránh lần fetch đầu tiên đưa lại kỳ cũ (gây trùng STT)
+                        if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
 
-                    // Khôi phục bộ đếm STT nhập tay theo ô cuối (hàng 8 ô 10)
-                    const ls = cells[TOTAL - 1].stt;
-                    if (ls !== null && ls !== '') {
-                        const n = parseInt(ls, 10);
-                        if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
+                        // Khôi phục bộ đếm STT nhập tay theo ô cuối (hàng 8 ô 10)
+                        const ls = cells[TOTAL - 1].stt;
+                        if (ls !== null && ls !== '') {
+                            const n = parseInt(ls, 10);
+                            if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
+                        }
+                    } else {
+                        // Dữ liệu cũ -> tự dọn: xoá cells/lastIssue cũ trên Firebase, giữ token
+                        console.log('[FB] Phát hiện dữ liệu cũ (thiếu schemaVersion). Tự dọn bảng cũ.');
+                        fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
+                            { lastIssue: null, schemaVersion: FB_SCHEMA_VERSION, cells: cells.map(c => ({ v: '', s: '' })) },
+                            { merge: true }
+                        ).catch(e => console.log('[FB] Lỗi dọn dữ liệu cũ:', e.message));
+                        setStatus('Đã bỏ qua bảng cũ (dữ liệu phiên bản trước). Bấm "Tự động lấy kết quả" để chạy lại.');
                     }
                 }
             } finally {
@@ -773,14 +801,9 @@
 
                 const latestIssue = String(rowIssue(latestRow));
 
-                // So sánh với kỳ đã đưa lần trước: chỉ đưa khi CÓ KỲ MỚI hơn
+                // So sánh với kỳ đã đưa lần trước: chỉ đưa khi CÓ KỲ MỚI (so theo ĐẦY ĐỦ chuỗi issue)
                 if (lastInsertedIssue !== null) {
-                    const lastNum = parseInt(lastInsertedIssue, 10);
-                    const curNum = parseInt(latestIssue, 10);
-                    const isNewer = Number.isFinite(lastNum) && Number.isFinite(curNum)
-                        ? curNum > lastNum
-                        : String(latestIssue) > String(lastInsertedIssue);
-                    if (!isNewer) {
+                    if (!isNewerIssue(latestIssue, String(lastInsertedIssue))) {
                         setStatus(`Chưa có kết quả mới. Kỳ hiện tại vẫn là: ${latestIssue}`);
                         return;
                     }
@@ -917,6 +940,7 @@
                     {
                         lastIssue: null,
                         lastUpdated: Date.now(),
+                        schemaVersion: FB_SCHEMA_VERSION,
                         cells: cells.map(c => ({ v: '', s: '' }))
                     },
                     { merge: true }
