@@ -5,7 +5,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Bảng 8x10 Nhị Phân & Dịch Trái + STT</title>
-        <!-- Firebase SDK (chạy khi mở file trong trình duyệt thật; bản preview trong app sẽ không nạp do chặn mạng) -->
+        <!-- Firebase SDK (chạy khi mở file trong trình duyệt thật) -->
         <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
         <script>
@@ -25,7 +25,7 @@
                 fbDB = firebase.firestore(fbApp);
                 console.log('[FB] Firebase đã kết nối.');
             } catch (e) {
-                console.log('[FB] Firebase chưa khả dụng (có thể mở bằng file:// hoặc thiếu mạng):', e.message);
+                console.log('[FB] Firebase chưa khả dụng:', e.message);
             }
         </script>
         <style>
@@ -53,7 +53,6 @@
             }
             
             h2 { color: var(--text); margin-bottom: 5px; text-align: center; }
-            p.desc { font-size: 13px; color: var(--text-dim); margin-bottom: 15px; text-align: center; }
             
             /* Ô nhập STT phía trên 8 hàng */
             .stt-header {
@@ -62,6 +61,7 @@
                 justify-content: flex-end;
                 gap: 8px;
                 width: 100%;
+                max-width: 360px;
                 background: transparent;
                 padding: 0;
                 margin-bottom: 6px;
@@ -81,7 +81,7 @@
             }
             #sttInput:focus { background-color: #3a2a55; }
             
-            /* Bảng 8x10 - kích thước nhỏ để vừa màn hình điện thoại */
+            /* Bảng 8x10 - kích thước nhỏ vừa màn hình điện thoại */
             .grid-table {
                 display: grid;
                 grid-template-columns: repeat(10, 28px);
@@ -120,7 +120,7 @@
             .grid-cell .val-input {
                 width: 24px;
                 height: 19px;
-                display: flex;            /* span -> canh giữa cả ngang lẫn dọc */
+                display: flex;
                 align-items: center;
                 justify-content: center;
                 font-size: 13px;
@@ -129,21 +129,20 @@
                 outline: none;
                 background: transparent;
                 color: var(--text);
-                pointer-events: none;  /* CHỈ ĐỌC: không cho bấm/focus/sửa */
+                pointer-events: none;
                 user-select: none;
-                -webkit-user-select: none;
             }
             .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
             
             /* Ô trùng dãy cuối hàng 8 - tô VÀNG nổi bật */
             .highlight {
-                background-color: #f9a825 !important;  /* vàng đậm dễ thấy */
+                background-color: #f9a825 !important;
                 border: 2px solid #ffd54f !important;
             }
             .highlight .val-input { color: #1a1a1a; font-weight: bold; }
             .highlight .stt-label { color: #3e2723; }
             
-            /* Ô tham chiếu cuối hàng 8: ô xanh, không tính vào kết quả */
+            /* Ô tham chiếu cuối hàng 8: ô xanh */
             .reference {
                 background-color: #0b3d66 !important;
                 border-color: #4da3ff !important;
@@ -151,7 +150,7 @@
             .reference .val-input { color: #cfe8ff; }
             .reference .stt-label { color: #ffeb3b; }
             
-            /* Khung hiển thị danh sách ô tô vàng và ô liền sau */
+            /* Khung hiển thị danh sách dạng gọn gàng (div) */
             .highlight-summary-panel {
                 background: var(--surface);
                 padding: 12px;
@@ -166,22 +165,43 @@
                 font-size: 13px;
                 font-weight: bold;
                 color: #ffeb3b;
-                margin-bottom: 6px;
+                margin-bottom: 8px;
                 text-align: center;
             }
             .highlight-summary-content {
-                font-family: monospace;
-                font-size: 11px;
-                color: #7CFC9A;
-                white-space: pre-wrap;
-                word-break: break-all;
-                max-height: 120px;
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                max-height: 150px;
                 overflow-y: auto;
+            }
+            
+            /* Dòng kết quả đơn lẻ định dạng mới */
+            .summary-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
                 background: #0d0d0d;
-                padding: 8px;
-                border-radius: 4px;
+                padding: 6px 10px;
+                border-radius: 6px;
                 border: 1px solid var(--border);
-                box-sizing: border-box;
+                font-size: 12px;
+                font-family: monospace;
+            }
+            .summary-pattern {
+                color: #ffeb3b;
+                font-weight: bold;
+            }
+            .summary-target {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background-color: #064e3b;
+                border: 1px solid #10b981;
+                color: #34d9ab;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-weight: bold;
             }
             
             /* Vùng điều khiển bên dưới */
@@ -198,7 +218,6 @@
                 max-width: 100%;
                 box-sizing: border-box;
             }
-            /* Ô A - nằm ngay phía trên 5 ô mẫu */
             .oa-section {
                 display: flex;
                 align-items: center;
@@ -223,23 +242,19 @@
                 background-color: var(--surface2);
                 color: var(--text);
             }
-            #mainInput::placeholder { color: #555; }
             
             .btn-undo {
                 padding: 8px 14px; background-color: #17a2b8; color: white; border: none;
                 border-radius: 4px; cursor: pointer; font-size: 13px;
             }
             .btn-undo:hover { background-color: #138496; }
-            .btn-undo:disabled { background-color: #444; cursor: not-allowed; }
             
             .btn-fetch {
                 padding: 8px 14px; background-color: #28a745; color: white; border: none;
                 border-radius: 4px; cursor: pointer; font-size: 13px;
             }
             .btn-fetch:hover { background-color: #218838; }
-            .btn-fetch:disabled { background-color: #444; cursor: not-allowed; }
             
-            /* Khu vực API / log */
             .api-panel {
                 width: 100%;
                 display: flex;
@@ -253,7 +268,7 @@
             }
             .api-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
             .status { font-size: 12px; color: var(--accent); min-height: 15px; }
-            /* Ô nhập token */
+            
             .token-row {
                 display: flex;
                 flex-direction: column;
@@ -303,21 +318,22 @@
 
         <h2>Bảng Nhị Phân 3 chiều</h2>
 
+        <!-- Ô nhập STT phía trên -->
+        <div class="stt-header">
+            <label for="sttInput">STT (8,10):</label>
+            <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
+        </div>
+
         <!-- Bảng chính 8x10 -->
         <div id="gridContainer" class="grid-table"></div>
 
-        <!-- Khung hiển thị danh sách ô tô vàng và ô thứ 5 -->
+        <!-- Khung hiển thị danh sách dạng gọn gàng -->
         <div class="highlight-summary-panel">
-            <div class="highlight-summary-title">Danh sách đoạn khớp (Tô vàng + Ô thứ 5):</div>
-            <div id="highlightSummaryContent" class="highlight-summary-content">Chưa có dữ liệu.</div>
+            <div class="highlight-summary-title">4 đoạn trùng khớp gần nhất:</div>
+            <div id="highlightSummaryContent" class="highlight-summary-content" style="color: var(--text-dim); text-align: center; padding: 6px;">Chưa có dữ liệu.</div>
         </div>
 
         <div class="control-panel">
-            <!-- Các phần tử điều khiển cũ (STT, Ô A, Hoàn tác, Làm mới) - ẨN -->
-            <div class="stt-header" style="display:none">
-                <label for="sttInput">STT (8,10):</label>
-                <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
-            </div>
             <div class="oa-section" style="display:none">
                 <span class="oa-label">Ô A</span>
                 <input type="tel" inputmode="numeric" pattern="[01]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0/1">
@@ -325,11 +341,9 @@
                 <button class="btn-reset" onclick="resetAll()">Làm mới</button>
             </div>
 
-            <!-- Khu vực tự động lấy kết quả từ API -->
             <div class="api-panel">
-                <!-- Ô nhập token tiện lợi -->
                 <div class="token-row">
-                    <label for="tokenInput">Token API (dán token mới mỗi khi đăng nhập):</label>
+                    <label for="tokenInput">Token API:</label>
                     <input type="text" id="tokenInput" placeholder="eyJhbGciOiJIUzI1NiIs..." autocomplete="off" spellcheck="false">
                     <div class="token-btns">
                         <button class="btn-fetch" onclick="getTokenFromClipboard()">📋 Lấy token</button>
@@ -345,7 +359,6 @@
                         <input type="checkbox" id="autoRefresh" checked> Mỗi 15s
                     </label>
                     <button class="btn-undo" onclick="toggleLog()">Xem log</button>
-                    <button class="btn-reset" onclick="resetAll()">🧹 Làm mới</button>
                 </div>
                 <div class="api-row">
                     <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối hàng 8:
@@ -364,27 +377,17 @@
         <script>
             const ROWS = 8;
             const COLS = 10;
-            const TOTAL = ROWS * COLS; // 80
+            const TOTAL = ROWS * COLS;
             
-            // Số ô xanh (tham chiếu) cuối hàng 8: 4, 5 hoặc 6 (mặc định 4)
             let refCount = 4;
-            
             const gridContainer = document.getElementById('gridContainer');
             const mainInput = document.getElementById('mainInput');
             const sttInput = document.getElementById('sttInput');
             
-            // Mỗi ô: { stt, value, valEl, sttEl }
             let cells = [];
-            
-            // Lịch sử trạng thái để HOÀN TÁC
             let undoStack = [];
-            
-            // Bộ đếm stt liên tục
             let nextStt = 1;
-            
-            // Kỳ (issue) cao nhất đã đưa vào bảng
             let lastInsertedIssue = null;
-            
             let fetchInProgress = false;
             let boardCleared = false;
             let localClearedAt = 0;
@@ -398,8 +401,6 @@
             };
             
             let currentToken = '';
-            
-            const li = (r, c) => r * COLS + c;
             
             function initGrid() {
                 gridContainer.innerHTML = '';
@@ -534,7 +535,7 @@
                     try { localStorage.setItem('vn168_token', currentToken); } catch (e) {}
                 }
                 if (fbDB && !applyingRemote) writeToFirebase();
-                setStatus('Đã lưu token ✓' + (fbDB ? ' (đã gửi lên Firebase)' : ''));
+                setStatus('Đã lưu token ✓');
             }
             
             function loadToken() {
@@ -685,7 +686,6 @@
             const FB_DOC = 'data';
             let applyingRemote = false;
             let remoteUnsub = null;
-            
             const LS_BOARD = 'vn168_board_v3';
             
             function saveBoardLocal() {
@@ -727,7 +727,7 @@
                             cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
                         }
                     }, { merge: true });
-                } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
+                } catch (e) {}
             }
             
             function applyRemoteData(d) {
@@ -747,7 +747,6 @@
                                     else localStorage.removeItem('vn168_token');
                                 } catch (e) {}
                             }
-                            setStatus(tok ? '✓ Đã nhận token từ Firebase!' : 'Token đã bị xoá.');
                         }
                     }
             
@@ -799,9 +798,7 @@
                     remoteUnsub = fbDB.collection(FB_COLLECTION).doc(FB_DOC)
                         .onSnapshot(snap => {
                             if (snap.exists) applyRemoteData(snap.data());
-                        }, err => {
-                            console.log('[FB] Lỗi realtime:', err.message);
-                        });
+                        }, err => {});
                 } catch (e) {}
             }
             
@@ -883,7 +880,7 @@
                         return i && issueGreater(i, String(lastInsertedIssue));
                     });
                     if (!toPush.length) {
-                        setStatus(`Chưa có kết quả mới. Kỳ hiện tại: ${newestIssue}`);
+                        setStatus(`Chưa có kết quả mới.`);
                         return;
                     }
             
@@ -912,7 +909,6 @@
                     setStatus(`✓ Đã đưa ${filled} kết quả mới.`);
                 } catch (err) {
                     setStatus('Lỗi: ' + err.message);
-                    showRaw(err.message);
                 } finally {
                     fetchInProgress = false;
                     if (btn) btn.disabled = false;
@@ -926,7 +922,7 @@
             
             loadToken();
             
-            // Hàm searchPattern hỗ trợ tô màu và hiển thị danh sách ra khung div
+            // Hàm searchPattern lấy toàn bộ kết quả trùng khớp, sau đó chỉ lấy tối đa 4 kết quả ở cuối (gần hàng 8 nhất)
             function searchPattern() {
                 clearHighlights();
             
@@ -943,7 +939,9 @@
                 const summaryEl = document.getElementById('highlightSummaryContent');
                 
                 if (pattern.length < 2) {
-                    if (summaryEl) summaryEl.textContent = 'Chưa đủ dữ liệu mẫu (cần ít nhất 2 ô).';
+                    if (summaryEl) {
+                        summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Chưa đủ dữ liệu mẫu (cần ít nhất 2 ô).</span>';
+                    }
                     return;
                 }
                 
@@ -951,8 +949,7 @@
                 const p0 = 80 - len;
             
                 let i = 0;
-                let matchCount = 0;
-                let resultsList = [];
+                let matches = []; // Lưu danh sách các đoạn trùng khớp tìm được
             
                 while (i <= TOTAL - len) {
                     let matched = true;
@@ -963,20 +960,29 @@
                         if (i !== p0) {
                             let segmentStts = [];
                             for (let k = 0; k < len; k++) {
-                                cells[i + k].valEl.parentElement.classList.add('highlight');
                                 segmentStts.push(cells[i + k].stt !== null ? cells[i + k].stt : '?');
                             }
                             
-                            let nextCellInfo = 'Hết bảng';
+                            let firstStt = segmentStts[0];
+                            let lastStt = segmentStts[segmentStts.length - 1];
+                            let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
+            
+                            let nextVal = 'Hết';
                             let nextIdx = i + len;
                             if (nextIdx < TOTAL) {
-                                let valNext = cells[nextIdx].value !== '' ? cells[nextIdx].value : '?';
-                                let sttNext = cells[nextIdx].stt !== null ? cells[nextIdx].stt : '?';
-                                nextCellInfo = `${valNext} (STT: ${sttNext})`;
+                                nextVal = cells[nextIdx].value !== '' ? cells[nextIdx].value : '?';
                             }
             
-                            resultsList.push(`STT [${segmentStts.join(', ')}] -> Ô kế tiếp: ${nextCellInfo}`);
-                            matchCount++;
+                            matches.push({
+                                startIndex: i,
+                                html: `
+                                    <div class="summary-row">
+                                        <span class="summary-pattern">${rangeText}</span>
+                                        <span>: ô tiếp là</span>
+                                        <span class="summary-target">${nextVal}</span>
+                                    </div>
+                                `
+                            });
                         }
                         i += len;
                     } else {
@@ -984,11 +990,21 @@
                     }
                 }
             
+                // Chỉ giữ lại 4 kết quả ở cuối mảng (gần hàng 8 nhất)
+                const latestMatches = matches.slice(-4);
+            
+                // Tô vàng trên bảng chỉ cho các ô thuộc 4 kết quả này
+                latestMatches.forEach(m => {
+                    for (let k = 0; k < len; k++) {
+                        cells[m.startIndex + k].valEl.parentElement.classList.add('highlight');
+                    }
+                });
+            
                 if (summaryEl) {
-                    if (resultsList.length > 0) {
-                        summaryEl.textContent = resultsList.join('\n');
+                    if (latestMatches.length > 0) {
+                        summaryEl.innerHTML = latestMatches.map(m => m.html).join('');
                     } else {
-                        summaryEl.textContent = 'Không tìm thấy đoạn nào trùng khớp.';
+                        summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Không tìm thấy đoạn trùng khớp.</span>';
                     }
                 }
             }
@@ -1059,7 +1075,7 @@
                             }
                         },
                         { merge: true }
-                    ).catch(err => console.log('[FB] Lỗi xoá:', err.message));
+                    ).catch(err => {});
                 }
             
                 setStatus('Đã xoá. Đang nạp lại...');
