@@ -638,6 +638,9 @@
                 // Cập nhật kỳ cao nhất đã đưa (kỳ mới nhất trong toPush)
                 if (toPush.length) lastInsertedIssue = String(rowIssue(toPush[0]));
 
+                // Tô màu lại cho chính xác theo 4 ô cuối (7-10) hàng 8 hiện tại
+                searchPattern();
+
                 setStatus(`Đã đưa ${filled} kết quả${skipped ? ' (bỏ ' + skipped + ' không xác định)' : ''}. Kỳ mới nhất (ô 10 hàng 8): ${rowIssue(allRows[0])}`);
             } catch (err) {
                 setStatus('Lỗi: ' + err.message);
