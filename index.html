@@ -289,6 +289,7 @@
                 <div class="token-btns">
                     <button class="btn-fetch" onclick="getTokenFromClipboard()">📋 Lấy token tự động</button>
                     <button class="btn-undo" onclick="saveToken()">Lưu token</button>
+                    <button class="btn-reset" onclick="clearToken()">🗑️ Xoá token</button>
                     <label><input type="checkbox" id="rememberToken" checked> Nhớ token</label>
                 </div>
             </div>
@@ -505,13 +506,29 @@
             currentToken = saved.trim();
         }
 
+        // Xoá token: làm trống ô nhập + xoá bộ nhớ trình duyệt + đồng bộ xoá lên Firebase
+        function clearToken() {
+            const el = document.getElementById('tokenInput');
+            if (el) el.value = '';
+            currentToken = '';
+            try { localStorage.removeItem('vn168_token'); } catch (e) {}
+            // Gửi token rỗng lên Firebase để các trang/thiết bị khác cũng xoá
+            if (fbDB && !applyingRemote) {
+                fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
+                    { token: '', lastTokenAt: Date.now() },
+                    { merge: true }
+                ).catch(err => console.log('[FB] Lỗi xoá token:', err.message));
+            }
+            setStatus('Đã xoá token ✓' + (fbDB ? ' (đã đồng bộ xoá lên Firebase)' : ''));
+        }
+
         // Nút "Lấy token tự động": lấy token từ clipboard (script Tampermonkey đã tự copy)
         // Lưu ý: cần tool chạy trên https/http hoặc trình duyệt cho phép đọc clipboard.
         async function getTokenFromClipboard() {
             try {
                 const text = await navigator.clipboard.readText();
-                const tok = (text || '').trim();
-                if (tok && tok.indexOf('eyJ') !== -1) {
+                const tok = extractToken(text);
+                if (tok && tok.indexOf('eyJ') === 0) {
                     const el = document.getElementById('tokenInput');
                     if (el) el.value = tok;
                     currentToken = tok;
@@ -535,12 +552,14 @@
         }
 
         function apiPost(url, body) {
+            // Luôn dùng token đã tách JWT sạch để header không bị lỗi non ISO-8859-1
+            const tok = extractToken(getToken() || '');
             return fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json;charset=UTF-8',
                     'Accept': 'application/json, text/plain, */*',
-                    'Authorization': 'Bearer ' + getToken(),
+                    'Authorization': 'Bearer ' + tok,
                     'Ar-Origin': CFG.arOrigin
                 },
                 body: JSON.stringify(body)
@@ -642,17 +661,22 @@
             applyingRemote = true;
             try {
                 // 1) Đồng bộ token vào ô nhập (ưu tiên làm trước)
-                if (d.token && typeof d.token === 'string' && d.token.trim()) {
-                    const tok = d.token.trim();
+                if ('token' in d) {
+                    const tok = extractToken(d.token);
                     currentToken = tok;
                     const el = document.getElementById('tokenInput');
                     if (el) el.value = tok;
                     // Nếu tích "Nhớ token" thì lưu luôn vào bộ nhớ trình duyệt
                     const remember = document.getElementById('rememberToken');
                     if (remember && remember.checked) {
-                        try { localStorage.setItem('vn168_token', tok); } catch (e) {}
+                        try {
+                            if (tok) localStorage.setItem('vn168_token', tok);
+                            else localStorage.removeItem('vn168_token');
+                        } catch (e) {}
                     }
-                    setStatus('✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!');
+                    setStatus(tok
+                        ? '✓ Đã nhận token từ Firebase và đồng bộ vào ô nhập!'
+                        : 'Token đã bị xoá (đồng bộ từ Firebase).');
                 }
                 // 2) Chỉ áp bảng khi có đủ 80 ô (cells)
                 if (d.cells && Array.isArray(d.cells) && d.cells.length === TOTAL) {
@@ -825,6 +849,30 @@
         // 7. Làm mới toàn bộ
         function resetAll() {
             undoStack = []; // xoá lịch sử hoàn tác
+            lastInsertedIssue = null; // lần sau sẽ lấy lại 20 kết quả đầu
+            for (let i = 0; i < TOTAL; i++) {
+                cells[i].stt = null;
+                cells[i].value = '';
+            }
+            mainInput.value = '';
+            nextStt = 1;
+            sttInput.value = '1';
+            renderAll();
+            mainInput.focus();
+        }
+
+        // Khởi chạy
+        initGrid();
+        nextStt = 1;
+        sttInput.value = '1';
+        mainInput.focus();
+
+        // Bật đồng bộ thời gian thực với Firebase (tự nhận/tự gửi)
+        startRealtimeSync();
+    </script>
+</body>
+</html>
+�c
             lastInsertedIssue = null; // lần sau sẽ lấy lại 20 kết quả đầu
             for (let i = 0; i < TOTAL; i++) {
                 cells[i].stt = null;
