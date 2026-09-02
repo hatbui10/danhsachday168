@@ -266,8 +266,8 @@
 </head>
 <body>
 
-    <h2>Bảng ma trận Nhị Phân</h2>
-   
+    <h2>Bảng Nhị Phân 3 chiều</h2>
+    
 
     <!-- Bảng chính 8x10 -->
     <div id="gridContainer" class="grid-table"></div>
@@ -307,6 +307,15 @@
                 <button class="btn-undo" onclick="toggleLog()">Xem log</button>
                 <button class="btn-reset" onclick="resetAll()">🧹 Làm mới</button>
             </div>
+            <div class="api-row">
+                <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối hàng 8:
+                    <select id="refCountSelect" onchange="onRefCountChange(this.value)" style="margin-left:4px">
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                </label>
+            </div>
             <div class="status" id="apiStatus">Chưa lấy dữ liệu.</div>
             <div id="rawLog"></div>
         </div>
@@ -316,6 +325,9 @@
         const ROWS = 8;
         const COLS = 10;
         const TOTAL = ROWS * COLS; // 80
+
+        // Số ô xanh (tham chiếu) cuối hàng 8: 2, 3 hoặc 4 (mặc định 4)
+        let refCount = 4;
 
         const gridContainer = document.getElementById('gridContainer');
         const mainInput = document.getElementById('mainInput');
@@ -367,8 +379,8 @@
                 for (let c = 0; c < COLS; c++) {
                     const box = document.createElement('div');
                     box.className = 'grid-cell';
-                    // 4 ô 7-10 hàng 8: đánh dấu làm ô tham chiếu (màu xanh)
-                    if (r === ROWS - 1 && c >= 6) box.classList.add('reference');
+                    // N ô cuối hàng 8 (N = refCount: 2/3/4) đánh dấu làm ô tham chiếu (màu xanh)
+                    if (r === ROWS - 1 && c >= COLS - refCount) box.classList.add('reference');
 
                     const sttEl = document.createElement('span');
                     sttEl.className = 'stt-label';
@@ -962,9 +974,9 @@
             clearHighlights();
 
             // Gom dãy từ cuối hàng 8 (ô 10) lùi về trái qua các ô có 0/1 liên tiếp,
-            // NHƯNG chỉ lấy TỐI ĐA 4 ô (4 ô cuối cùng hàng 8).
+            // NHƯNG chỉ lấy TỐI ĐA refCount ô (số ô xanh cuối hàng 8: 2/3/4).
             let pattern = [];
-            for (let i = 79; i >= 0 && pattern.length < 4; i--) {
+            for (let i = 79; i >= 0 && pattern.length < refCount; i--) {
                 const v = cells[i].value;
                 if (v === '0' || v === '1') {
                     pattern.unshift(v);
@@ -1012,6 +1024,37 @@
             }
         }
 
+        // ===== SỐ Ô XANH (tham chiếu) cuối hàng 8: 2/3/4 =====
+        function onRefCountChange(v) {
+            const n = parseInt(v, 10);
+            if (!Number.isInteger(n) || n < 2 || n > 4) return;
+            refCount = n;
+            try { localStorage.setItem('vn168_refCount', String(n)); } catch (e) {}
+            updateRefCells();
+        }
+
+        // Vẽ lại các ô xanh theo refCount + chạy lại so khớp tô màu
+        function updateRefCells() {
+            for (let i = 0; i < TOTAL; i++) {
+                const r = Math.floor(i / COLS);
+                const c = i % COLS;
+                const box = cells[i].valEl.parentElement;
+                if (r === ROWS - 1 && c >= COLS - refCount) box.classList.add('reference');
+                else box.classList.remove('reference');
+            }
+            searchPattern();
+        }
+
+        // Nạp lại lựa chọn số ô xanh đã lưu khi mở trang
+        function loadRefCount() {
+            let saved = 4;
+            try { saved = parseInt(localStorage.getItem('vn168_refCount'), 10); } catch (e) {}
+            if (!Number.isInteger(saved) || saved < 2 || saved > 4) saved = 4;
+            refCount = saved;
+            const sel = document.getElementById('refCountSelect');
+            if (sel) sel.value = String(saved);
+        }
+
         // 7. Làm mới toàn bộ: xoá sạch bảng + dữ liệu cũ trên Firebase (giữ token),
         //    sau đó NẠP NGAY 20 kết quả mới nhất (không để bảng trống chờ 15s).
         function resetAll() {
@@ -1056,6 +1099,7 @@
         }
 
         // Khởi chạy
+        loadRefCount();   // nạp số ô xanh đã chọn (trước khi dựng bảng)
         initGrid();
         nextStt = 1;
         sttInput.value = '1';
