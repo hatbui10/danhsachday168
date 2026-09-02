@@ -4,6 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng 8x10 Nhị Phân & Dịch Trái + STT</title>
+    <!-- Firebase SDK (chạy khi mở file trong trình duyệt thật; bản preview trong app sẽ không nạp do chặn mạng) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <script>
+        // CẤU HÌNH FIREBASE của bạn
+        const firebaseConfig = {
+            apiKey: "AIzaSyBKQGr19UsETmy24RCBIXQuETE6c4WWZ7I",
+            authDomain: "vn-d925e.firebaseapp.com",
+            projectId: "vn-d925e",
+            storageBucket: "vn-d925e.firebasestorage.app",
+            messagingSenderId: "128210473722",
+            appId: "1:128210473722:web:fb30f15f7bf4828c3bef43",
+            measurementId: "G-EZMVTFJRNY"
+        };
+        let fbApp = null, fbDB = null;
+        try {
+            fbApp = firebase.initializeApp(firebaseConfig);
+            fbDB = firebase.firestore(fbApp);
+            console.log('[FB] Firebase đã kết nối.');
+        } catch (e) {
+            console.log('[FB] Firebase chưa khả dụng (có thể mở bằng file:// hoặc thiếu mạng):', e.message);
+        }
+    </script>
     <style>
         :root {
             --bg: #121212;
@@ -589,6 +612,62 @@
             return null;
         }
 
+        // ===== ĐỒNG BỘ FIREBASE (THỜI GIAN THỰC) =====
+        const FB_COLLECTION = 'vn168';
+        const FB_DOC = 'data';
+        let applyingRemote = false; // chặn vòng lặp khi nhận dữ liệu remote rồi ghi ngược
+        let remoteUnsub = null;
+
+        // Ghi token + bảng lên Firestore (KHÔNG kích hoạt listener ngược lại)
+        async function writeToFirebase() {
+            if (!fbDB) return;
+            try {
+                await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
+                    token: currentToken || getToken(),
+                    lastUpdated: Date.now(),
+                    cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
+                });
+            } catch (e) { console.log('[FB] Lỗi ghi:', e.message); }
+        }
+
+        // Áp dữ liệu remote (từ Firestore) vào bảng + token
+        function applyRemoteData(d) {
+            if (!d || !d.cells || d.cells.length !== TOTAL) return;
+            applyingRemote = true;
+            try {
+                if (d.token) {
+                    currentToken = d.token;
+                    const el = document.getElementById('tokenInput');
+                    if (el) el.value = d.token;
+                }
+                for (let i = 0; i < TOTAL; i++) {
+                    cells[i].value = d.cells[i].v;
+                    cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
+                }
+                renderAll();
+                searchPattern();
+            } finally {
+                applyingRemote = false;
+            }
+        }
+
+        // Lắng nghe thời gian thực: khi Firestore đổi -> tự cập nhật
+        function startRealtimeSync() {
+            if (!fbDB) return;
+            if (remoteUnsub) return; // tránh đăng ký nhiều lần
+            try {
+                remoteUnsub = fbDB.collection(FB_COLLECTION).doc(FB_DOC)
+                    .onSnapshot(snap => {
+                        if (snap.exists) applyRemoteData(snap.data());
+                    }, err => {
+                        console.log('[FB] Lỗi realtime:', err.message);
+                    });
+                console.log('[FB] Realtime sync đã bật.');
+            } catch (e) {
+                console.log('[FB] Không bật được realtime:', e.message);
+            }
+        }
+
         // Hàm chính: lấy kết quả và đưa vào bảng
         async function fetchAndFill() {
             const btn = document.getElementById('btnFetch');
@@ -647,6 +726,9 @@
                 searchPattern();
 
                 setStatus(`Đã đưa ${filled} kết quả${skipped ? ' (bỏ ' + skipped + ' không xác định)' : ''}. Kỳ mới nhất (ô 10 hàng 8): ${rowIssue(allRows[0])}`);
+
+                // Tự ghi lên Firebase để đồng bộ thời gian thực (nếu có mạng Firebase)
+                if (!applyingRemote) writeToFirebase();
             } catch (err) {
                 setStatus('Lỗi: ' + err.message);
                 showRaw(err.message);
@@ -743,6 +825,9 @@
         nextStt = 1;
         sttInput.value = '1';
         mainInput.focus();
+
+        // Bật đồng bộ thời gian thực với Firebase (tự nhận/tự gửi)
+        startRealtimeSync();
     </script>
 </body>
 </html>
