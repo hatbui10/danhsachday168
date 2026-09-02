@@ -662,38 +662,43 @@
         // Nạp token đã lưu khi mở trang
         loadToken();
 
-        // 5. Luôn tô màu các vị trí trùng dãy giá trị ô 7-10 hàng 8 (không cần nhập mẫu)
-        //    Dãy mẫu = 4 giá trị của hàng 8, cột 7-10 (đọc trái -> phải: ô7 cũ nhất -> ô10 mới nhất)
+        // 5. Tô màu các vị trí trùng dãy 4 ô cuối hàng 8 (cột 7-10).
+        //    Quét theo DÃY LIÊN TỤC 1 chiều (80 ô nối tiếp nhau) => 4 ô khớp có thể vắt qua 2 hàng vẫn được tô.
+        //    Mỗi ô chỉ dùng 1 lần (khi khớp thì nhảy qua đoạn, không chồng lấn).
         function searchPattern() {
             clearHighlights();
 
-            const pattern = [];
-            for (let k = 6; k <= 9; k++) { // cột 7,8,9,10 (index 6..9) của hàng 8 (index 7)
-                pattern.push(cells[li(7, k)].value);
-            }
+            // Dãy tham chiếu = 4 ô cuối hàng 8: index 76,77,78,79
+            const p0 = 76; // (7,6) -> ô 7
+            const pattern = [
+                cells[p0].value,
+                cells[p0 + 1].value,
+                cells[p0 + 2].value,
+                cells[p0 + 3].value
+            ];
             // Nếu dãy chưa đủ 0/1 thì không tô
             if (pattern.some(v => v !== '0' && v !== '1')) return;
-            const len = pattern.length; // 4
+            const len = 4;
 
-            for (let r = 0; r < ROWS; r++) {
-                let c = 0;
-                while (c <= COLS - len) {
-                    let matched = true;
-                    for (let i = 0; i < len; i++) {
-                        if (cells[li(r, c + i)].value !== pattern[i]) { matched = false; break; }
-                    }
-                    if (matched) {
-                        // Tô vàng nhưng KHÔNG tính 4 ô tham chiếu (hàng 8, cột 7-10) - chúng luôn tô xanh
-                        for (let i = 0; i < len; i++) {
-                            const idx = li(r, c + i);
-                            if (!cells[idx].valEl.parentElement.classList.contains('reference')) {
-                                cells[idx].valEl.parentElement.classList.add('highlight');
-                            }
+            // Quét toàn bộ dãy 1 chiều (i từ 0 đến TOTAL-len), không giới hạn theo từng hàng
+            let i = 0;
+            while (i <= TOTAL - len) {
+                let matched = true;
+                for (let k = 0; k < len; k++) {
+                    if (cells[i + k].value !== pattern[k]) { matched = false; break; }
+                }
+                if (matched) {
+                    // Tô vàng đoạn khớp, NHƯNG không tô 4 ô tham chiếu cuối (index 76-79)
+                    for (let k = 0; k < len; k++) {
+                        const idx = i + k;
+                        // bỏ qua nếu trùng đúng 4 ô tham chiếu (i===76)
+                        if (i !== p0) {
+                            cells[idx].valEl.parentElement.classList.add('highlight');
                         }
-                        c += len; // mỗi ô chỉ xét 1 lần
-                    } else {
-                        c += 1;
                     }
+                    i += len; // mỗi ô chỉ dùng 1 lần
+                } else {
+                    i += 1;
                 }
             }
         }
