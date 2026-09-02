@@ -126,6 +126,9 @@
             outline: none;
             background: transparent;
             color: var(--text);
+            pointer-events: none;  /* CHỈ ĐỌC: không cho bấm/focus/sửa */
+            user-select: none;
+            -webkit-user-select: none;
         }
         .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
 
@@ -261,8 +264,8 @@
 </head>
 <body>
 
-    <h2>Bảng ma trận Nhị Phân</h2>
-   
+    <h2>Bảng 8x10 Nhị Phân (Dịch Trái + Số Thứ Tự)</h2>
+    <p class="desc">Gõ 0/1 ở Ô A -> bit mới vào ô (hàng 8, ô 10), toàn bộ dịch trái. Tự tô màu các vị trí trùng dãy ô 7-10 hàng 8.</p>
 
     <!-- Bảng chính 8x10 -->
     <div id="gridContainer" class="grid-table"></div>
@@ -370,18 +373,8 @@
                     valEl.pattern = '[01]';
                     valEl.maxLength = 1;
                     valEl.className = 'val-input';
-
-                    // Sửa thủ công trên bảng (lưu trạng thái để hoàn tác)
-                    valEl.addEventListener('input', () => {
-                        boardCleared = false;
-                        undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
-                        let v = valEl.value;
-                        if (v !== '0' && v !== '1') valEl.value = '';
-                        cells[li(r,c)].value = valEl.value;
-                        searchPattern();
-                        saveBoardLocal();
-                        writeToFirebase();
-                    });
+                    valEl.readOnly = true;  // CHỈ ĐỌC: bảng do API/Action điền, người dùng không sửa
+                    valEl.tabIndex = -1;    // không cho focus bằng Tab
 
                     box.appendChild(sttEl);
                     box.appendChild(valEl);
@@ -843,61 +836,94 @@
                     return;
                 }
 
-                // Tìm ĐÚNG 1 kỳ MỚI NHẤT (issue lớn nhất). So theo CHUỖI để không mất chính xác với số 17 chữ số.
-                let latestRow = null, latestKey = '';
-                for (const r of allRows) {
-                    const raw = String(rowIssue(r) || '').trim();
-                    if (!raw) continue;
-                    if (!latestRow || issueGreater(raw, latestKey)) {
-                        latestRow = r;
-                        latestKey = raw;
-                    }
-                }
-                if (!latestRow) {
+                // Sắp tăng dần theo issue (so theo CHUỖI để chính xác với số 17 chữ số)
+                const sorted = allRows
+                    .filter(r => String(rowIssue(r) || '').trim())
+                    .sort((a, b) => {
+                        const ia = String(rowIssue(a) || '');
+                        const ib = String(rowIssue(b) || '');
+                        if (ia === ib) return 0;
+                        return issueGreater(ia, ib) ? 1 : -1;
+                    });
+                if (!sorted.length) {
                     setStatus('Không xác định được kỳ xổ trong JSON.');
                     return;
                 }
 
-                const latestIssue = String(rowIssue(latestRow));
+                const newestIssue = String(rowIssue(sorted[sorted.length - 1]));
 
-                // So sánh với kỳ đã đưa lần trước: chỉ đưa khi CÓ KỲ MỚI (so theo ĐẦY ĐỦ chuỗi issue)
-                if (lastInsertedIssue !== null) {
-                    if (!isNewerIssue(latestIssue, String(lastInsertedIssue))) {
-                        setStatus(`Chưa có kết quả mới. Kỳ hiện tại vẫn là: ${latestIssue}`);
-                        return;
+                // ===== LẦN ĐẦU / BẢNG TRỐNG: nạp 20 kết quả mới nhất vào bảng =====
+                if (lastInsertedIssue === null) {
+                    boardCleared = false;
+                    const take = Math.min(20, sorted.length);          // tối đa 20 kết quả
+                    const batch = sorted.slice(sorted.length - take);   // 20 kỳ mới nhất, thứ tự cũ -> mới
+
+                    // Xoá bảng cho chắc chắn trống
+                    for (let i = 0; i < TOTAL; i++) { cells[i].value = ''; cells[i].stt = null; }
+
+                    // Đặt vào CUỐI bảng: kỳ cũ nhất nằm trái, kỳ mới nhất nằm ô (hàng 8, ô 10)
+                    const start = TOTAL - batch.length;
+                    for (let k = 0; k < batch.length; k++) {
+                        const row = batch[k];
+                        const bit = valueToBit(rowBitValue(row));
+                        if (bit === null) continue;
+                        const issue = String(rowIssue(row));
+                        cells[start + k].value = bit;
+                        cells[start + k].stt = issue.padStart(3, '0').slice(-3); // STT = 3 số cuối issue
                     }
-                }
 
-                // Chuyển kết quả -> bit 0/1
-                const bit = valueToBit(rowBitValue(latestRow));
-                if (bit === null) {
-                    setStatus('Kết quả mới không xác định được lớn/nhỏ. Bấm "Xem log" để xem JSON thô.');
+                    lastInsertedIssue = String(rowIssue(batch[batch.length - 1]));
+
+                    // Đồng bộ bộ đếm nhập tay theo ô cuối
+                    const ls = cells[TOTAL - 1].stt;
+                    if (ls !== null && ls !== '') {
+                        const n = parseInt(ls, 10);
+                        if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
+                    }
+
+                    renderAll();
+                    searchPattern();
+                    saveBoardLocal();
+                    writeToFirebase();
+                    setStatus(`✓ Đã nạp ${batch.length} kết quả gần nhất. Kỳ mới nhất (ô 10 hàng 8): ${lastInsertedIssue}`);
                     return;
                 }
 
-                // STT = 3 số cuối của issue (pad cho đủ 3 chữ số, vd kỳ 5 -> "005")
-                const stt = String(latestIssue).padStart(3, '0').slice(-3);
-
-                // CHẶN TRÙNG STT: nếu ô cuối (hàng 8, ô 10) đang mang đúng STT này thì không đưa lại
-                const prevStt = cells[TOTAL - 1].stt;
-                if (prevStt !== null && String(prevStt) === stt) {
-                    lastInsertedIssue = latestIssue; // cập nhật mốc để khỏi lặp cảnh báo
-                    setStatus(`Kỳ ${latestIssue} (STT ${stt}) đã nằm ở ô 10 hàng 8. Chờ kết quả mới.`);
+                // ===== CÁC LẦN SAU: chỉ đưa kết quả MỚI, mỗi kỳ dịch trái 1 ô =====
+                const toPush = sorted.filter(r => {
+                    const i = String(rowIssue(r) || '');
+                    return i && issueGreater(i, String(lastInsertedIssue));
+                });
+                if (!toPush.length) {
+                    setStatus(`Chưa có kết quả mới. Kỳ hiện tại vẫn là: ${newestIssue}`);
                     return;
                 }
 
-                // Cập nhật mốc kỳ TRƯỚC khi đưa bit vào, để ghi Firebase đúng mốc mới
-                lastInsertedIssue = latestIssue;
+                let filled = 0;
+                for (const row of toPush) {
+                    const bit = valueToBit(rowBitValue(row));
+                    if (bit === null) continue;
+                    const issue = String(rowIssue(row));
+                    const stt = issue.padStart(3, '0').slice(-3);
 
-                // Đưa bit mới vào ô cuối (hàng 8, ô 10), toàn bộ bảng dịch trái 1 ô
-                pushBitRaw(bit, stt);
+                    // Chặn trùng: nếu ô cuối (8,10) đang mang đúng STT này thì bỏ qua
+                    const prevStt = cells[TOTAL - 1].stt;
+                    if (prevStt !== null && String(prevStt) === stt) {
+                        lastInsertedIssue = issue;
+                        continue;
+                    }
 
-                // Đồng bộ bộ đếm nhập tay để không trùng STT của API
-                const numStt = parseInt(stt, 10);
+                    lastInsertedIssue = issue; // cập nhật mốc TRƯỚC khi đẩy để ghi Firebase đúng
+                    pushBitRaw(bit, stt);      // dịch trái + vào ô cuối + tự lưu & ghi Firebase
+                    filled++;
+                }
+
+                // Đồng bộ bộ đếm nhập tay theo ô cuối
+                const numStt = parseInt(String(cells[TOTAL - 1].stt), 10);
                 if (Number.isInteger(numStt)) { nextStt = numStt + 1; sttInput.value = String(nextStt); }
 
                 searchPattern();
-                setStatus(`✓ Kết quả mới (kỳ ${latestIssue}) vào ô 10 hàng 8, STT = ${stt}. Bảng dịch trái.`);
+                setStatus(`✓ Đã đưa ${filled} kết quả mới. Kỳ mới nhất (ô 10 hàng 8): ${lastInsertedIssue}`);
             } catch (err) {
                 setStatus('Lỗi: ' + err.message);
                 showRaw(err.message);
@@ -1025,5 +1051,5 @@
         // Bật đồng bộ thời gian thực với Firebase (tự nhận/tự gửi)
         startRealtimeSync();
     </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a349e7664a3e1113',t:'MTc4ODMyNDczMQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
