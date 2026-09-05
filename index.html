@@ -1,3 +1,14 @@
+📂 Mở
+🔄 Reset
+↩ Undo
+↪ Redo
+✨ Format
+⌨️ Phím
+HTML
+CSS
+JS
+💾 LƯU
+CHẠY ▶
 <!DOCTYPE html>
 <html lang="vi">
 
@@ -336,7 +347,15 @@
             <div class="highlight-summary-title">Đoạn trùng khớp gần nhất (ô 7-10 dòng 8):</div>
             <div id="highlightSummaryContent" class="highlight-summary-content" style="color: var(--text-dim); text-align: center; padding: 6px;">Chưa có dữ liệu.</div>
         </div>
-
+        <div class="api-row">
+            <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối hàng 8:
+                <select id="refCountSelect" onchange="onRefCountChange(this.value)" style="margin-left:4px">
+                    <option value="6">6</option>
+                    <option value="5">5</option>
+                    <option value="4">4</option>
+                </select>
+            </label>
+        </div>
         <div class="control-panel" style="display:none">
             <div class="oa-section">
                 <span class="oa-label">Ô A</span>
@@ -364,15 +383,7 @@
                     </label>
                     <button class="btn-undo" onclick="toggleLog()">Xem log</button>
                 </div>
-                <div class="api-row">
-                    <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối hàng 8:
-                        <select id="refCountSelect" onchange="onRefCountChange(this.value)" style="margin-left:4px">
-                            <option value="6">6</option>
-                            <option value="5">5</option>
-                            <option value="4">4</option>
-                        </select>
-                    </label>
-                </div>
+
                 <div class="status" id="apiStatus">Chưa lấy dữ liệu.</div>
                 <div id="rawLog"></div>
             </div>
