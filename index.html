@@ -345,7 +345,7 @@
                 <button class="btn-reset" onclick="resetAll()">Làm mới</button>
             </div>
 
-            <div class="api-panel">
+            <div class="api-panel" style="display:none">
                 <div class="token-row">
                     <label for="tokenInput">Token API:</label>
                     <input type="text" id="tokenInput" placeholder="eyJhbGciOiJIUzI1NiIs..." autocomplete="off" spellcheck="false">
@@ -954,7 +954,7 @@
             
                 let i = 0;
                 let matchStarts = []; // Lưu vị trí bắt đầu của các đoạn trùng khớp
-
+            
                 while (i <= TOTAL - len) {
                     let matched = true;
                     for (let k = 0; k < len; k++) {
@@ -967,17 +967,17 @@
                         i += 1;
                     }
                 }
-
+            
                 // Chỉ lấy đoạn trùng khớp GẦN NHẤT với hàng 8 (đoạn cuối cùng trong bảng)
                 const matchStart = matchStarts.length > 0 ? matchStarts[matchStarts.length - 1] : -1;
-
+            
                 // Tô vàng trên bảng chỉ cho đoạn trùng khớp gần nhất này
                 if (matchStart >= 0) {
                     for (let k = 0; k < len; k++) {
                         cells[matchStart + k].valEl.parentElement.classList.add('highlight');
                     }
                 }
-
+            
                 if (summaryEl) {
                     if (matchStart >= 0) {
                         // Dãy số thứ tự (ngày) của đoạn trùng khớp
@@ -988,7 +988,7 @@
                         let firstStt = segmentStts[0];
                         let lastStt = segmentStts[segmentStts.length - 1];
                         let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
-
+            
                         // 4 số ngày phía sau đoạn trùng khớp đó
                         let nextVals = [];
                         for (let k = 0; k < 4; k++) {
@@ -999,7 +999,7 @@
                                 nextVals.push('—');
                             }
                         }
-
+            
                         summaryEl.innerHTML = `
                             <div class="summary-row">
                                 <span>Trùng <span class="summary-pattern">${rangeText}</span></span>
