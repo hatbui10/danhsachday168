@@ -204,6 +204,10 @@
                 border-radius: 4px;
                 font-weight: bold;
             }
+            .summary-targets {
+                display: inline-flex;
+                gap: 4px;
+            }
             
             /* Vùng điều khiển bên dưới */
             .control-panel {
@@ -329,7 +333,7 @@
         </div>
         <!-- Khung hiển thị danh sách dạng gọn gàng -->
         <div class="highlight-summary-panel">
-            <div class="highlight-summary-title">4 đoạn trùng khớp gần nhất:</div>
+            <div class="highlight-summary-title">Đoạn trùng khớp gần nhất (ô 7-10 dòng 8):</div>
             <div id="highlightSummaryContent" class="highlight-summary-content" style="color: var(--text-dim); text-align: center; padding: 6px;">Chưa có dữ liệu.</div>
         </div>
 
@@ -949,59 +953,62 @@
                 const p0 = 80 - len;
             
                 let i = 0;
-                let matches = []; // Lưu danh sách các đoạn trùng khớp tìm được
-            
+                let matchStarts = []; // Lưu vị trí bắt đầu của các đoạn trùng khớp
+
                 while (i <= TOTAL - len) {
                     let matched = true;
                     for (let k = 0; k < len; k++) {
                         if (cells[i + k].value !== pattern[k]) { matched = false; break; }
                     }
                     if (matched) {
-                        if (i !== p0) {
-                            let segmentStts = [];
-                            for (let k = 0; k < len; k++) {
-                                segmentStts.push(cells[i + k].stt !== null ? cells[i + k].stt : '?');
-                            }
-                            
-                            let firstStt = segmentStts[0];
-                            let lastStt = segmentStts[segmentStts.length - 1];
-                            let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
-                            let nextVal = 'Hết';
-                            let nextIdx = i + len;
-                            if (nextIdx < TOTAL) {
-                                nextVal = cells[nextIdx].value !== '' ? cells[nextIdx].value : '?';
-                            }
-            
-                            matches.push({
-                                startIndex: i,
-                                html: `
-                                    <div class="summary-row">
-                                        <span class="summary-pattern">${rangeText}</span>
-                                        <span>: ô tiếp là</span>
-                                        <span class="summary-target">${nextVal}</span>
-                                    </div>
-                                `
-                            });
-                        }
+                        if (i !== p0) matchStarts.push(i);
                         i += len;
                     } else {
                         i += 1;
                     }
                 }
-            
-                // Chỉ giữ lại 4 kết quả ở cuối mảng (gần hàng 8 nhất)
-                const latestMatches = matches.slice(-4);
-            
-                // Tô vàng trên bảng chỉ cho các ô thuộc 4 kết quả này
-                latestMatches.forEach(m => {
+
+                // Chỉ lấy đoạn trùng khớp GẦN NHẤT với hàng 8 (đoạn cuối cùng trong bảng)
+                const matchStart = matchStarts.length > 0 ? matchStarts[matchStarts.length - 1] : -1;
+
+                // Tô vàng trên bảng chỉ cho đoạn trùng khớp gần nhất này
+                if (matchStart >= 0) {
                     for (let k = 0; k < len; k++) {
-                        cells[m.startIndex + k].valEl.parentElement.classList.add('highlight');
+                        cells[matchStart + k].valEl.parentElement.classList.add('highlight');
                     }
-                });
-            
+                }
+
                 if (summaryEl) {
-                    if (latestMatches.length > 0) {
-                        summaryEl.innerHTML = latestMatches.map(m => m.html).join('');
+                    if (matchStart >= 0) {
+                        // Dãy số thứ tự (ngày) của đoạn trùng khớp
+                        let segmentStts = [];
+                        for (let k = 0; k < len; k++) {
+                            segmentStts.push(cells[matchStart + k].stt !== null ? cells[matchStart + k].stt : '?');
+                        }
+                        let firstStt = segmentStts[0];
+                        let lastStt = segmentStts[segmentStts.length - 1];
+                        let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
+
+                        // 4 số ngày phía sau đoạn trùng khớp đó
+                        let nextVals = [];
+                        for (let k = 0; k < 4; k++) {
+                            const idx = matchStart + len + k;
+                            if (idx < TOTAL) {
+                                nextVals.push(cells[idx].value !== '' ? cells[idx].value : '?');
+                            } else {
+                                nextVals.push('—');
+                            }
+                        }
+
+                        summaryEl.innerHTML = `
+                            <div class="summary-row">
+                                <span>Trùng <span class="summary-pattern">${rangeText}</span></span>
+                                <span style="color:#999">→ 4 ngày sau:</span>
+                                <span class="summary-targets">
+                                    ${nextVals.map(v => `<span class="summary-target">${v}</span>`).join('')}
+                                </span>
+                            </div>
+                        `;
                     } else {
                         summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Không tìm thấy đoạn trùng khớp.</span>';
                     }
