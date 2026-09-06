@@ -1139,21 +1139,21 @@
                     const lock = (dateLocks[k] && dateLocks[k].locked) ? dateLocks[k] : null;
                     const day = lock ? lock.day : auto;
                     const afterStt = (cell && cell.stt !== null && String(cell.stt).trim() !== '') ? String(cell.stt).trim() : '';
-                    let label = dayLabel(afterStt);
-                    if (!afterStt) {
-                        if (baseNum !== null) label = dayLabel(String(baseNum + k + 1));
-                        else if (baseDigits) label = dayLabel(baseDigits + '+' + (k + 1));
-                    }
+                    // Nhãn = STT KẾ TIẾP của ô (10,hàng 8): (10,8)=100 -> 4 ô ngày là 101, 102, 103, 104
+                    let label = '?';
+                    if (baseNum !== null) label = dayLabel(String(baseNum + k + 1));
+                    else if (baseDigits) label = dayLabel(baseDigits + '+' + (k + 1));
                     pairs.push({
                         day: day, auto: auto, after: after,
                         sum: (day !== '?' && (after === '0' || after === '1')) ? (parseInt(day, 10) + parseInt(after, 10)) : null,
                         label: label,
                         idx: nextIdx,
                         pos: posLabel(nextIdx),
+                        afterStt: afterStt,
                         locked: !!lock
                     });
                 }
-                return { n: DAY_BOXES, pairs: pairs, ready: matchStart >= 0 };
+                return { n: DAY_BOXES, pairs: pairs, ready: matchStart >= 0, base: baseNum };
             }
             
             function renderDateBoxes(info) {
@@ -1162,7 +1162,8 @@
                 if (!info) { box.innerHTML = ''; return; }
                 box.innerHTML = info.pairs.map((p, k) => {
                     const sumTxt = (p.sum === null) ? 'chưa có ô sau' : (p.day + ' + ' + p.after + ' = ' + p.sum);
-                    const tip = 'Ô ngày · kỳ ' + p.label + ' (ứng ô ' + p.pos + ') · bù với ô sau trong hộp: ' + sumTxt
+                    const tip = 'Ô ngày kỳ ' + p.label + ' (kế tiếp ô (8,10)) · lấy bù với ô sau ' + p.pos
+                              + (p.afterStt ? ' kỳ ' + p.afterStt : '') + ': ' + sumTxt
                               + (p.locked ? ' · ĐANG KHOÁ' : '')
                               + ' · Bấm: khoá/lật, nhấp đúp: bỏ khoá';
                     return '<div class="grid-cell date-cell' + (p.locked ? ' locked' : '') + '" data-k="' + k + '" title="' + tip + '">'
@@ -1196,6 +1197,13 @@
             }
             
             function histKey(seq, stt) { return seq + '@' + String(stt || ''); }
+            
+            // "kỳ 101–104" : dãy 4 số tương ứng 4 ô ngày 101,102,103,104
+            function histRangeLabel(stt) {
+                const n = parseSttNum(stt);
+                if (n === null) return stt ? 'kỳ ' + stt : 'kỳ ?';
+                return 'kỳ ' + n + '–' + (n + DAY_BOXES - 1);
+            }
             
             function saveHistoryFirebase() {
                 if (!fbDB) return;
@@ -1244,7 +1252,8 @@
             function recordHistory(info) {
                 const seq = daySeq(info);
                 if (!seq) return;
-                const stt = cells[TOTAL - 1].stt === null ? '' : String(cells[TOTAL - 1].stt);
+                // dòng lịch sử gắn với kỳ đầu của dãy (vd 101 cho dãy 101..104); mỗi kỳ mới là một key khác nhau
+                const stt = (info && info.pairs && info.pairs[0]) ? String(info.pairs[0].label || '') : '';
                 const key = histKey(seq, stt);
                 if (dayHistory.some(e => histKey(e.seq, e.stt) === key)) return;
                 dayHistory.unshift({ seq: seq, stt: stt, ts: Date.now() });
@@ -1269,11 +1278,12 @@
                 } else {
                     rows = dayHistory.map((e, k) => {
                         const chips = e.seq.split('').map(d => '<span class="summary-target">' + d + '</span>').join('');
-                        const isCur = (e.seq === curSeq && e.stt === String(cells[TOTAL - 1].stt || '')) ? ' cur' : '';
+                        const curStt = (info && info.pairs && info.pairs[0]) ? String(info.pairs[0].label) : '';
+                        const isCur = (e.seq === curSeq && e.stt === curStt) ? ' cur' : '';
                         return '<div class="hist-line' + isCur + '">'
                              + '<span class="hist-ix">#' + (k + 1) + '</span>'
                              + chips
-                             + '<span class="hist-meta">kỳ ' + (e.stt || '?') + ' · ' + fmtTime(e.ts) + '</span>'
+                             + '<span class="hist-meta">' + histRangeLabel(e.stt) + ' · ' + fmtTime(e.ts) + '</span>'
                              + '</div>';
                     }).join('');
                 }
@@ -1424,6 +1434,6 @@
             mainInput.focus();
             startRealtimeSync();
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36b32656ef44bd7',t:'MTc4ODY3MzgzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36b3d0c9bbad4b4',t:'MTc4ODY3NDI3MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
