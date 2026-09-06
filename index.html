@@ -60,6 +60,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: flex-end;
+                flex-wrap: wrap;
                 gap: 8px;
                 width: 100%;
                 max-width: 360px;
@@ -81,6 +82,59 @@
                 color: var(--text);
             }
             #sttInput:focus { background-color: #3a2a55; }
+            
+            /* ===== Hàng 4 ô NGÀY phía trên hộp "Đoạn trùng khớp gần nhất", trước ô STT(8,10) =====
+               Mỗi ô dùng lại đúng class .grid-cell / .stt-label / .val-input của bảng 8x10 */
+            .date-boxes {
+                display: flex;
+                gap: 3px;
+                margin-right: auto;
+                background: var(--surface);
+                padding: 6px;
+                border-radius: 8px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            }
+            .date-cell {
+                width: 28px;
+                height: 32px;
+                min-width: 28px;
+                cursor: pointer;
+            }
+            .date-cell:hover { border-color: var(--accent); }
+            /* khoá tay -> tô vàng như ô trùng khớp trong bảng */
+            .date-cell.locked { background-color: #f9a825 !important; border-color: #ffd54f !important; }
+            .date-cell.locked .val-input { color: #1a1a1a; }
+            .date-cell.locked .stt-label { color: #3e2723; }
+            /* ===== Hộp LỊCH SỬ 3 dãy ngày (ngay dưới hàng "4 ô sau" trong hộp Đoạn trùng khớp) ===== */
+            .dayHistoryBox {
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                background: #0d0d0d;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 6px 8px;
+                font-family: monospace;
+                font-size: 11px;
+                color: #9fd8c8;
+            }
+            .hist-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 6px;
+                color: #6d8f86;
+                font-size: 10px;
+            }
+            .hist-flag { padding: 0 5px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
+            .hist-flag.ok { background: #064e3b; color: #34d9ab; }
+            .hist-flag.bad { background: #5b1a1a; color: #ff7b7b; }
+            .hist-flag.neutral { background: #2a2a2a; color: #999; }
+            .hist-line { display: flex; align-items: center; gap: 4px; justify-content: center; padding: 1px 0; }
+            .hist-line.cur { background: #10221c; border-radius: 4px; }
+            .hist-ix { color: #6d8f86; min-width: 15px; text-align: right; }
+            .hist-meta { color: #6d8f86; font-size: 10px; margin-left: 3px; white-space: nowrap; }
+            .hist-empty { color: #6d8f86; font-size: 10px; text-align: center; }
             
             /* Bảng 8x10 - kích thước nhỏ vừa màn hình điện thoại */
             .grid-table {
@@ -327,8 +381,9 @@
         <!-- Bảng chính 8x10 -->
         <div id="gridContainer" class="grid-table"></div>
 
-        <!-- Ô nhập STT phía trên -->
+        <!-- 4 ô NGÀY (bù trừ với ô trung) + Ô nhập STT phía trên -->
         <div class="stt-header">
+            <div id="dateBoxes" class="date-boxes" title="Ô ngày = giá trị bù của ô trung tương ứng (ngày + trung = 1). Bấm vào ô để khoá / tự lật."></div>
             <label for="sttInput">STT (8,10):</label>
             <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
         </div>
@@ -730,7 +785,8 @@
                             lastIssue: lastInsertedIssue || null,
                             clearedAt: localClearedAt || 0,
                             cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
-                        }
+                        },
+                        dayHistory: dayHistory.slice(0, HISTORY_MAX)
                     }, { merge: true });
                 } catch (e) {}
             }
@@ -754,6 +810,8 @@
                             }
                         }
                     }
+            
+                    if ('dayHistory' in d) mergeRemoteHistory(d.dayHistory);
             
                     const rb = d.board;
                     if (rb && Array.isArray(rb.cells) && rb.cells.length === TOTAL) {
@@ -947,9 +1005,13 @@
                     if (summaryEl) {
                         summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Chưa đủ dữ liệu mẫu (cần ít nhất 2 ô).</span>';
                     }
+                    lastMatch = { start: -1, len: null };
+                    const emptyInfo = buildDateInfo(-1, null);
+                    recordHistory(emptyInfo);
+                    drawDates(emptyInfo, true);
                     return;
                 }
-                
+            
                 const len = pattern.length;
                 const p0 = 80 - len;
             
@@ -979,6 +1041,8 @@
                     }
                 }
             
+                lastMatch = { start: matchStart, len: len };
+                const dateInfo = buildDateInfo(matchStart, len);
                 if (summaryEl) {
                     if (matchStart >= 0) {
                         // Dãy số thứ tự (ngày) của đoạn trùng khớp
@@ -990,9 +1054,9 @@
                         let lastStt = segmentStts[segmentStts.length - 1];
                         let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
             
-                        // 4 số ngày phía sau đoạn trùng khớp đó
+                        // 4 ô ngay phía sau đoạn trùng khớp đó (chính là 4 ô mà hàng "ô ngày" ở trên bù trừ)
                         let nextVals = [];
-                        for (let k = 0; k < 4; k++) {
+                        for (let k = 0; k < DAY_BOXES; k++) {
                             const idx = matchStart + len + k;
                             if (idx < TOTAL) {
                                 nextVals.push(cells[idx].value !== '' ? cells[idx].value : '?');
@@ -1014,18 +1078,277 @@
                         summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Không tìm thấy đoạn trùng khớp.</span>';
                     }
                 }
+                recordHistory(dateInfo);
+                drawDates(dateInfo, true);
             }
             
             function clearHighlights() {
                 for (let i = 0; i < TOTAL; i++) {
                     cells[i].valEl.parentElement.classList.remove('highlight');
+                    cells[i].valEl.parentElement.classList.remove('after');
                 }
+            }
+            
+            /* ================= 4 Ô NGÀY =================
+               - Luôn 4 ô, ghép 1-1 với 4 ô "→ 4 ô sau" trong hộp "Đoạn trùng khớp gần nhất"
+               - Giá trị ô ngày = PHẦN BÙ của ô sau tương ứng  =>  ô ngày + ô sau = 1
+               - Nhãn "ngày"   = STT của chính ô sau đó (chưa có thì suy từ kỳ cuối +1, +2, ...)
+               - 4 ô sau trên bảng được viền xanh để nhìn rõ ô nào ghép với ô nào
+               - Bấm ô: khoá giá trị ; bấm tiếp: lật 0<->1 ; nhấp đúp: bỏ khoá (tự bù lại)
+            ================================================ */
+            const DAY_BOXES = 4;
+            const HISTORY_MAX = 3;
+            const LS_HISTORY = 'vn168_day_history_v1';
+            let dayHistory = [];      // [{ seq:'1011', stt:'81', ts: 1699... }] – mới nhất ở đầu
+            let dateLocks = [];
+            let lastDateInfo = null;
+            let lastMatch = { start: -1, len: null };
+            
+            function parseSttNum(s) {
+                if (s === null || s === undefined) return null;
+                const t = String(s).trim();
+                if (!t) return null;
+                const digits = t.replace(/\D/g, '');
+                if (!digits) return null;
+                const n = parseInt(digits, 10);
+                return Number.isFinite(n) ? n : null;
+            }
+            
+            function dayLabel(s) {
+                const t = String(s === null || s === undefined ? '' : s).trim();
+                return t === '' ? '?' : t;
+            }
+            
+            function posLabel(idx) {
+                if (!Number.isInteger(idx) || idx < 0 || idx >= TOTAL) return '—';
+                return '(' + (Math.floor(idx / COLS) + 1) + ',' + (idx % COLS + 1) + ')';
+            }
+            
+            // matchStart/len: đoạn trùng khớp gần nhất. "Ô sau" thứ k = cells[matchStart + len + k]
+            function buildDateInfo(matchStart, len) {
+                const base = cells[TOTAL - 1].stt;
+                const baseNum = parseSttNum(base);
+                const baseDigits = baseNum !== null ? String(baseNum) : String(base || '').trim();
+            
+                const pairs = [];
+                for (let k = 0; k < DAY_BOXES; k++) {
+                    const nextIdx = (matchStart >= 0 && Number.isInteger(len)) ? (matchStart + len + k) : -1;
+                    const cell = (nextIdx >= 0 && nextIdx < TOTAL) ? cells[nextIdx] : null;
+                    const after = cell ? cell.value : '';                    // giá trị ô sau đang hiện trong hộp
+                    const auto = (after === '0') ? '1' : (after === '1' ? '0' : '?');
+                    const lock = (dateLocks[k] && dateLocks[k].locked) ? dateLocks[k] : null;
+                    const day = lock ? lock.day : auto;
+                    const afterStt = (cell && cell.stt !== null && String(cell.stt).trim() !== '') ? String(cell.stt).trim() : '';
+                    let label = dayLabel(afterStt);
+                    if (!afterStt) {
+                        if (baseNum !== null) label = dayLabel(String(baseNum + k + 1));
+                        else if (baseDigits) label = dayLabel(baseDigits + '+' + (k + 1));
+                    }
+                    pairs.push({
+                        day: day, auto: auto, after: after,
+                        sum: (day !== '?' && (after === '0' || after === '1')) ? (parseInt(day, 10) + parseInt(after, 10)) : null,
+                        label: label,
+                        idx: nextIdx,
+                        pos: posLabel(nextIdx),
+                        locked: !!lock
+                    });
+                }
+                return { n: DAY_BOXES, pairs: pairs, ready: matchStart >= 0 };
+            }
+            
+            function renderDateBoxes(info) {
+                const box = document.getElementById('dateBoxes');
+                if (!box) return;
+                if (!info) { box.innerHTML = ''; return; }
+                box.innerHTML = info.pairs.map((p, k) => {
+                    const sumTxt = (p.sum === null) ? 'chưa có ô sau' : (p.day + ' + ' + p.after + ' = ' + p.sum);
+                    const tip = 'Ô ngày · kỳ ' + p.label + ' (ứng ô ' + p.pos + ') · bù với ô sau trong hộp: ' + sumTxt
+                              + (p.locked ? ' · ĐANG KHOÁ' : '')
+                              + ' · Bấm: khoá/lật, nhấp đúp: bỏ khoá';
+                    return '<div class="grid-cell date-cell' + (p.locked ? ' locked' : '') + '" data-k="' + k + '" title="' + tip + '">'
+                         + '<span class="stt-label">' + p.label + '</span>'
+                         + '<span class="val-input">' + p.day + '</span>'
+                         + '</div>';
+                }).join('');
+            }
+            
+            /* ---------- LỊCH SỬ 3 DÃY 4 SỐ (dãy giá trị của 4 ô ngày mới thêm) ----------
+               - Ghi mỗi khi có KỲ MỚI được đẩy vào bảng (bấm tay / API / Firebase)
+               - Mỗi dòng: #thứ tự + 4 chữ số + "kỳ <STT> · giờ"; tối đa 3 dòng, dòng mới nhất trên cùng
+               - Lưu localStorage + Firebase (field dayHistory) nên reload / máy khác vẫn thấy
+            ------------------------------------------------------------------------- */
+            function daySeq(info) {
+                if (!info || !info.pairs || info.pairs.length !== DAY_BOXES) return '';
+                let out = '';
+                for (const p of info.pairs) {
+                    if (p.day !== '0' && p.day !== '1') return '';
+                    out += p.day;
+                }
+                return out;
+            }
+            
+            function fmtTime(ts) {
+                const n = Number(ts);
+                if (!Number.isFinite(n) || n <= 0) return '?';
+                const d = new Date(n);
+                const z = x => (x < 10 ? '0' + x : String(x));
+                return z(d.getHours()) + ':' + z(d.getMinutes());
+            }
+            
+            function histKey(seq, stt) { return seq + '@' + String(stt || ''); }
+            
+            function saveHistoryFirebase() {
+                if (!fbDB) return;
+                try {
+                    fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
+                        { dayHistory: dayHistory.slice(0, HISTORY_MAX), lastHistoryAt: Date.now() },
+                        { merge: true }
+                    ).catch(err => console.log('[FB] Lỗi lưu lịch sử:', err.message));
+                } catch (e) {}
+            }
+            
+            function saveDayHistory(writeFb) {
+                try { localStorage.setItem(LS_HISTORY, JSON.stringify(dayHistory)); } catch (e) {}
+                if (writeFb !== false && !applyingRemote) saveHistoryFirebase();
+            }
+            
+            function loadDayHistory() {
+                let arr = null;
+                try { arr = JSON.parse(localStorage.getItem(LS_HISTORY) || 'null'); } catch (e) {}
+                if (!Array.isArray(arr)) return;
+                dayHistory = arr
+                    .filter(e => e && typeof e.seq === 'string' && /^[01]{4}$/.test(e.seq))
+                    .slice(0, HISTORY_MAX)
+                    .map(e => ({ seq: e.seq, stt: String(e.stt || ''), ts: Number(e.ts) || 0 }));
+            }
+            
+            // Gộp lịch sử từ Firebase về: lấy theo key (dãy + kỳ), giữ 3 bản mới nhất theo ts
+            function mergeRemoteHistory(remote) {
+                if (!Array.isArray(remote)) return;
+                const clean = remote
+                    .filter(e => e && typeof e.seq === 'string' && /^[01]{4}$/.test(e.seq))
+                    .map(e => ({ seq: e.seq, stt: String(e.stt || ''), ts: Number(e.ts) || 0 }));
+                const byKey = new Map();
+                clean.concat(dayHistory).forEach(e => {
+                    const k = histKey(e.seq, e.stt);
+                    const prev = byKey.get(k);
+                    if (!prev || e.ts > prev.ts) byKey.set(k, e);
+                });
+                const merged = Array.from(byKey.values()).sort((x, y) => y.ts - x.ts).slice(0, HISTORY_MAX);
+                if (JSON.stringify(merged) === JSON.stringify(dayHistory)) return;
+                dayHistory = merged;
+                saveDayHistory(false);
+                refreshDates();
+            }
+            
+            function recordHistory(info) {
+                const seq = daySeq(info);
+                if (!seq) return;
+                const stt = cells[TOTAL - 1].stt === null ? '' : String(cells[TOTAL - 1].stt);
+                const key = histKey(seq, stt);
+                if (dayHistory.some(e => histKey(e.seq, e.stt) === key)) return;
+                dayHistory.unshift({ seq: seq, stt: stt, ts: Date.now() });
+                if (dayHistory.length > HISTORY_MAX) dayHistory.length = HISTORY_MAX;
+                saveDayHistory();
+            }
+            
+            function renderHistoryBlock(info) {
+                const curSeq = info ? daySeq(info) : '';
+                const sums = (info && info.pairs) ? info.pairs.map(p => p.sum) : [];
+                const checked = sums.filter(x => x !== null);
+                let flagCls = 'neutral', flagTxt = 'chưa có 4 ô sau';
+                if (checked.length) {
+                    const bad = checked.filter(x => x !== 1).length;
+                    flagCls = bad ? 'bad' : 'ok';
+                    flagTxt = bad ? '⚠ ' + bad + ' ô lệch = 1' : '✓ ngày + ô sau = 1';
+                }
+                const flag = '<span class="hist-flag ' + flagCls + '">' + flagTxt + '</span>';
+                let rows;
+                if (!dayHistory.length) {
+                    rows = '<div class="hist-empty">Chưa có dãy nào được lưu – sẽ lưu khi có kỳ mới.</div>';
+                } else {
+                    rows = dayHistory.map((e, k) => {
+                        const chips = e.seq.split('').map(d => '<span class="summary-target">' + d + '</span>').join('');
+                        const isCur = (e.seq === curSeq && e.stt === String(cells[TOTAL - 1].stt || '')) ? ' cur' : '';
+                        return '<div class="hist-line' + isCur + '">'
+                             + '<span class="hist-ix">#' + (k + 1) + '</span>'
+                             + chips
+                             + '<span class="hist-meta">kỳ ' + (e.stt || '?') + ' · ' + fmtTime(e.ts) + '</span>'
+                             + '</div>';
+                    }).join('');
+                }
+                return '<div class="hist-head"><span>Lịch sử ' + HISTORY_MAX + ' dãy 4 số mới thêm</span>' + flag + '</div>' + rows;
+            }
+            
+            function bindDateBoxes() {
+                const box = document.getElementById('dateBoxes');
+                if (!box || box.dataset.bound === '1') return;
+                box.dataset.bound = '1';
+                box.addEventListener('click', e => {
+                    const cell = e.target && e.target.closest ? e.target.closest('.date-cell') : null;
+                    if (!cell) return;
+                    const k = parseInt(cell.getAttribute('data-k'), 10);
+                    if (!Number.isInteger(k)) return;
+                    if (lastDateInfo && lastDateInfo.pairs[k]) {
+                        const p = lastDateInfo.pairs[k];
+                        if (!p.locked) dateLocks[k] = { locked: true, day: p.day };
+                        else {
+                            const d = (p.day === '0') ? '1' : (p.day === '1' ? '0' : p.day);
+                            dateLocks[k] = { locked: true, day: d };
+                        }
+                    }
+                    refreshDates();
+                });
+                box.addEventListener('dblclick', e => {
+                    const cell = e.target && e.target.closest ? e.target.closest('.date-cell') : null;
+                    if (!cell) return;
+                    const k = parseInt(cell.getAttribute('data-k'), 10);
+                    if (!Number.isInteger(k)) return;
+                    delete dateLocks[k];
+                    refreshDates();
+                });
+            }
+            
+            // Vẽ lại 4 ô ngày + khối tổng kiểm tra, bám theo 4 ô sau của đoạn trùng khớp gần nhất
+            function refreshDates() {
+                drawDates(buildDateInfo(lastMatch.start, lastMatch.len), true);
+            }
+            
+            function drawDates(info, updateSummary) {
+                lastDateInfo = info;
+                renderDateBoxes(info);
+                markAfterCells(info);
+                if (!updateSummary) return;
+                const el = document.getElementById('highlightSummaryContent');
+                if (!el || !el.querySelector) return;
+                let node = el.querySelector('.dayHistoryBox');
+                if (!info || !info.pairs || !info.pairs.length) { if (node && node.remove) node.remove(); return; }
+                if (!node) {
+                    node = document.createElement('div');
+                    node.className = 'dayHistoryBox';
+                    el.appendChild(node);
+                }
+                node.innerHTML = renderHistoryBlock(info);
+            }
+            
+            // Viền xanh 4 ô ngay sau đoạn trùng khớp (chính là 4 ô trong hộp)
+            function markAfterCells(info) {
+                for (let i = 0; i < TOTAL; i++) {
+                    if (cells[i] && cells[i].valEl) cells[i].valEl.parentElement.classList.remove('after');
+                }
+                if (!info || !info.pairs) return;
+                info.pairs.forEach(p => {
+                    if (Number.isInteger(p.idx) && p.idx >= 0 && p.idx < TOTAL && cells[p.idx]) {
+                        cells[p.idx].valEl.parentElement.classList.add('after');
+                    }
+                });
             }
             
             function onRefCountChange(v) {
                 const n = parseInt(v, 10);
                 if (!Number.isInteger(n) || n < 4 || n > 6) return;
                 refCount = n;
+                dateLocks = [];
                 try { localStorage.setItem('vn168_refCount', String(n)); } catch (e) {}
                 updateRefCells();
             }
@@ -1055,6 +1378,7 @@
                 localClearedAt = Date.now();
                 boardCleared = true;
                 undoStack = [];
+                dateLocks = [];      // lịch sử dãy ngày (dayHistory) được GIỮ LẠI
                 lastInsertedIssue = null;
                 fetchInProgress = false;
                 for (let i = 0; i < TOTAL; i++) {
@@ -1091,12 +1415,15 @@
             
             loadRefCount();
             initGrid();
+            bindDateBoxes();
             nextStt = 1;
             sttInput.value = '1';
+            loadDayHistory();
             loadBoardLocal();
+            refreshDates();
             mainInput.focus();
             startRealtimeSync();
         </script>
-    </body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36b32656ef44bd7',t:'MTc4ODY3MzgzMw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
