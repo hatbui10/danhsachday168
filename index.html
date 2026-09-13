@@ -460,46 +460,23 @@
             .gp-archive-row span { font-size: 11px; color: var(--text-dim); flex: 1; }
             .gp-status { margin-top: 6px; font-size: 11px; color: var(--text-dim); word-break: break-word; white-space: pre-wrap; }
             .gp-note { font-size: 10px; color: #666; margin-top: 4px; }
-            /* ===== CHẾ ĐỘ GỌN (mặc định BẬT): ẩn bảng 100×10, panel duyệt trang, khung nhập STT =====
-               Mọi thứ VẪN CHẠY NGẦM (bảng vẫn nạp số, STT vẫn tự lấy từ ô cuối bảng) — chỉ ẩn khỏi màn hình.
-               Hiện lại: F12 → localStorage.vn168_uiMin='0' rồi tải lại trang, hoặc gõ hienUI() trong console. */
-            body.ui-min .hm { display: none !important; }
-            /* Khung XEM CUỐI BẢNG — cùng tông sáng với ô lịch sử */
-            .tail-panel {
-                background: #454e5c; border: 1px solid #6d7887; border-radius: 10px;
-                padding: 10px 12px; margin: 12px auto; max-width: 860px;
-            }
-            .tail-panel .ch-head { color: #eef1f5; }
-            .tail-grid { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-            .tail-row { display: flex; gap: 4px; align-items: stretch; }
-            .tail-row .tr-label {
-                width: 62px; flex: none; text-align: right; padding-right: 6px;
-                font-size: 11px; color: #cfd6e0; align-self: center;
-            }
-            .tail-cell {
-                flex: 1; min-width: 24px; text-align: center; font-weight: 700; font-size: 15px;
-                padding: 7px 0; border-radius: 6px; background: #2b323c; border: 1px solid #59636f; color: #f2f5f8;
-            }
-            .tail-cell.empty { color: #6b7480; font-weight: 400; background: #39414c; }
-            .tail-cell.ref { background: #1f5c40; border-color: #2e8b62; color: #a8ffcf; }
-            .tail-cell.last { outline: 2px solid #f9a825; }
         </style>
     </head>
 
     <body>
 
-        <h2 class="hm">Bảng Số Cuối 0-9 (100 hàng × 10 cột)</h2>
+        <h2>Bảng Số Cuối 0-9 (100 hàng × 10 cột)</h2>
 
         <!-- Bảng chính 100x10: mặc định hiện 4 hàng cuối, cuộn để xem toàn bộ -->
-        <div id="gridContainer" class="grid-table hm"></div>
+        <div id="gridContainer" class="grid-table"></div>
 
         <!-- 4 ô DỰ ĐOÁN (4 số phía sau đoạn trùng) + Ô nhập STT phía trên -->
-        <div class="stt-header hm">
+        <div class="stt-header">
             <div id="dateBoxes" class="date-boxes" title="Ô dự đoán = 4 số ngay phía sau đoạn trùng khớp gần nhất. Bấm vào ô để khoá / bỏ khoá."></div>
             <label for="sttInput">STT (100,10):</label>
             <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
         </div>
-        <div class="api-row hm">
+        <div class="api-row">
             <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối bảng:
                 <select id="refCountSelect" onchange="onRefCountChange(this.value)" style="margin-left:4px">
                     <option value="4">4</option>
@@ -510,8 +487,8 @@
         </div>
         <!-- Nút lấy dữ liệu + trạng thái (thấy được ngay) -->
         <div class="fetch-row">
-            <button class="btn-fetch hm" onclick="fetchAndFill()">🔄 Lấy số từ game</button>
-            <button class="btn-fetch hm" id="btnDeep" onclick="fetchDeepHistory()">📥 Lấy 1000 kỳ trước</button>
+            <button class="btn-fetch" onclick="fetchAndFill()">🔄 Lấy số từ game</button>
+            <button class="btn-fetch" id="btnDeep" onclick="fetchDeepHistory()">📥 Lấy 1000 kỳ trước</button>
             <span class="visible-status" id="apiStatusVisible">Chưa lấy dữ liệu.</span>
         </div>
         <!-- Ô LỊCH SỬ (MỚI — 3 CỘT = 3 NGÀY):
@@ -520,26 +497,13 @@
              • Mỗi cột = thang STT: STT+10 … STT+1, [STT] , STT-1 … STT-10 → Ô CÓ STT NẰM GIỮA KHUNG
              • Mỗi ô: HÀNG 1 = STT, HÀNG 2 = SỐ CỦA KỲ (ngày nằm ở tiêu đề cột + góc phải ô, khỏi lặp "13" ở mọi ô)
              • Ngày chưa tải tới → ô mờ dấu "–" (không phải lỗi) -->
-        <!-- XEM CUỐI BẢNG 100×10 (bảng chính đang ẨN ở chế độ gọn): mặc định 1 hàng cuối, chọn tới 10 hàng cuối -->
-        <div class="tail-panel">
-            <div class="ch-head">🔢 Cuối bảng 100×10 (hàng mới nhất nằm dưới)
-                <span class="ch-count" id="tailInfo">chưa có số</span>
-                <span style="float:right;font-size:11px;color:#cfd6e0">hiện
-                    <select id="tailRows" onchange="renderBoardTail()" style="margin-left:2px">
-                        <option value="1" selected>1</option><option value="2">2</option><option value="3">3</option>
-                        <option value="5">5</option><option value="10">10</option>
-                    </select> hàng cuối
-                </span>
-            </div>
-            <div id="tailGrid" class="tail-grid"></div>
-        </div>
         <div class="cell-history-panel">
             <div class="ch-head">🔎 Lịch sử 3 ngày × STT — ô hiện SỐ CỦA KỲ <span class="ch-count" id="chCount">chưa tải</span></div>
             <div class="hist-ctrl">
-                <label for="histSttInput" class="hm">STT:</label>
-                <input type="tel" inputmode="numeric" pattern="[0-9]*" id="histSttInput" class="hm" autocomplete="off" placeholder="auto" maxlength="20" title="Để trống = tự lấy STT của ô cuối cùng hàng cuối cùng trên bảng">
-                <button class="btn-mini hm" onclick="histUseBoardStt()" title="Lấy STT ô cuối cùng hàng cuối cùng trên bảng">↩ ô cuối bảng</button>
-                <button class="btn-mini hm" onclick="histClearStt()" title="Về chế độ TỰ ĐỘNG (theo bảng)">✕</button>
+                <label for="histSttInput">STT:</label>
+                <input type="tel" inputmode="numeric" pattern="[0-9]*" id="histSttInput" autocomplete="off" placeholder="auto" maxlength="20" title="Để trống = tự lấy STT của ô cuối cùng hàng cuối cùng trên bảng">
+                <button class="btn-mini" onclick="histUseBoardStt()" title="Lấy STT ô cuối cùng hàng cuối cùng trên bảng">↩ ô cuối bảng</button>
+                <button class="btn-mini" onclick="histClearStt()" title="Về chế độ TỰ ĐỘNG (theo bảng)">✕</button>
                 <button class="btn-mini" id="histDemoBtn" onclick="histToggleDemo()" title="Bơm 50.000 kỳ GIẢ vào bộ nhớ để xem trước giao diện (KHÔNG lưu vào kho, KHÔNG đưa lên bảng)">🧪 dữ liệu mẫu</button>
                 <label for="histWin">±</label>
                 <select id="histWin" title="Số ô phía trên và phía dưới ô STT">
@@ -566,7 +530,7 @@
             <div class="ch-note" id="histNote"></div>
         </div>
         <!-- Khung LỊCH SỬ GAME: duyệt từng trang 1/9212 như trên trang game, tải & lưu hàng loạt -->
-        <div class="game-page-panel hm">
+        <div class="game-page-panel">
             <div class="ch-head">📚 Lịch sử game (duyệt trang) <span class="ch-count" id="gpTotal">chưa tải</span></div>
             <div class="gp-nav">
                 <button class="btn-undo" onclick="gameGoPage(1)" title="Trang 1">⏮</button>
@@ -1908,11 +1872,7 @@
                 try { const p = JSON.parse(localStorage.getItem(LS_GAME_PROGRESS) || 'null'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
             }
             function writeProgress(o) { try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify(o)); } catch (e) {} }
-            function fbArchStatus(msg) {
-                const el = document.getElementById('fbArchStatus'); if (el && msg !== undefined) el.textContent = msg;
-                // panel "Lịch sử game" đang ẨN (chế độ gọn) → mirror cảnh báo ☁️ ra dòng trạng thái luôn thấy ở màn hình chính
-                if (typeof msg === 'string' && /^[⚠❌]/.test(msg) && typeof setVisStatus === 'function') setVisStatus('☁️ ' + msg);
-            }
+            function fbArchStatus(msg) { const el = document.getElementById('fbArchStatus'); if (el && msg !== undefined) el.textContent = msg; }
             function encEntry(e) { return e.i + ':' + e.d + ':' + (Number(e.t) || 0); }
             function decEntry(str) {
                 const a = String(str).split(':');
@@ -2410,21 +2370,6 @@
             }, 15000);
             
             loadToken();
-            
-            // ===== CHẾ ĐỘ GỌN: ẩn bảng + panel duyệt trang + khung STT (mặc định BẬT) =====
-            function uiMin(on) {
-                try { localStorage.setItem('vn168_uiMin', on ? '1' : '0'); } catch (e) {}
-                document.body.classList.toggle('ui-min', !!on);
-                setStatus(on ? 'Đã ẨN bảng 100×10 + panel duyệt trang + khung STT (mọi thứ vẫn chạy ngầm). Hiện lại: gõ hienUI() ở console.'
-                             : 'Đã HIỆN lại toàn bộ công cụ.');
-            }
-            function hienUI() { uiMin(false); }
-            function anUI() { uiMin(true); }
-            (function applyUiMin() {
-                let on = true;
-                try { on = localStorage.getItem('vn168_uiMin') !== '0'; } catch (e) {}
-                document.body.classList.toggle('ui-min', on);
-            })();
             
             // Cuộn bảng (chỉ khu vực bảng, không kéo theo trang) đến hàng chứa ô idx, căn giữa ô đó
             function scrollGridToCell(idx, behavior) {
@@ -3064,51 +3009,6 @@
                         box.scrollTop = Math.max(0, box.scrollTop + (hR.top - bR.top) - box.clientHeight / 2 + hR.height / 2);
                     }
                 } catch (e) {}
-                renderBoardTail();   // bảng đổi (tải kỳ mới / tải nền / đồng bộ) → vẽ lại khung cuối bảng luôn
-            }
-            
-            /* ===== KHUNG XEM CUỐI BẢNG 100×10 =====
-               Bảng chính bị ẨN ở chế độ gọn, nhưng dữ liệu vẫn nạp ngầm → khung này cho XEM lại
-               1 hàng cuối (mặc định) hoặc 2/3/5/10 hàng cuối. Hàng MỚI NHẤT nằm dưới cùng.
-               Ô xanh = ô tham chiếu cuối bảng (như "ô xanh" trên bảng thật); ô viền cam = ô cuối cùng (100,10). */
-            function renderBoardTail() {
-                const wrap = document.getElementById('tailGrid');
-                if (!wrap || !cells || !cells.length) return;
-                const sel = document.getElementById('tailRows');
-                let N = sel ? parseInt(sel.value, 10) : 1;
-                if (!(N >= 1)) N = 1;
-                N = Math.min(N, 10);
-                const rowsTotal = Math.floor(cells.length / COLS);
-                const frag = document.createDocumentFragment();
-                let filled = 0;
-                for (let k = 0; k < N; k++) {
-                    const rowNo = rowsTotal - (N - 1 - k);      // k=0 = hàng cũ nhất trong khung, k cuối = hàng cuối bảng
-                    if (rowNo < 1) continue;
-                    const rowDiv = document.createElement('div');
-                    rowDiv.className = 'tail-row';
-                    const lb = document.createElement('span');
-                    lb.className = 'tr-label';
-                    lb.textContent = 'hàng ' + rowNo;
-                    rowDiv.appendChild(lb);
-                    for (let c = 0; c < COLS; c++) {
-                        const idx = (rowNo - 1) * COLS + c;
-                        const cell = cells[idx];
-                        const v = (cell && cell.value !== '' && cell.value !== null && cell.value !== undefined) ? String(cell.value) : '';
-                        const sp = document.createElement('span');
-                        sp.className = 'tail-cell' + (v ? '' : ' empty');
-                        if (rowNo === rowsTotal && c >= COLS - refCount) sp.classList.add('ref');   // ô xanh cuối bảng
-                        if (idx === cells.length - 1 && v) sp.classList.add('last');                // ô (100,10)
-                        sp.textContent = v || '·';
-                        if (cell && cell.sttFull) sp.title = 'Kỳ ' + cell.sttFull + ' · STT ' + String(cell.sttFull).slice(-3) + ' · số ' + v;
-                        rowDiv.appendChild(sp);
-                        if (v) filled++;
-                    }
-                    frag.appendChild(rowDiv);
-                }
-                wrap.innerHTML = '';
-                wrap.appendChild(frag);
-                const info = document.getElementById('tailInfo');
-                if (info) info.textContent = filled ? (filled + '/' + (N * COLS) + ' ô có số') : 'chưa có số';
             }
 
             // Lấy STT của ô CUỐI CÙNG HÀNG CUỐI CÙNG trên bảng ghi vào ô nhập
@@ -3325,6 +3225,6 @@
                     autoStartBulkLoad('mở app');
                 });
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a812f40b3f6aba',t:'MTc4OTMxMjE3Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a7fa944fc6bc74',t:'MTc4OTMxMTE3OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
