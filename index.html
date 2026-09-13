@@ -448,7 +448,7 @@
                 <button class="btn-reset" onclick="gameClearArchive()">🧹 Xoá kho</button>
             </div>
             <div class="gp-status" id="gpStatus">Chưa tải lịch sử game.</div>
-            <div class="gp-note">Khuyến nghị tải ≤ 500 trang mỗi đợt (~3–5 phút). Kho tự ghi nhớ vị trí — tắt app mở lại bấm tiếp vẫn chạy từ chỗ dừng.</div>
+            <div class="gp-note">Mở app là TỰ TẢI NỀN 5000 trang (≈1–2 tiếng; tắt tab/đóng máy vẫn được — mở lại chạy tiếp từ chỗ dừng, có nút ■ Dừng). Bảng 100×10 tự mở rộng tới 5.100 hàng = 51.000 ô, mỗi ô đủ số + STT. Tắt tự tải: F12 → localStorage.vn168_autoLoad='0'. Nên chạy trên máy tính (51.000 ô khá nặng trên điện thoại).</div>
         </div>
         <div class="control-panel" style="display:none">
             <div class="oa-section">
@@ -484,9 +484,14 @@
         </div>
 
         <script>
-            const ROWS = 100;
+            const ROWS = 100;             // số hàng BẢNG BAN ĐẦU
             const COLS = 10;
-            const TOTAL = ROWS * COLS;
+            const MAX_BOARD_ROWS = 5100;  // tối đa 5100 hàng = 51.000 ô (đủ 5000+ trang lịch sử)
+            let boardRows = ROWS;
+            let TOTAL = ROWS * COLS;      // ĐỘNG: bảng tự mở rộng dần khi nạp lịch sử (tối đa MAX_BOARD_ROWS hàng)
+            const AUTO_LOAD_PAGES = 5000; // mỗi khi mở app: tự tải nền 2→5000 trang (tắt: LS vn168_autoLoad='0')
+            let bulkLoadMode = false;     // đang tải hàng loạt: gom ghi localStorage/Firebase/lịch sử theo đợt
+            let boardCount = 0;           // số ô đang có số trên bảng
             
             let refCount = 4;
             const gridContainer = document.getElementById('gridContainer');
@@ -542,6 +547,50 @@
                 }
             }
             
+            // ===== TỰ MỞ RỘNG BẢNG (100 hàng → tối đa MAX_BOARD_ROWS = 5100 hàng / 51.000 ô) =====
+            // Hàng MỚI được chèn lên ĐẦU bảng (đó là các kỳ cũ hơn);
+            // các ô ĐÃ CÓ SỐ vẫn nằm ở CUỐI bảng (hàng mới nhất) — không xáo trộn dữ liệu.
+            // Mở rộng theo bước nhảy (gấp đôi, tối thiểu +100 hàng) để khỏi phải xây lại DOM liên tục.
+            function expandBoardTo(targetRows) {
+                targetRows = Math.floor(targetRows);
+                if (!(targetRows > boardRows)) return;
+                targetRows = Math.min(MAX_BOARD_ROWS, Math.max(targetRows, boardRows * 2, boardRows + 100));
+                const addRows = targetRows - boardRows;
+                const frag = document.createDocumentFragment();
+                const newCells = [];
+                for (let r = 0; r < addRows; r++) {
+                    for (let c = 0; c < COLS; c++) {
+                        const box = document.createElement('div');
+                        box.className = 'grid-cell';
+                        const sttEl = document.createElement('span');
+                        sttEl.className = 'stt-label';
+                        const valEl = document.createElement('span');
+                        valEl.className = 'val-input';
+                        box.appendChild(sttEl);
+                        box.appendChild(valEl);
+                        frag.appendChild(box);
+                        newCells.push({ stt: null, sttFull: null, value: '', valEl: valEl, sttEl: sttEl });
+                    }
+                }
+                gridContainer.insertBefore(frag, gridContainer.firstChild);
+                cells.unshift.apply(cells, newCells);   // hàng mới ở đầu mảng (trên bảng) — ô đã có số vẫn ở cuối
+                boardRows = targetRows;
+                TOTAL = boardRows * COLS;
+                // ô xanh "hàng mới nhất" phải di chuyển xuống hàng cuối của bảng mới
+                for (let i = 0; i < TOTAL; i++) {
+                    const rr = Math.floor(i / COLS), cc = i % COLS;
+                    const box = cells[i].valEl.parentElement;
+                    if (rr === boardRows - 1 && cc >= COLS - refCount) box.classList.add('reference');
+                    else box.classList.remove('reference');
+                }
+                scrollGridToBottom('auto');
+            }
+            
+            // Chỉ vẽ lại một khoảng ô (thay vì renderAll cả 51.000 ô) — dùng khi nạp hàng loạt
+            function renderCellsRange(a, b) {
+                for (let i = Math.max(0, a); i <= Math.min(TOTAL - 1, b); i++) renderCell(i);
+            }
+            
             function renderCell(i) {
                 cells[i].valEl.textContent = cells[i].value;
                 cells[i].sttEl.textContent = cells[i].stt === null ? '' : cells[i].stt;
@@ -595,6 +644,7 @@
                 cells[TOTAL - 1].value = String(digit);
                 cells[TOTAL - 1].stt = N;
                 cells[TOTAL - 1].sttFull = null;
+                boardCount = Math.min(TOTAL, boardCount + 1);
                 recordCellNumber(N, digit);
                 
                 renderAll();
@@ -627,6 +677,7 @@
                 cells[TOTAL - 1].value = String(digit);
                 cells[TOTAL - 1].stt = stt;
                 cells[TOTAL - 1].sttFull = (sttFull !== undefined && sttFull !== null && String(sttFull) !== '') ? String(sttFull) : null;
+                boardCount = Math.min(TOTAL, boardCount + 1);
                 recordCellNumber(stt, digit, ts);
                 renderAll();
                 searchPattern();
@@ -852,6 +903,7 @@
             const LS_BOARD = 'vn168_board_v100';
             
             function saveBoardLocal() {
+                if (bulkLoadMode) return;   // đang tải hàng loạt: ghi theo đợt (51.000 ô ≈ 2MB, không thể ghi mỗi trang)
                 try {
                     localStorage.setItem(LS_BOARD, JSON.stringify({
                         lastIssue: lastInsertedIssue,
@@ -863,11 +915,17 @@
             function loadBoardLocal() {
                 let d = null;
                 try { d = JSON.parse(localStorage.getItem(LS_BOARD) || 'null'); } catch (e) {}
-                if (!d || !d.cells || d.cells.length !== TOTAL) return;
+                if (!d || !Array.isArray(d.cells) || !d.cells.length) return;
+                // bảng lưu có thể đã MỞ RỘNG (vd 5100 hàng) từ phiên trước -> khôi phục đúng cỡ trước khi nạp
+                expandBoardTo(Math.ceil(d.cells.length / COLS));
+                boardCount = 0;
                 for (let i = 0; i < TOTAL; i++) {
-                    cells[i].value = d.cells[i].v;
-                    cells[i].stt = d.cells[i].s === '' ? null : d.cells[i].s;
-                    cells[i].sttFull = d.cells[i].f || null;
+                    const src = d.cells[i];
+                    if (!src) continue;
+                    cells[i].value = src.v;
+                    cells[i].stt = src.s === '' ? null : src.s;
+                    cells[i].sttFull = src.f || null;
+                    if (cells[i].stt !== null && cells[i].stt !== '') boardCount++;
                 }
                 if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
                 const ls = cells[TOTAL - 1].stt;
@@ -880,7 +938,7 @@
             }
             
             async function writeToFirebase() {
-                if (!fbDB) return;
+                if (!fbDB || bulkLoadMode) return;   // đang tải hàng loạt: đồng bộ 1 lần khi xong
                 try {
                     await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
                         token: currentToken || getToken(),
@@ -888,7 +946,9 @@
                         board: {
                             lastIssue: lastInsertedIssue || null,
                             clearedAt: localClearedAt || 0,
-                            cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
+                            // Firestore giới hạn 1MB/tài liệu: chỉ đồng bộ CỬA SỔ 1000 Ô MỚI NHẤT
+                            // (bảng đầy đủ 51.000 ô vẫn an toàn trong localStorage của máy này)
+                            cells: cells.slice(-1000).map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
                         },
                         dayHistory: dayHistory.slice(0, HISTORY_MAX),
                         cellHistory: cellHistory.slice(0, CELL_HIST_MAX)
@@ -1030,6 +1090,7 @@
                         }
                         
                         lastInsertedIssue = String(rowIssue(batch[batch.length - 1]));
+                        boardCount = batch.length;
                         sortCellHistory();   // sắp theo THỜI GIAN RƠI thật (mới nhất trên cùng)
                         
                         const ls = cells[TOTAL - 1].stt;
@@ -1079,6 +1140,7 @@
                         filled++;
                     }
                     
+                    boardCount = Math.min(TOTAL, boardCount + filled);
                     const numStt = parseInt(String(cells[TOTAL - 1].stt), 10);
                     if (Number.isInteger(numStt)) { nextStt = numStt + 1; sttInput.value = String(nextStt); }
                     
@@ -1190,10 +1252,13 @@
                         batch = sorted.slice(-TOTAL).map(r => ({ s: short(rowIssue(r)), d: dgOf(r), t: rowTimeMs(r) || 0, f: String(rowIssue(r)) })).filter(x => x.d !== null);
                     } else {
                         // bảng đã có số: chỉ chen thêm các kỳ CŨ hơn đầu bảng
+                        // (khớp theo STT ĐẦY ĐỦ trước — 3 số cuối bị reset lại 001 mỗi ngày)
                         const oldest = cur[0].s;
+                        const oldestFull = cur[0].f || null;
                         let idx = -1;
                         for (let i = sorted.length - 1; i >= 0; i--) {
-                            if (short(rowIssue(sorted[i])) === oldest) { idx = i; break; }
+                            const iss = String(rowIssue(sorted[i]));
+                            if ((oldestFull && iss === oldestFull) || short(iss) === oldest) { idx = i; break; }
                         }
                         const older = idx > 0 ? sorted.slice(0, idx) : [];
                         const free = TOTAL - cur.length;
@@ -1538,15 +1603,24 @@
                     const c = cells[i];
                     if (c.stt !== null && c.stt !== '' && /^[0-9]$/.test(c.value)) cur.push({ s: String(c.stt), d: c.value, f: c.sttFull || null });
                 }
-                const oldest = cur.length ? cur[0].s : null;
-                const existing = new Set(cur.map(x => x.s));
+                // SO SÁNH THEO STT ĐẦY ĐỦ (12 số) khi có thể — STT 3 số bị ĐẶT LẠI 001 mỗi ngày,
+                // nếu so theo 3 số sẽ sai trật tự/không nhận kỳ khi bảng trải qua nhiều ngày (5000 trang ≈ hàng chục ngày)
+                const keyOf = e => e.f || e.s;
+                const cmpE = (a, b) => ((a.f && b.f) ? compareIssue(a.f, b.f) : compareIssue(a.s, b.s));
+                const existing = new Set(cur.map(keyOf));
+                const oldestEntry = cur.length ? cur[0] : null;
                 // chỉ giữ kỳ CHƯA có trên bảng VÀ cũ hơn đầu bảng
-                const older = incoming.filter(e => !existing.has(e.s) && (!oldest || compareIssue(e.s, oldest) < 0));
+                const older = incoming.filter(e => !existing.has(keyOf(e)) && (!oldestEntry || cmpE(e, oldestEntry) < 0));
                 if (!older.length) return 0;
                 // sắp cũ -> mới (đầu bảng = cũ nhất)
-                older.sort((a, b) => (compareIssue(a.s, b.s) < 0 ? -1 : 1));
+                older.sort((a, b) => (cmpE(a, b) < 0 ? -1 : 1));
+                // TỰ MỞ RỘNG BẢNG khi sắp đầy (mở rộng lười: chỉ khi số kỳ > sức chứa hiện tại,
+                // bước nhảy gấp đôi → tối đa MAX_BOARD_ROWS hàng = 51.000 ô)
+                if (older.length + cur.length > TOTAL) {
+                    expandBoardTo(Math.ceil((older.length + cur.length) / COLS));
+                }
                 const merged = older.concat(cur);
-                const take = merged.slice(-TOTAL);   // giữ tối đa 1000 kỳ gần nhất
+                const take = merged.slice(-TOTAL);   // giữ tối đa (số hàng hiện tại × 10) kỳ gần nhất
                 const addedCount = take.length - cur.length;
                 for (let i = 0; i < TOTAL; i++) { cells[i].value = ''; cells[i].stt = null; cells[i].sttFull = null; }
                 const start = TOTAL - take.length;
@@ -1555,13 +1629,16 @@
                     cells[start + k].stt = take[k].s;
                     cells[start + k].sttFull = take[k].f || null;
                 }
+                boardCount = take.length;
                 // ghi khung lịch sử (100,10) cho chính các kỳ cũ vừa chen thêm
-                const addedSet = new Set(older.slice(older.length - addedCount).map(x => x.s));
-                for (const e of older) if (addedSet.has(e.s)) appendOldCellNumber(e.s, e.d, e.t);
-                renderAll();
-                searchPattern();
-                saveBoardLocal();
-                writeToFirebase();
+                const addedSet = new Set(older.slice(older.length - addedCount).map(keyOf));
+                for (const e of older) if (addedSet.has(keyOf(e))) appendOldCellNumber(e.s, e.d, e.t);
+                renderCellsRange(start, TOTAL - 1);
+                if (!bulkLoadMode) {
+                    searchPattern();
+                    saveBoardLocal();
+                    writeToFirebase();
+                }
                 return addedCount;
             }
             
@@ -1580,27 +1657,40 @@
                 gpStatus('💾 Đã lưu ' + saved + ' kỳ từ trang ' + gamePageState.pageNo + (toBoard ? (' — đưa ' + toBoard + ' kỳ lên bảng') : '') + ' (kho: ' + gameArchive.length + ').');
             }
             
-            async function gameAutoFetch() {
+            // Nparam: số trang đích (vd AUTO_LOAD_PAGES=5000 khi tự chạy lúc mở app);
+            // không có Nparam thì đọc ô nhập gpN (chạy tay)
+            async function gameAutoFetch(Nparam) {
                 if (gameAutoRunning) return;
                 if (!getToken()) { gpStatus('⚠️ Chưa có token — không lấy được dữ liệu.'); return; }
                 const nEl = document.getElementById('gpN');
-                let N = parseInt(nEl && nEl.value, 10);
+                let N = (Nparam !== undefined && Nparam !== null) ? parseInt(Nparam, 10) : parseInt(nEl && nEl.value, 10);
                 if (!(N >= 1)) N = 100;
                 N = Math.min(N, 9212);
                 let start = 2;
                 try {
                     const p = JSON.parse(localStorage.getItem(LS_GAME_PROGRESS) || 'null');
-                    if (p && p.running && p.nextPage) start = Math.min(p.nextPage, N + 1);
+                    if (p) {
+                        if (p.running && p.nextPage) start = Math.min(p.nextPage, N + 1);   // dừng giữa chừng -> nạp lại đúng trang đang làm
+                        else if (p.lastPage) start = Math.min(p.lastPage + 1, N + 1);       // đã chạy tới lastPage -> tiếp trang sau
+                    }
                 } catch (e) {}
-                if (start > N) { gpStatus('Đã tải hết tới trang ' + N + ' rồi — tăng N (số bên cạnh) lên rồi bấm lại.'); return; }
+                if (start > N) {
+                    gpStatus('✓ Đã tải đủ tới trang ' + N + '. Muốn tải sâu hơn: tăng N (ô số bên cạnh) rồi bấm lại.');
+                    return;
+                }
                 gameAutoRunning = true; gameAutoStop = false;
                 const btn = document.getElementById('btnGameAuto'), stop = document.getElementById('btnGameStop');
                 if (btn) btn.disabled = true; if (stop) stop.disabled = false;
-                let savedTotal = 0, page = start, errPages = 0, lastErrMsg = '';
+                bulkLoadMode = true;   // gom ghi localStorage/Firebase/lịch sử mỗi 25 trang (bảng 50.000 ô ≈ 2MB — không thể ghi mỗi trang)
+                let savedTotal = 0, page = start, lastOk = page - 1, errPages = 0, lastErrMsg = '', sinceFlush = 0, endReason = '';
+                const flush = () => {
+                    saveGameArchive(); saveBoardLocal(); saveCellHistory(); renderCellHistory(); renderGameArchiveInfo();
+                    sinceFlush = 0;
+                };
                 try {
-                    while (page <= N && !gameAutoStop) {
-                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: true, nextPage: page + 1 })); } catch (e) {}
-                        gpStatus('📥 Đang tải trang ' + page + '/' + N + ' (kho: ' + gameArchive.length + ')...');
+                    while (page <= N && !gameAutoStop && !endReason) {
+                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: true, nextPage: page, lastPage: lastOk })); } catch (e) {}
+                        gpStatus('📥 Đang tải trang ' + page + '/' + N + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ')...');
                         let rows = [];
                         let pageErr = null;
                         // thử 2 lần: lần 1 lỗi thì đợi 2s rồi thử lại (Cloudflare hay chặn nhịp gọi nhanh)
@@ -1624,9 +1714,11 @@
                         if (pageErr) {
                             errPages++; lastErrMsg = pageErr.message;
                             gpStatus('⚠️ Trang ' + page + ' lỗi: ' + pageErr.message + ' — bỏ qua, thử trang sau...');
+                        } else if (!rows.length) {
+                            endReason = 'API không còn dữ liệu từ trang ' + page + ' (đã tới cuối lịch sử).';
                         } else {
                             // trang tải về thường CŨ hơn kho hiện tại (tải 2,3,4... từ mới đến cũ) -> đẩy cuối (nhanh);
-                            // nếu entry MỚI hơn đáy kho (ví dụ trang lỗi trước đó được nạp lại) -> chèn đúng vị trí
+                            // nếu entry MỚI hơn đáy kho (nạp lại trang đang làm dở) -> chèn đúng vị trí
                             const tailBefore = gameArchive.length ? gameArchive[gameArchive.length - 1].i : null;
                             for (const r of rows) {
                                 const e = gameRowToEntry(r);
@@ -1636,25 +1728,33 @@
                                 if (add) savedTotal++;
                                 recordCellNumber(e.i.padStart(3, '0').slice(-3), e.d, e.t);
                             }
-                            saveGameArchive(); renderGameArchiveInfo();
-                            // ghi luôn lên bảng 100x10
+                            renderGameArchiveInfo();
+                            // ghi luôn lên bảng 100x10 (bảng TỰ MỞ RỘNG tới 51.000 ô)
                             boardPrependFromRows(rows);
+                            lastOk = page;
+                            if (gamePageState.totalPage && page >= gamePageState.totalPage) endReason = 'Đã tới trang cuối của API (' + gamePageState.totalPage + ').';
                         }
                         page++;
+                        if (++sinceFlush >= 25) flush();
                         // nghỉ giữa các trang: chậm lại sau lỗi để tránh bị chặn
-                        if (page <= N && !gameAutoStop) await new Promise(s => setTimeout(s, pageErr ? 1500 : 600));
+                        if (page <= N && !gameAutoStop && !endReason) await new Promise(s => setTimeout(s, pageErr ? 1500 : 600));
                     }
                     if (gameAutoStop) {
-                        // giữ tiến độ để bấm lại sẽ TỪ CHỖ DỪNG (nạp lại trang đang làm dở — trùng sẽ bị bỏ qua)
-                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: true, nextPage: page })); } catch (e) {}
+                        // giữ tiến độ để bấm lại / mở lại app sẽ TỪ CHỖ DỪNG (trùng sẽ bị bỏ qua)
+                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: true, nextPage: page, lastPage: lastOk })); } catch (e) {}
                     } else {
-                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: false, nextPage: null })); } catch (e) {}
+                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: false, nextPage: null, lastPage: lastOk })); } catch (e) {}
                     }
+                    bulkLoadMode = false;
+                    flush();
+                    searchPattern();
+                    writeToFirebase();
                     const errNote = errPages ? (' · ' + errPages + ' trang lỗi (lỗi gần nhất: ' + lastErrMsg + ')') : '';
                     gpStatus(gameAutoStop
-                        ? ('■ Đã dừng ở trang ' + (page - 1) + ' (kho: ' + gameArchive.length + ')' + errNote + '). Bấm lại để tiếp tục từ trang ' + page + '.')
-                        : ('✓ Xong tải trang ' + start + '→' + N + ' — thêm ' + savedTotal + ' kỳ (kho: ' + gameArchive.length + ')' + errNote + '. Bảng: ' + (function(){ let n=0; for (let i=0;i<TOTAL;i++) if (cells[i].stt!==null&&cells[i].stt!=='') n++; return n; })() + '/1000 kỳ' + '.'));
+                        ? ('■ Đã dừng ở trang ' + lastOk + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + errNote + (endReason ? ' · ' + endReason : '') + '). Bấm lại (hoặc mở lại app) sẽ tiếp tục từ trang ' + page + '.')
+                        : ('✓ Xong — thêm ' + savedTotal + ' kỳ (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + (endReason ? ' — ' + endReason : ' (trang ' + start + '→' + lastOk + ')') + errNote + '.'));
                 } finally {
+                    bulkLoadMode = false;
                     gameAutoRunning = false;
                     if (btn) btn.disabled = false; if (stop) stop.disabled = true;
                 }
@@ -1975,6 +2075,7 @@
                 if (!s || cellHistory.some(e => cellHistKey(e.s, e.t) === cellHistKey(s, t))) return;   // chống trùng kỳ
                 cellHistory.unshift({ s: s, d: d, t: t });
                 if (cellHistory.length > CELL_HIST_MAX) cellHistory.length = CELL_HIST_MAX;
+                if (bulkLoadMode) return;   // đang tải hàng loạt: ghi + vẽ lại theo đợt (mỗi 25 trang)
                 saveCellHistory();
                 renderCellHistory();
             }
@@ -1998,6 +2099,7 @@
                     cellHistory.push(entry);
                 }
                 if (cellHistory.length > CELL_HIST_MAX) cellHistory.length = CELL_HIST_MAX;
+                if (bulkLoadMode) return;   // đang tải hàng loạt: ghi + vẽ lại theo đợt
                 saveCellHistory();
                 renderCellHistory();
             }
@@ -2137,10 +2239,10 @@
                     const r = Math.floor(i / COLS);
                     const c = i % COLS;
                     const box = cells[i].valEl.parentElement;
-                    if (r === ROWS - 1 && c >= COLS - refCount) box.classList.add('reference');
+                    if (r === boardRows - 1 && c >= COLS - refCount) box.classList.add('reference');
                     else box.classList.remove('reference');
                 }
-                searchPattern();
+                if (!bulkLoadMode) searchPattern();
             }
             
             function loadRefCount() {
@@ -2169,6 +2271,7 @@
                     cells[i].value = '';
                     cells[i].sttFull = null;
                 }
+                boardCount = 0;
                 mainInput.value = '';
                 nextStt = 1;
                 sttInput.value = '1';
@@ -2186,7 +2289,7 @@
                             board: {
                                 lastIssue: null,
                                 clearedAt: localClearedAt,
-                                cells: cells.map(c => ({ v: '', s: '' }))
+                                cells: cells.slice(-1000).map(c => ({ v: '', s: '' }))   // Firestore 1MB: chỉ cần cửa sổ 1000 ô
                             },
                             cellHistory: []
                         },
@@ -2218,9 +2321,17 @@
                 if (lastAutoScrollKey === null) scrollGridToBottom('auto');
             });
             
-            // Lấy số từ game NGAY khi mở (không phải chờ 15s)
-            if (getToken()) fetchAndFill();
+            // Lấy số từ game NGAY khi mở (không phải chờ 15s),
+            // rồi TỰ ĐỘNG TẢI NỀN 5000 trang lịch sử (bảng tự mở rộng tới 51.000 ô).
+            // Tải nền chạy ~1-2 tiếng; tắt tab / đóng app cũng được — mở lại sẽ tiếp tục từ chỗ dừng.
+            if (getToken()) {
+                fetchAndFill().then(() => {
+                    let autoOn = true;
+                    try { autoOn = localStorage.getItem('vn168_autoLoad') !== '0'; } catch (e) {}
+                    if (autoOn) gameAutoFetch(AUTO_LOAD_PAGES);
+                });
+            }
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a72c6e4904a880',t:'MTc4OTMwMjczNQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
