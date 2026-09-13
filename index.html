@@ -198,9 +198,15 @@
             .fetch-row .btn-fetch { padding: 5px 10px; font-size: 11px; }
             .visible-status { font-size: 11px; color: var(--accent); min-height: 14px; }
             
-            /* Khung lịch sử tất cả số đã đi qua ô (100,10) */
+            /* Khung lịch sử — ĐÃ LÀM SÁNG HƠN (nền cũ #1e1e1e quá tối) */
             .cell-history-panel {
-                background: var(--surface);
+                --hp-cell: #5b6472;             /* nền 1 ô */
+                --hp-cell-bd: #828d9c;          /* viền ô */
+                --hp-list: #343c47;             /* nền khung danh sách */
+                --hp-void: #454e5a;             /* ô chưa có kỳ */
+                background: #454e5c;
+                border: 1px solid #6d7887;
+                color: #f6f8fb;
                 border-radius: 8px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.5);
                 width: 360px;
@@ -209,6 +215,12 @@
                 margin-bottom: 10px;
                 padding: 8px 10px;
             }
+            .cell-history-panel .ch-head { color: #ffe082; }
+            .cell-history-panel .ch-count,
+            .cell-history-panel .ch-note,
+            .cell-history-panel .ch-empty { color: #dbe3ec; }
+            .cell-history-panel .ch-empty b { color: #ffe082; }
+            .cell-history-panel label { color: #e0d0ff; }
             .ch-head {
                 font-size: 12px;
                 color: #ffeb3b;
@@ -238,6 +250,69 @@
             .ch-empty { color: #6d8f86; text-align: center; padding: 6px 0; font-size: 11px; }
             .ch-note { color: #6d8f86; font-size: 10px; text-align: center; padding: 2px 0; }
             
+            /* ===== Ô LỊCH SỬ (MỚI): bảng 3 CỘT — mỗi ô có HÀNG 1 = STT, HÀNG 2 = NGÀY ===== */
+            .hist-ctrl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+            .hist-ctrl label { font-size: 11px; color: var(--stt-purple); }
+            #histSttInput {
+                width: 62px; height: 28px; text-align: center; font-size: 15px; font-weight: bold;
+                border: 2px solid #b78aff; border-radius: 4px; outline: none;
+                background-color: #2f3742; color: #ffffff;
+            }
+            #histSttInput:focus { background-color: #4a3a6b; }
+            .hist-ctrl select {
+                background: #2f3742; color: #f6f8fb; border: 1px solid #828d9c;
+                border-radius: 4px; font-size: 11px; padding: 2px 3px;
+            }
+            .btn-mini {
+                padding: 3px 7px; font-size: 10px; background: #5c6a7d; color: #ffffff;
+                border: 1px solid #93a0b1; border-radius: 4px; cursor: pointer;
+            }
+            .btn-mini:hover { border-color: #9fd0ff; color: #cfe6ff; }
+            /* hàng công cụ Firebase của kho lịch sử */
+            .fb-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+            .fb-row span { font-size: 11px; color: #9fd0ff; flex: 1; min-width: 120px; word-break: break-word; }
+            /* hàng tiêu đề 3 cột: mỗi cột là 1 NGÀY */
+            .hist-daylabel { font-size: 11px; color: #ffd54a; font-weight: bold; flex: 1; text-align: center; min-width: 90px; }
+            .hist-grid3 {
+                display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; align-items: start;
+                max-height: 340px; overflow-y: auto;
+                background: #343c47; border: 1px solid #6d7887; border-radius: 4px; padding: 4px;
+            }
+            .hist-grid3::-webkit-scrollbar { width: 8px; }
+            .hist-grid3::-webkit-scrollbar-track { background: #2b323b; border-radius: 4px; }
+            .hist-grid3::-webkit-scrollbar-thumb { background: #828d9c; border-radius: 4px; }
+            .h3-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+            .h3-colhead {
+                position: sticky; top: 0; z-index: 3;
+                background: #5c6a7d; border: 1px solid #93a0b1; border-radius: 4px;
+                padding: 2px 3px; text-align: center;
+            }
+            .h3-colhead b { display: block; font-size: 12px; color: #fff3c4; letter-spacing: .3px; }
+            .h3-colhead span { display: block; font-size: 9px; color: #e2ecf7; }
+            .h3-cells { display: flex; flex-direction: column; gap: 3px; }
+            .hist-cell {
+                position: relative;
+                border: 1px solid #828d9c; border-radius: 3px; background: #5b6472;
+                display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+                box-sizing: border-box; padding: 1px; min-height: 34px; cursor: pointer;
+            }
+            .hist-cell:hover { border-color: #9fd0ff; background: #6a7482; }
+            .hist-cell .h-stt { font-size: 10px; color: #fff59d; width: 100%; text-align: center; line-height: 12px; overflow: hidden; font-weight: bold; }  /* HÀNG 1 = STT */
+            .hist-cell .h-stt i { font-style: normal; color: #ffcdd2; }
+            .hist-cell .h-num { font-size: 18px; font-weight: bold; color: #b9f6ca; line-height: 20px; }                                 /* HÀNG 2 = SỐ CỦA KỲ */
+            .hist-cell .h-day2 { position: absolute; top: 1px; right: 3px; font-size: 8px; color: #c5d3e2; line-height: 9px; }            /* ngày (góc phải, nhỏ) */
+            .hist-cell.void { background: #454e5a; border-color: #6b7684; }
+            .hist-cell.void .h-stt { color: #b6bfca; }
+            .hist-cell.void .h-num { color: #8e99a6; font-size: 14px; }
+            .hist-cell.near { background: #4fc3f7; border-color: #b3e5fc; }   /* giữa khung nhưng ngày đó KHÔNG có đúng STT → kỳ GẦN NHẤT */
+            .hist-cell.near .h-stt { color: #08303f; }
+            .hist-cell.near .h-num { color: #062633; }
+            .hist-cell.near .h-day2 { color: #0d3b4d; }
+            .hist-cell.hit { background: #ffc400; border-color: #fff3c4; box-shadow: 0 0 0 1px #fff3c4 inset; }   /* Ô CÓ STT — giữa khung */
+            .hist-cell.hit .h-stt { color: #3e2723; }
+            .hist-cell.hit .h-num { color: #141414; }
+            .hist-cell.hit .h-day2 { color: #5d4037; }
+
             /* Vùng điều khiển bên dưới */
             .control-panel {
                 display: flex;
@@ -416,10 +491,43 @@
             <button class="btn-fetch" id="btnDeep" onclick="fetchDeepHistory()">📥 Lấy 1000 kỳ trước</button>
             <span class="visible-status" id="apiStatusVisible">Chưa lấy dữ liệu.</span>
         </div>
-        <!-- Khung lịch sử TẤT CẢ số đã đi qua ô (100,10) -->
+        <!-- Ô LỊCH SỬ (MỚI — 3 CỘT = 3 NGÀY):
+             • STT dò = STT của Ô CUỐI CÙNG, HÀNG CUỐI CÙNG trên bảng 100x10 (= 3 số cuối ID kỳ, vd 20260913100051502 → 502)
+             • Cột 1 = NGÀY hôm nay (202609|13), cột 2 = 202609|12, cột 3 = 202609|11 — TỰ TĂNG khi sang ngày mới
+             • Mỗi cột = thang STT: STT+10 … STT+1, [STT] , STT-1 … STT-10 → Ô CÓ STT NẰM GIỮA KHUNG
+             • Mỗi ô: HÀNG 1 = STT, HÀNG 2 = SỐ CỦA KỲ (ngày nằm ở tiêu đề cột + góc phải ô, khỏi lặp "13" ở mọi ô)
+             • Ngày chưa tải tới → ô mờ dấu "–" (không phải lỗi) -->
         <div class="cell-history-panel">
-            <div class="ch-head">Lịch sử số qua ô (100,10) <span class="ch-count" id="chCount">0 số</span></div>
-            <div class="ch-list" id="cellHistoryList"><div class="ch-empty">Chưa có số nào đi qua ô (100,10).</div></div>
+            <div class="ch-head">🔎 Lịch sử 3 ngày × STT — ô hiện SỐ CỦA KỲ <span class="ch-count" id="chCount">chưa tải</span></div>
+            <div class="hist-ctrl">
+                <label for="histSttInput">STT:</label>
+                <input type="tel" inputmode="numeric" pattern="[0-9]*" id="histSttInput" autocomplete="off" placeholder="auto" maxlength="20" title="Để trống = tự lấy STT của ô cuối cùng hàng cuối cùng trên bảng">
+                <button class="btn-mini" onclick="histUseBoardStt()" title="Lấy STT ô cuối cùng hàng cuối cùng trên bảng">↩ ô cuối bảng</button>
+                <button class="btn-mini" onclick="histClearStt()" title="Về chế độ TỰ ĐỘNG (theo bảng)">✕</button>
+                <button class="btn-mini" id="histDemoBtn" onclick="histToggleDemo()" title="Bơm 50.000 kỳ GIẢ vào bộ nhớ để xem trước giao diện (KHÔNG lưu vào kho, KHÔNG đưa lên bảng)">🧪 dữ liệu mẫu</button>
+                <label for="histWin">±</label>
+                <select id="histWin" title="Số ô phía trên và phía dưới ô STT">
+                    <option value="5">5</option>
+                    <option value="10" selected>10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
+                </select>
+                <label for="histCols">ngày</label>
+                <select id="histCols" title="Số cột = số ngày liên tiếp (kể từ ngày mới nhất)">
+                    <option value="2">2</option>
+                    <option value="3" selected>3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                </select>
+            </div>
+            <div class="hist-ctrl">
+                <button class="btn-mini" onclick="histShiftDay(-1)" title="Xem các ngày CŨ hơn">◀</button>
+                <span class="hist-daylabel" id="histDayLabel">—</span>
+                <button class="btn-mini" onclick="histShiftDay(1)" title="Xem các ngày MỚI hơn">▶</button>
+                <button class="btn-mini" onclick="histShiftDay(0)" title="Về nhóm ngày mới nhất">⟲ hôm nay</button>
+            </div>
+            <div class="hist-grid3" id="cellHistoryList"><div class="ch-empty">Đang chờ dữ liệu…</div></div>
+            <div class="ch-note" id="histNote"></div>
         </div>
         <!-- Khung LỊCH SỬ GAME: duyệt từng trang 1/9212 như trên trang game, tải & lưu hàng loạt -->
         <div class="game-page-panel">
@@ -447,8 +555,16 @@
                 <button class="btn-undo" onclick="gameExportArchive()">📋 Xuất</button>
                 <button class="btn-reset" onclick="gameClearArchive()">🧹 Xoá kho</button>
             </div>
+            <!-- ☁️ ĐỒNG BỘ KHO 5000 TRANG VỚI FIREBASE: mở app là tự kéo về + tự lưu khi tải tiếp -->
+            <div class="fb-row">
+                <span id="fbArchStatus">☁️ Firebase: chưa kiểm tra kho.</span>
+                <button class="btn-undo" onclick="fbArchiveSave(true)" title="Đẩy TOÀN BỘ kho lên Firebase (chia khối 5000 kỳ/tài liệu)">☁️ Lưu kho lên Firebase</button>
+                <button class="btn-undo" onclick="fbArchiveLoad()" title="Kéo kho đã lưu trên Firebase về máy này">⬇️ Tải kho từ Firebase</button>
+            </div>
             <div class="gp-status" id="gpStatus">Chưa tải lịch sử game.</div>
-            <div class="gp-note">Mở app là TỰ TẢI NỀN 5000 trang (≈1–2 tiếng; tắt tab/đóng máy vẫn được — mở lại chạy tiếp từ chỗ dừng, có nút ■ Dừng). Bảng 100×10 tự mở rộng tới 5.100 hàng = 51.000 ô, mỗi ô đủ số + STT. Tắt tự tải: F12 → localStorage.vn168_autoLoad='0'. Nên chạy trên máy tính (51.000 ô khá nặng trên điện thoại).</div>
+            <div class="gp-note">Mở app là TỰ TẢI NỀN 5000 trang (tắt tab/đóng máy vẫn được — mở lại chạy TIẾP từ chỗ dừng, có nút ■ Dừng).
+                ☁️ Kho <b>TỰ LƯU LÊN FIREBASE</b> mỗi ~100 trang (collection <code>vn168_archive</code>: <code>progress</code> + <code>chunk_000…</code>, mỗi khối 5000 kỳ) và <b>TỰ KÉO VỀ</b> khi mở app → máy khác / cài lại trình duyệt / xoá cache vẫn <b>chỉ tải TIẾP từ trang cuối</b>, không tải lại 5000 trang.
+                Bảng 100×10 tự mở rộng tới 5.100 hàng = 51.000 ô, mỗi ô đủ số + STT. Tắt tự tải: F12 → localStorage.vn168_autoLoad='0'. Nên chạy trên máy tính.</div>
         </div>
         <div class="control-panel" style="display:none">
             <div class="oa-section">
@@ -653,6 +769,7 @@
                 sttInput.value = nextStt;
                 
                 searchPattern();
+                renderCellHistory();
                 saveBoardLocal();
                 writeToFirebase();
             }
@@ -678,9 +795,9 @@
                 cells[TOTAL - 1].stt = stt;
                 cells[TOTAL - 1].sttFull = (sttFull !== undefined && sttFull !== null && String(sttFull) !== '') ? String(sttFull) : null;
                 boardCount = Math.min(TOTAL, boardCount + 1);
-                recordCellNumber(stt, digit, ts);
                 renderAll();
                 searchPattern();
+                renderCellHistory();   // ô lịch sử 3 cột: cập nhật kỳ vừa rơi
                 saveBoardLocal();
                 writeToFirebase();
             }
@@ -902,19 +1019,36 @@
             let remoteUnsub = null;
             const LS_BOARD = 'vn168_board_v100';
             
+            // Bảng 51.000 ô: JSON ≈ 2,3MB → dễ tràn localStorage. Lưu NÉN "v3|lastIssue|v,s,f;v,s,f;…" ≈ 1,2MB.
+            let boardSaveFailed = '';
             function saveBoardLocal() {
                 if (bulkLoadMode) return;   // đang tải hàng loạt: ghi theo đợt (51.000 ô ≈ 2MB, không thể ghi mỗi trang)
-                try {
-                    localStorage.setItem(LS_BOARD, JSON.stringify({
-                        lastIssue: lastInsertedIssue,
-                        cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt, f: c.sttFull || '' }))
-                    }));
-                } catch (e) {}
+                const parts = [];
+                for (let k = 0; k < cells.length; k++) {
+                    const c = cells[k];
+                    parts.push((c.value || '') + ',' + (c.stt === null || c.stt === undefined ? '' : c.stt) + ',' + (c.sttFull || ''));
+                }
+                const out = 'v3|' + (lastInsertedIssue || '') + '|' + parts.join(';');
+                try { localStorage.setItem(LS_BOARD, out); boardSaveFailed = ''; }
+                catch (err) { boardSaveFailed = 'localStorage đầy (' + (err && err.name ? err.name : 'lỗi ghi') + ')'; }
             }
             
             function loadBoardLocal() {
                 let d = null;
-                try { d = JSON.parse(localStorage.getItem(LS_BOARD) || 'null'); } catch (e) {}
+                try {
+                    const raw = localStorage.getItem(LS_BOARD) || '';
+                    if (raw.indexOf('v3|') === 0) {                       // định dạng NÉN mới
+                        const p1 = raw.indexOf('|', 3), parts = raw.slice(p1 + 1).split(';');
+                        const arr = [];
+                        for (let k = 0; k < parts.length; k++) {
+                            const f = parts[k].split(',');
+                            arr.push({ v: f[0] || '', s: f[1] || '', f: f[2] || '' });
+                        }
+                        d = { lastIssue: raw.slice(3, p1) || null, cells: arr };
+                    } else if (raw) {                                      // định dạng CŨ (JSON) — vẫn đọc được
+                        d = JSON.parse(raw);
+                    }
+                } catch (e) {}
                 if (!d || !Array.isArray(d.cells) || !d.cells.length) return;
                 // bảng lưu có thể đã MỞ RỘNG (vd 5100 hàng) từ phiên trước -> khôi phục đúng cỡ trước khi nạp
                 expandBoardTo(Math.ceil(d.cells.length / COLS));
@@ -1101,6 +1235,7 @@
                         
                         renderAll();
                         searchPattern();
+                        renderCellHistory();   // ô lịch sử 3 cột: nạp batch đầu tiên
                         saveBoardLocal();
                         
                         await writeToFirebase();
@@ -1487,6 +1622,7 @@
                     if (!rows.length) { gpStatus('Trang này không có dữ liệu.'); return; }
                     // lưu luôn lên bảng 100x10 (kỳ cũ hơn đầu bảng sẽ được chen lên đầu)
                     const toBoard = boardPrependFromRows(rows);
+                    renderCellHistory();
                     gpStatus('✓ Trang ' + pageNo + ' — ' + rows.length + ' kỳ' + (toBoard ? (' · đưa ' + toBoard + ' kỳ lên bảng') : ' (đã có trên bảng)') + '.');
                 } catch (e) {
                     gpStatus('⚠️ Lỗi tải trang ' + pageNo + ': ' + e.message + ' — bấm "Xem log" (trên) để xem chi tiết.');
@@ -1555,24 +1691,200 @@
                 }
                 return true;
             }
+            /* localStorage chỉ ~5MB: kho 50.000 kỳ dạng JSON ≈ 3,5MB → DỄ TRÀN và ghi THẤT BẠI ÂM THẦM
+               (bảng vẫn hiện số nhưng kho mất → mở lại là phải tải lại từ đầu).
+               => lưu dạng NÉN "v2|ID:số:ts|ID:số:ts|…" ≈ 1,4MB, và BÁO RÕ khi không ghi được. */
+            let archiveSaveFailed = '';
             function saveGameArchive() {
-                try { localStorage.setItem(LS_GAME_ARCHIVE, JSON.stringify(gameArchive)); } catch (e) {}
+                let out = 'v2|';
+                for (let k = 0; k < gameArchive.length; k++) {
+                    const e = gameArchive[k];
+                    out += e.i + ':' + e.d + ':' + (Number(e.t) || 0) + '|';
+                }
+                try {
+                    localStorage.setItem(LS_GAME_ARCHIVE, out);
+                    archiveSaveFailed = '';
+                } catch (err) {
+                    archiveSaveFailed = 'localStorage đầy (' + (err && err.name ? err.name : 'lỗi ghi') + ')';
+                    // thử lần nữa sau khi bỏ dữ liệu cũ chiếm chỗ
+                    try { localStorage.removeItem(LS_GAME_ARCHIVE); localStorage.setItem(LS_GAME_ARCHIVE, out); archiveSaveFailed = ''; }
+                    catch (e2) { archiveSaveFailed = 'localStorage đầy — kho CHỈ nằm trong bộ nhớ, hãy bấm ☁️ Lưu kho lên Firebase'; }
+                }
             }
             function loadGameArchive() {
-                try {
-                    const arr = JSON.parse(localStorage.getItem(LS_GAME_ARCHIVE) || 'null');
-                    if (Array.isArray(arr)) {
-                        gameArchive = arr.filter(e => e && e.i && e.d !== undefined && /^[0-9]$/.test(String(e.d)));
-                        gameArchive = gameArchive.slice(0, GAME_ARCHIVE_MAX);
-                    }
-                } catch (e) { gameArchive = []; }
+                let raw = null;
+                try { raw = localStorage.getItem(LS_GAME_ARCHIVE); } catch (e) {}
+                let arr = null;
+                if (raw && raw.charAt(0) === '[') {                       // định dạng CŨ (JSON) — vẫn đọc được
+                    try { arr = JSON.parse(raw); } catch (e) {}
+                } else if (raw && raw.indexOf('v2|') === 0) {             // định dạng NÉN mới
+                    arr = [];
+                    const parts = raw.slice(3).split('|');
+                    for (let k = 0; k < parts.length; k++) { const e = decEntry(parts[k]); if (e) arr.push(e); }
+                }
+                if (Array.isArray(arr)) {
+                    gameArchive = arr.filter(e => e && e.i && e.d !== undefined && /^[0-9]$/.test(String(e.d)));
+                    gameArchive = gameArchive.slice(0, GAME_ARCHIVE_MAX);
+                } else { gameArchive = []; }
                 gameArchiveKeys = new Set(gameArchive.map(e => e.i));
             }
             function renderGameArchiveInfo() {
                 const el = document.getElementById('gpArchiveInfo');
-                if (el) el.textContent = 'Kho lưu: ' + gameArchive.length + ' mục' + (gameArchive.length ? ' (mới nhất ' + gameArchive[0].i + ')' : '');
+                if (el) el.textContent = 'Kho lưu: ' + gameArchive.length + ' mục'
+                    + (gameArchive.length ? ' (mới nhất ' + gameArchive[0].i + ')' : '')
+                    + (archiveSaveFailed ? '  ⚠️ ' + archiveSaveFailed : '');
             }
             
+            /* ================= TỰ ĐỘNG LƯU KHO 5000 TRANG LÊN FIREBASE =================
+               Firestore giới hạn 1MB/tài liệu, mà kho 50.000 kỳ ≈ 2MB → phải CHIA KHỐI:
+                 collection "vn168_archive"
+                   ├─ progress    : trang cuối đã tải, số kỳ, kỳ mới nhất / cũ nhất
+                   └─ chunk_000…  : mỗi khối FB_CHUNK_SIZE kỳ, nén thành chuỗi "ID:số:ts|ID:số:ts|…"
+               • CHỈ đẩy lên những khối THAY ĐỔI (tải trang mới chỉ nối vào CUỐI → thường đúng 1 khối).
+               • Mở app: kéo kho từ Firebase về → gộp với kho trong máy → đọc progress
+                 → gameAutoFetch() TỰ BẮT ĐẦU TỪ TRANG CUỐI CÙNG, KHÔNG tải lại 5000 trang.
+            ========================================================================== */
+            const FB_ARCHIVE_COL = 'vn168_archive';
+            const FB_CHUNK_SIZE = 5000;        // kỳ/khối ≈ 110KB (Firestore tối đa 1MB/tài liệu)
+            const FB_SAVE_EVERY_FLUSH = 4;     // 4 đợt × 25 trang = cứ ~100 trang lại lưu đám mây 1 lần
+            let fbArchiveSig = [];             // chữ ký các khối đã đồng bộ (để khỏi ghi lại khối chưa đổi)
+            let fbArchiveBusy = false;
+            let fbFlushTick = 0;
+
+            function readProgress() {
+                try { const p = JSON.parse(localStorage.getItem(LS_GAME_PROGRESS) || 'null'); return (p && typeof p === 'object') ? p : {}; } catch (e) { return {}; }
+            }
+            function writeProgress(o) { try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify(o)); } catch (e) {} }
+            function fbArchStatus(msg) { const el = document.getElementById('fbArchStatus'); if (el && msg !== undefined) el.textContent = msg; }
+            function encEntry(e) { return e.i + ':' + e.d + ':' + (Number(e.t) || 0); }
+            function decEntry(str) {
+                const a = String(str).split(':');
+                if (!a[0] || !a[1]) return null;
+                return { i: a[0], n: a[1], d: a[1], t: Number(a[2]) || 0 };
+            }
+            function chunkSig(ci) {
+                const a = ci * FB_CHUNK_SIZE;
+                if (a >= gameArchive.length) return 'EMPTY';
+                const b = Math.min(gameArchive.length - 1, a + FB_CHUNK_SIZE - 1);
+                return (b - a + 1) + '|' + gameArchive[a].i + '|' + gameArchive[b].i;
+            }
+
+            // ☁️ ĐẨY KHO LÊN FIREBASE (chỉ khối nào thay đổi)
+            async function fbArchiveSave(force) {
+                if (!fbDB) { fbArchStatus('☁️ Firebase chưa kết nối — kho chỉ lưu trong máy này (localStorage).'); return 0; }
+                if (fbArchiveBusy) return 0;
+                if (!gameArchive.length && !force) return 0;
+                fbArchiveBusy = true;
+                let pushed = 0;
+                try {
+                    const nChunks = Math.max(1, Math.ceil(gameArchive.length / FB_CHUNK_SIZE));
+                    const jobs = [], sigs = [];
+                    for (let ci = 0; ci < nChunks; ci++) {
+                        const sig = chunkSig(ci);
+                        sigs.push(sig);
+                        if (!force && fbArchiveSig[ci] === sig) continue;
+                        const a = ci * FB_CHUNK_SIZE, b = Math.min(gameArchive.length, a + FB_CHUNK_SIZE);
+                        if (b <= a) continue;
+                        jobs.push(fbDB.collection(FB_ARCHIVE_COL).doc('chunk_' + String(ci).padStart(3, '0')).set({
+                            idx: ci, count: b - a,
+                            head: gameArchive[a].i, tail: gameArchive[b - 1].i,
+                            items: gameArchive.slice(a, b).map(encEntry).join('|'),
+                            savedAt: Date.now()
+                        }));
+                        pushed++;
+                    }
+                    for (let ci = nChunks; ci < fbArchiveSig.length; ci++) {     // kho rút ngắn → xoá khối thừa
+                        jobs.push(fbDB.collection(FB_ARCHIVE_COL).doc('chunk_' + String(ci).padStart(3, '0')).delete());
+                    }
+                    const prog = readProgress();
+                    jobs.push(fbDB.collection(FB_ARCHIVE_COL).doc('progress').set({
+                        lastPage: Number(prog.lastPage) || 0,
+                        nextPage: prog.nextPage || null,
+                        running: !!prog.running,
+                        count: gameArchive.length,
+                        chunks: nChunks,
+                        newest: gameArchive.length ? gameArchive[0].i : null,
+                        oldest: gameArchive.length ? gameArchive[gameArchive.length - 1].i : null,
+                        savedAt: Date.now()
+                    }, { merge: true }));
+                    if (jobs.length) await Promise.all(jobs);
+                    fbArchiveSig = sigs;
+                    fbArchStatus('☁️ Đã lưu kho lên Firebase: ' + gameArchive.length + ' kỳ / ' + nChunks + ' khối'
+                        + (prog.lastPage ? (' · đã tải tới trang ' + prog.lastPage) : '')
+                        + (pushed ? (' · vừa đẩy ' + pushed + ' khối · ' + new Date().toLocaleTimeString('vi-VN')) : ' · không có gì thay đổi') + '.');
+                } catch (err) {
+                    fbArchStatus('⚠️ Lưu kho lên Firebase THẤT BẠI: ' + err.message + ' — kho vẫn an toàn trong máy này. (Nếu là "permission-denied" thì cần mở quyền ghi cho collection ' + FB_ARCHIVE_COL + ' trong Firestore Rules.)');
+                } finally { fbArchiveBusy = false; }
+                return pushed;
+            }
+
+            // ⬇️ KÉO KHO TỪ FIREBASE VỀ + chốt TRANG CUỐI để lần này chỉ tải TIẾP
+            async function fbArchiveLoad() {
+                if (!fbDB) { fbArchStatus('☁️ Firebase chưa kết nối — dùng kho trong máy này.'); return false; }
+                fbArchStatus('⬇️ Đang tải kho từ Firebase…');
+                try {
+                    const snap = await fbDB.collection(FB_ARCHIVE_COL).get();
+                    if (!snap || snap.empty) { fbArchStatus('☁️ Firebase chưa có kho nào — app sẽ tải từ API rồi TỰ lưu lên.'); return false; }
+                    const chunks = [];
+                    let prog = null;
+                    snap.forEach(doc => {
+                        const d = doc.data() || {};
+                        if (doc.id === 'progress') { prog = d; return; }
+                        if (typeof d.idx === 'number' && typeof d.items === 'string') chunks.push(d);
+                    });
+                    chunks.sort((a, b) => a.idx - b.idx);
+                    const remote = [], seen = new Set();
+                    for (const c of chunks) {
+                        const parts = String(c.items).split('|');
+                        for (let k = 0; k < parts.length; k++) {
+                            const e = decEntry(parts[k]);
+                            if (!e || seen.has(e.i)) continue;
+                            seen.add(e.i); remote.push(e);
+                        }
+                    }
+                    const localCount = gameArchive.length;
+                    const merged = [], keys = new Set();
+                    const all = gameArchive.concat(remote);
+                    for (let k = 0; k < all.length; k++) {
+                        const e = all[k];
+                        if (!e || !e.i || keys.has(e.i)) continue;
+                        keys.add(e.i); merged.push(e);
+                    }
+                    merged.sort((a, b) => compareIssue(b.i, a.i));   // mới → cũ
+                    gameArchive = merged.slice(0, GAME_ARCHIVE_MAX);
+                    gameArchiveKeys = new Set(gameArchive.map(e => e.i));
+                    // TRANG CUỐI: lấy số lớn hơn giữa máy này và Firebase → lần sau KHÔNG tải lại từ đầu
+                    const local = readProgress();
+                    const lastPage = Math.max(Number(prog && prog.lastPage) || 0, Number(local.lastPage) || 0);
+                    if (lastPage > 0) writeProgress({ running: false, nextPage: null, lastPage: lastPage });
+                    const added = gameArchive.length - localCount;
+                    fbArchiveSig = (added === 0 && localCount === remote.length) ? chunks.map((c, i) => chunkSig(i)) : [];
+                    saveGameArchive(); renderGameArchiveInfo(); renderCellHistory();
+                    fbArchStatus('☁️ Đã tải kho từ Firebase: ' + chunks.length + ' khối / ' + remote.length + ' kỳ'
+                        + (added > 0 ? (' · thêm ' + added + ' kỳ vào máy này') : '')
+                        + (lastPage ? (' · đã tải tới trang ' + lastPage + ' → lần này CHỈ tải tiếp từ trang ' + (lastPage + 1)) : '') + '.');
+                    return true;
+                } catch (err) {
+                    fbArchStatus('⚠️ Không tải được kho từ Firebase: ' + err.message);
+                    return false;
+                }
+            }
+
+            // 🧹 xoá kho trên Firebase (dùng khi bấm "Xoá kho")
+            async function fbArchiveClear() {
+                if (!fbDB) return 0;
+                try {
+                    const snap = await fbDB.collection(FB_ARCHIVE_COL).get();
+                    if (!snap || snap.empty) { fbArchiveSig = []; return 0; }
+                    const jobs = [];
+                    snap.forEach(doc => jobs.push(doc.ref.delete()));
+                    await Promise.all(jobs);
+                    fbArchiveSig = [];
+                    fbArchStatus('🧹 Đã xoá kho trên Firebase.');
+                    return jobs.length;
+                } catch (err) { fbArchStatus('⚠️ Không xoá được kho trên Firebase: ' + err.message); return 0; }
+            }
+
             function gameRowToEntry(r) {
                 const issue = String(rowIssue(r) || '').trim();
                 if (!issue) return null;
@@ -1636,6 +1948,7 @@
                 renderCellsRange(start, TOTAL - 1);
                 if (!bulkLoadMode) {
                     searchPattern();
+                    renderCellHistory();   // ô lịch sử 3 cột: cập nhật theo kỳ vừa nạp
                     saveBoardLocal();
                     writeToFirebase();
                 }
@@ -1652,7 +1965,8 @@
                     if (archiveInsert(e)) saved++;
                     recordCellNumber(e.i.padStart(3, '0').slice(-3), e.d, e.t);
                 }
-                saveGameArchive(); renderGameArchiveInfo();
+                saveGameArchive(); renderGameArchiveInfo(); renderCellHistory();
+                fbArchiveSave();         // ☁️ lưu trang vừa tải lên Firebase luôn
                 const toBoard = boardPrependFromRows(rows);
                 gpStatus('💾 Đã lưu ' + saved + ' kỳ từ trang ' + gamePageState.pageNo + (toBoard ? (' — đưa ' + toBoard + ' kỳ lên bảng') : '') + ' (kho: ' + gameArchive.length + ').');
             }
@@ -1686,10 +2000,12 @@
                 const flush = () => {
                     saveGameArchive(); saveBoardLocal(); saveCellHistory(); renderCellHistory(); renderGameArchiveInfo();
                     sinceFlush = 0;
+                    // ☁️ TỰ ĐỘNG lưu kho lên Firebase (mỗi FB_SAVE_EVERY_FLUSH đợt ≈ 100 trang, chỉ đẩy khối đã đổi)
+                    if (++fbFlushTick % FB_SAVE_EVERY_FLUSH === 0) fbArchiveSave();
                 };
                 try {
                     while (page <= N && !gameAutoStop && !endReason) {
-                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: true, nextPage: page, lastPage: lastOk })); } catch (e) {}
+                        writeProgress({ running: true, nextPage: page, lastPage: lastOk });
                         gpStatus('📥 Đang tải trang ' + page + '/' + N + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ')...');
                         let rows = [];
                         let pageErr = null;
@@ -1703,6 +2019,10 @@
                                     const c = document.getElementById('gpCount'); if (c) c.textContent = totalPage;
                                     const t = document.getElementById('gpTotal'); if (t) t.textContent = totalPage + ' trang';
                                 }
+                                pageErr = null;
+                                break;   // ✔ tải được rồi thì DỪNG — trước đây vòng lặp chạy đủ 2 lần
+                                       //   nên MỖI TRANG BỊ GỌI API 2 LẦN (5000 trang = 10.000 request,
+                                       //   vừa chậm gấp đôi vừa dễ bị Cloudflare chặn)
                             } catch (e) {
                                 pageErr = e;
                                 if (attempt === 0) {
@@ -1741,14 +2061,15 @@
                     }
                     if (gameAutoStop) {
                         // giữ tiến độ để bấm lại / mở lại app sẽ TỪ CHỖ DỪNG (trùng sẽ bị bỏ qua)
-                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: true, nextPage: page, lastPage: lastOk })); } catch (e) {}
+                        writeProgress({ running: true, nextPage: page, lastPage: lastOk });
                     } else {
-                        try { localStorage.setItem(LS_GAME_PROGRESS, JSON.stringify({ running: false, nextPage: null, lastPage: lastOk })); } catch (e) {}
+                        writeProgress({ running: false, nextPage: null, lastPage: lastOk });
                     }
                     bulkLoadMode = false;
                     flush();
                     searchPattern();
                     writeToFirebase();
+                    fbArchiveSave();     // ☁️ chốt kho + trang cuối lên Firebase (dừng giữa chừng cũng lưu)
                     const errNote = errPages ? (' · ' + errPages + ' trang lỗi (lỗi gần nhất: ' + lastErrMsg + ')') : '';
                     gpStatus(gameAutoStop
                         ? ('■ Đã dừng ở trang ' + lastOk + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + errNote + (endReason ? ' · ' + endReason : '') + '). Bấm lại (hoặc mở lại app) sẽ tiếp tục từ trang ' + page + '.')
@@ -1773,12 +2094,15 @@
                 }
             }
             function gameClearArchive() {
-                const sure = (typeof confirm === 'function') ? confirm('Xoá cả kho lịch sử game (' + gameArchive.length + ' mục)?') : true;
+                const sure = (typeof confirm === 'function')
+                    ? confirm('Xoá kho lịch sử game (' + gameArchive.length + ' mục) TRÊN MÁY NÀY và CẢ TRÊN FIREBASE?') : true;
                 if (!sure) return;
                 gameArchive = [];
                 gameArchiveKeys = new Set();
-                saveGameArchive(); renderGameArchiveInfo();
-                gpStatus('🧹 Đã xoá kho lịch sử game.');
+                writeProgress({ running: false, nextPage: null, lastPage: 0 });   // xoá luôn trang cuối → lần sau tải lại từ đầu
+                saveGameArchive(); renderGameArchiveInfo(); renderCellHistory();
+                fbArchiveClear();          // ☁️ xoá cả các khối trên Firebase
+                gpStatus('🧹 Đã xoá kho lịch sử game (trong máy + trên Firebase).');
             }
             
             setInterval(() => {
@@ -2068,40 +2392,18 @@
             // Chìa khoá chống trùng: cùng STT + cùng PHÚT rơi = cùng 1 kỳ (2 máy/2 tab ghi lại 1 kỳ)
             const cellHistKey = (s, t) => s + '@' + Math.floor((Number(t) || 0) / 60000);
             function recordCellNumber(stt, digit, ts) {
-                const d = String(digit === null || digit === undefined ? '' : digit);
-                if (!/^[0-9]$/.test(d)) return;
-                const s = String(stt === null || stt === undefined ? '' : stt).trim();
-                const t = Number(ts) || Date.now();
-                if (!s || cellHistory.some(e => cellHistKey(e.s, e.t) === cellHistKey(s, t))) return;   // chống trùng kỳ
-                cellHistory.unshift({ s: s, d: d, t: t });
-                if (cellHistory.length > CELL_HIST_MAX) cellHistory.length = CELL_HIST_MAX;
-                if (bulkLoadMode) return;   // đang tải hàng loạt: ghi + vẽ lại theo đợt (mỗi 25 trang)
-                saveCellHistory();
-                renderCellHistory();
+                // ⛔ ĐÃ BỎ LOGIC CŨ: ô lịch sử giờ đọc thẳng từ KHO 5000 TRANG (gameArchive) + bảng,
+                //    không cần mảng cellHistory nữa. Bỏ ghi ở đây giúp tải 5000 trang nhanh hơn nhiều
+                //    (trước đây mỗi kỳ phải quét lại tới 5000 phần tử để chống trùng).
+                return;
             }
             
             // Ghi kỳ CŨ (nạp lại lịch sử):
             //  - có thời gian rơi thật -> chèn đúng vị trí (danh sách luôn sắp mới -> cũ)
             //  - không có (API không cho giờ) -> coi là cũ hơn mọi thứ -> cuối danh sách
             function appendOldCellNumber(stt, digit, ts) {
-                const d = String(digit === null || digit === undefined ? '' : digit);
-                if (!/^[0-9]$/.test(d)) return;
-                const s = String(stt === null || stt === undefined ? '' : stt).trim();
-                const realT = (typeof ts === 'number' && ts > 0) ? ts : 0;
-                const t = realT || Date.now();
-                if (!s || cellHistory.some(e => cellHistKey(e.s, e.t) === cellHistKey(s, t))) return;
-                const entry = { s: s, d: d, t: t };
-                if (realT) {
-                    let i = 0;
-                    while (i < cellHistory.length && cellHistory[i].t > t) i++;
-                    cellHistory.splice(i, 0, entry);
-                } else {
-                    cellHistory.push(entry);
-                }
-                if (cellHistory.length > CELL_HIST_MAX) cellHistory.length = CELL_HIST_MAX;
-                if (bulkLoadMode) return;   // đang tải hàng loạt: ghi + vẽ lại theo đợt
-                saveCellHistory();
-                renderCellHistory();
+                // ⛔ ĐÃ BỎ LOGIC CŨ (xem recordCellNumber) — ô lịch sử mới lấy dữ liệu từ kho 5000 trang + bảng.
+                return;
             }
             
             // Dọn dữ liệu cũ: xoá trùng (cùng STT cùng phút), sắp xếp mới → cũ
@@ -2150,31 +2452,355 @@
                 return z(d.getMonth() + 1) + '/' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
             }
             
+            /* ============ Ô LỊCH SỬ (MỚI) — 3 CỘT = 3 NGÀY · MỖI Ô: HÀNG 1 = STT, HÀNG 2 = SỐ CỦA KỲ ============
+               • STT cần dò = STT của Ô CUỐI CÙNG, HÀNG CUỐI CÙNG trên bảng 100x10
+                 (= 3 số cuối ID kỳ, vd 20260913100051502 → 502). Ô STT để trống = TỰ ĐỘNG; gõ số = dò theo số đó.
+               • 3 cột = 3 NGÀY liên tiếp: 202609|13 · 202609|12 · 202609|11 — TỰ TĂNG khi sang ngày mới.
+               • Mỗi cột = thang STT giảm dần: STT+10, …, STT+1, [STT], STT-1, …, STT-10
+                 → Ô CÓ STT LUÔN NẰM GIỮA KHUNG kết quả (khung tự cuộn tới hàng giữa).
+               • TRONG Ô: HÀNG 1 = STT, HÀNG 2 = SỐ CỦA KỲ (ngày đã có ở tiêu đề cột + góc phải ô).
+                 Ngày nào CHƯA tải tới → ô mờ dấu "–" (không phải lỗi, tải thêm trang sẽ hiện số).
+               • Nguồn dò: TOÀN BỘ kỳ đã load = kho 5000 trang (gameArchive) + các kỳ mới hơn đang trên bảng.
+            ============================================================================================== */
+            const HIST_WIN_DEFAULT = 10;    // 10 kết quả phía trên và 10 kết quả phía dưới
+            const HIST_COLS_DEFAULT = 3;    // 3 cột = 3 ngày
+            let histCache = { key: '', list: [], byDay: new Map(), newestDay: '', oldestDay: '' };
+            let histDayOffset = 0;          // 0 = nhóm ngày MỚI NHẤT; +1 = lùi về quá khứ 1 ngày
+            let histLastBase = '';          // ngày gốc đang vẽ — để TỰ vẽ lại khi sang ngày mới
+
+            // NGÀY từ ID kỳ: 20260913100051502 → sau "202609" lấy "13", bỏ hết ký tự phía sau
+            function issueDay(issue) {
+                const s = String(issue === null || issue === undefined ? '' : issue).replace(/\D/g, '');
+                const m = s.match(/^\d{4}\d{2}(\d{2})/);
+                if (m) { const dd = parseInt(m[1], 10); if (dd >= 1 && dd <= 31) return m[1]; }   // giữ nguyên 2 chữ số: 09, 13…
+                return '?';
+            }
+            // 8 số đầu ID kỳ = YYYYMMDD
+            function issueYmd(issue) {
+                const s = String(issue === null || issue === undefined ? '' : issue).replace(/\D/g, '');
+                return /^\d{8}/.test(s) ? s.slice(0, 8) : '';
+            }
+            function todayYmd() {
+                const d = new Date();
+                return '' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+            }
+            // cộng/trừ ngày cho chuỗi YYYYMMDD (tự nhảy tháng/năm: 20260901 lùi 1 → 20260831)
+            function ymdShift(ymd, delta) {
+                const y = parseInt(ymd.slice(0, 4), 10), m = parseInt(ymd.slice(4, 6), 10), d = parseInt(ymd.slice(6, 8), 10);
+                if (!(y && m && d)) return ymd;
+                const dt = new Date(Date.UTC(y, m - 1, d + delta));
+                return '' + dt.getUTCFullYear() + String(dt.getUTCMonth() + 1).padStart(2, '0') + String(dt.getUTCDate()).padStart(2, '0');
+            }
+            function ymdPretty(ymd) { return ymd.slice(0, 4) + '-' + ymd.slice(4, 6) + '-' + ymd.slice(6, 8); }
+            function ymdOfDate(ts) {
+                const n = Number(ts);
+                if (!Number.isFinite(n) || n <= 0) return '';
+                const d = new Date(n);
+                if (isNaN(d.getTime())) return '';
+                return '' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+            }
+            // NGÀY của 1 kỳ: ưu tiên 8 số đầu ID kỳ, không có thì suy từ THỜI GIAN RƠI
+            function entryYmd(issue, ts) { return issueYmd(issue) || ymdOfDate(ts); }
+            function entryDay(ymd) { return ymd ? ymd.slice(6, 8) : '?'; }
+
+            /* ---------- 🧪 DỮ LIỆU MẪU: 50.000 kỳ GIẢ = 5000 trang, chỉ nằm trong BỘ NHỚ ----------
+               Dùng khi chưa có dữ liệu thật (chưa có token / chưa tải trang / mở file trong khung xem thử
+               không có mạng). KHÔNG ghi localStorage, KHÔNG ghi Firebase, KHÔNG đưa lên bảng 100x10. */
+            let histDemoOn = false;
+            let histDemoData = null;
+            function histBuildDemo() {
+                const list = [], byDay = new Map();
+                const now = new Date();
+                const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0, 0).getTime();
+                let counter = 51502, newestDay = '';
+                let oldestDay = '';
+                for (let k = 0; k < 50000; k++) {
+                    const t = start - k * 60000, d = new Date(t);
+                    const ymd = '' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+                    const i = ymd + (100000000 + counter);
+                    counter = ((counter - 1) % 100000 + 100000) % 100000;
+                    const dg = String((k * 7 + 3) % 10);
+                    const e = { i: i, s: i.slice(-3), d: dg, t: t, ymd: ymd, day: ymd.slice(6, 8) };
+                    list.push(e);
+                    if (!newestDay || ymd > newestDay) newestDay = ymd;
+                    if (!oldestDay || ymd < oldestDay) oldestDay = ymd;
+                    let arr = byDay.get(ymd);
+                    if (!arr) { arr = []; byDay.set(ymd, arr); }
+                    arr.push(e);
+                }
+                return { key: 'DEMO', list: list, byDay: byDay, newestDay: newestDay, oldestDay: oldestDay };
+            }
+            function histToggleDemo() {
+                histDemoOn = !histDemoOn;
+                if (histDemoOn && !histDemoData) histDemoData = histBuildDemo();
+                const b = document.getElementById('histDemoBtn');
+                if (b) {
+                    b.textContent = histDemoOn ? '🧪 tắt dữ liệu mẫu' : '🧪 dữ liệu mẫu';
+                    b.style.color = histDemoOn ? '#f9a825' : '';
+                    b.style.borderColor = histDemoOn ? '#f9a825' : '';
+                }
+                renderCellHistory();
+            }
+
+            /* --- Dữ liệu đã load: danh sách kỳ MỚI → CŨ + CHỈ MỤC theo NGÀY → STT --- */
+            function histData() {
+                if (histDemoOn) { if (!histDemoData) histDemoData = histBuildDemo(); return histDemoData; }
+                const headIssue = gameArchive.length ? String(gameArchive[0].i) : '';
+                const key = gameArchive.length + '|' + headIssue + '|' + boardCount + '|' + TOTAL + '|' + (lastInsertedIssue || '');
+                if (histCache.key === key) return histCache;
+                const list = [];
+                // (1) kỳ trên bảng CHƯA có trong kho — thường là các kỳ MỚI NHẤT vừa lấy từ game
+                const extra = [];
+                for (let k = cells.length - 1; k >= 0; k--) {
+                    const c = cells[k];
+                    if (!/^[0-9]$/.test(c.value)) continue;
+                    const full = c.sttFull ? String(c.sttFull) : '';
+                    if (full && gameArchiveKeys.has(full)) continue;
+                    const s = (full || String(c.stt === null ? '' : c.stt)).replace(/\D/g, '').padStart(3, '0').slice(-3);
+                    const ymd = entryYmd(full, 0);
+                    extra.push({ i: full, s: s, d: c.value, t: 0, ymd: ymd, day: entryDay(ymd) });
+                }
+                extra.sort((a, b) => (a.i && b.i) ? (compareIssue(a.i, b.i) > 0 ? -1 : 1) : 0);
+                for (const e of extra) list.push(e);
+                // (2) kho 5000 trang đã load (đã sắp mới → cũ)
+                for (const e of gameArchive) {
+                    const t = Number(e.t) || 0;
+                    const ymd = entryYmd(e.i, t);
+                    list.push({ i: String(e.i), s: String(e.i).padStart(3, '0').slice(-3), d: e.d, t: t, ymd: ymd, day: entryDay(ymd) });
+                }
+                // (3) chỉ mục: NGÀY (YYYYMMDD) → DANH SÁCH KỲ của ngày đó (sắp MỚI → CŨ)
+                //     → tra cứu giống hệt khung "Lịch sử game": có ID kỳ là tìm ra SỐ ngay
+                const byDay = new Map();
+                let newestDay = '', oldestDay = '';
+                for (const e of list) {
+                    if (!e.ymd) continue;
+                    if (!newestDay || e.ymd > newestDay) newestDay = e.ymd;
+                    if (!oldestDay || e.ymd < oldestDay) oldestDay = e.ymd;
+                    let arr = byDay.get(e.ymd);
+                    if (!arr) { arr = []; byDay.set(e.ymd, arr); }
+                    arr.push(e);
+                }
+                byDay.forEach(function (arr) {
+                    arr.sort(function (a, b) { return compareIssue(String(b.i || ''), String(a.i || '')); });   // mới → cũ
+                });
+                histCache = { key: key, list: list, byDay: byDay, newestDay: newestDay, oldestDay: oldestDay };
+                return histCache;
+            }
+            function histEntries() { return histData().list; }   // giữ tên cũ cho tương thích
+
+            /* --- STT của Ô CUỐI CÙNG, HÀNG CUỐI CÙNG trên bảng (100,10) --- */
+            function histBoardStt() {
+                const norm = v => String(v === null || v === undefined ? '' : v).replace(/\D/g, '').slice(-3).padStart(3, '0');
+                const last = cells[TOTAL - 1];
+                if (last && String(last.stt === null ? '' : last.stt).trim() !== '') return norm(last.stt);
+                for (let k = cells.length - 1; k >= 0; k--) {
+                    if (cells[k] && String(cells[k].stt === null ? '' : cells[k].stt).trim() !== '') return norm(cells[k].stt);
+                }
+                const l = histData().list;
+                return l.length ? l[0].s : '';
+            }
+            // STT đang dò: ô nhập trống → TỰ ĐỘNG lấy từ bảng ; có gõ số → lấy 3 số cuối
+            function histTarget() {
+                const el = document.getElementById('histSttInput');
+                const typed = String((el && el.value) || '').replace(/\D/g, '');
+                if (typed) return typed.slice(-3).padStart(3, '0');
+                return histBoardStt();
+            }
+            // Ngày gốc của cột 1 = NGÀY MỚI NHẤT có dữ liệu (sang ngày mới → tự tăng)
+            function histBaseDay(data) {
+                return data.newestDay || todayYmd();
+            }
+            // ◀ ▶ dịch nhóm ngày ; ⟲ về nhóm ngày mới nhất
+            function histShiftDay(delta) {
+                histDayOffset = (delta === 0) ? 0 : Math.max(0, histDayOffset - delta);
+                renderCellHistory();
+            }
+
             function renderCellHistory() {
-                const el = document.getElementById('cellHistoryList');
+                const box = document.getElementById('cellHistoryList');
+                if (!box) return;
+                const data = histData();
                 const countEl = document.getElementById('chCount');
-                if (countEl) countEl.textContent = cellHistory.length + ' số';
-                if (!el) return;
-                if (!cellHistory.length) {
-                    el.innerHTML = '<div class="ch-empty">Chưa có số nào đi qua ô (100,10).</div>';
+                const note = document.getElementById('histNote');
+                const lbl = document.getElementById('histDayLabel');
+                if (countEl) countEl.textContent = data.list.length + (histDemoOn ? ' kỳ 🧪 MẪU' : ' kỳ đã load');
+
+                if (!data.list.length) {
+                    box.innerHTML = '<div class="ch-empty">'
+                        + '<b style="color:#ffd54a">CHƯA CÓ DỮ LIỆU</b><br>'
+                        + '1) Dán token (F12 → localStorage.vn168_token hoặc ô Token API) rồi bấm <b>🔄 Lấy số từ game</b><br>'
+                        + '2) Bấm <b>📥 Tải trang 2→N + lưu</b> — hoặc chờ app TỰ tải nền 5000 trang (≈1–2 tiếng)<br>'
+                        + '3) Muốn xem trước giao diện ngay: bấm <b style="color:#f9a825">🧪 dữ liệu mẫu</b> ở trên'
+                        + '</div>';
+                    if (note) note.textContent = 'Kho đang trống: 0 kỳ đã load. Ô lịch sử cần ID kỳ (vd 20260913100051502) để cắt NGÀY và lấy STT.';
+                    if (lbl) lbl.textContent = '—';
+                    if (countEl) countEl.textContent = '0 kỳ đã load';
                     return;
                 }
-                // Chỉ vẽ tối đa 800 dòng đầu để nhẹ; tổng số vẫn hiện ở tiêu đề
-                const SHOW_MAX = 800;
-                let html = '';
-                if (cellHistory.length > SHOW_MAX) {
-                    html += '<div class="ch-note">hiện ' + SHOW_MAX + ' số mới nhất / tổng ' + cellHistory.length + '</div>';
+
+                // số cột (= số ngày) và độ rộng thang STT
+                const colsEl = document.getElementById('histCols');
+                let cols = parseInt(colsEl && colsEl.value, 10);
+                if (!(cols >= 1)) cols = HIST_COLS_DEFAULT;
+                cols = Math.max(1, Math.min(7, cols));
+                const winEl = document.getElementById('histWin');
+                let win = parseInt(winEl && winEl.value, 10);
+                if (!(win >= 1)) win = HIST_WIN_DEFAULT;
+                win = Math.max(1, Math.min(50, win));
+
+                const target = histTarget();
+                const targetNum = parseInt(target, 10);
+                const baseDay = histBaseDay(data);
+                histLastBase = baseDay;
+                const days = [];
+                for (let c = 0; c < cols; c++) days.push(ymdShift(baseDay, -(histDayOffset + c)));
+                if (lbl) {
+                    lbl.textContent = days.map(d => d.slice(6, 8)).join(' · ') + ' / ' + days[0].slice(0, 4) + '-' + days[0].slice(4, 6)
+                        + (histDayOffset ? '   (lùi ' + histDayOffset + ' ngày)' : '');
                 }
-                html += cellHistory.slice(0, SHOW_MAX).map(e =>
-                    '<div class="ch-row">'
-                    + '<span class="ch-stt">' + (e.s || '?') + '</span>'
-                    + '<span class="ch-d">' + e.d + '</span>'
-                    + '<span class="ch-t">' + fmtTime(e.t) + '</span>'
-                    + '</div>'
-                ).join('');
-                el.innerHTML = html;
+                // có kỳ mà KHÔNG cắt được NGÀY → ID kỳ không theo dạng YYYYMMDD… (báo rõ để còn sửa)
+                const noDay = (data.byDay.size === 0);
+
+                const rows = 2 * win + 1;
+                let html = '', foundTotal = 0, firstCenter = null;
+                for (let c = 0; c < cols; c++) {
+                    const ymd = days[c];
+                    const dayTxt = ymd.slice(6, 8);                                  // NGÀY, giữ 2 chữ số
+                    const dayList = data.byDay.get(ymd) || null;                      // các kỳ THẬT của ngày đó (mới → cũ)
+
+                    /* --- TRA CỨU TRONG DỮ LIỆU THẬT (giống khung "Lịch sử game"):
+                           tìm kỳ có STT = STT đang dò trong ngày đó;
+                           KHÔNG có thì lấy kỳ có STT GẦN NHẤT để cột vẫn hiện SỐ, không bị toàn "–" --- */
+                    let pos = -1, exact = false;
+                    if (dayList && dayList.length) {
+                        for (let k = 0; k < dayList.length; k++) {
+                            if (dayList[k].s === target) { pos = k; exact = true; break; }
+                        }
+                        if (pos < 0 && targetNum !== null) {
+                            let best = Infinity;
+                            for (let k = 0; k < dayList.length; k++) {
+                                const n = parseInt(dayList[k].s, 10);
+                                if (!Number.isFinite(n)) continue;
+                                let diff = Math.abs(n - targetNum);
+                                diff = Math.min(diff, 1000 - diff);                   // STT quấn vòng 999→000
+                                if (diff < best) { best = diff; pos = k; }
+                            }
+                        }
+                        if (pos < 0) pos = 0;
+                    }
+                    if (c === 0 && pos >= 0 && dayList) firstCenter = dayList[pos];
+
+                    let inner = '', cnt = 0;
+                    for (let r = 0; r < rows; r++) {
+                        const off = win - r;                                          // +win … 0 … -win
+                        // dayList sắp MỚI → CŨ nên ô TRÊN CÙNG (r=0) phải là idx NHỎ HƠN tâm:
+                        //   r=0 → pos-win (10 kỳ MỚI hơn) … r=win → pos (ô STT) … r=2*win → pos+win (10 kỳ CŨ hơn)
+                        const idx = pos - off;
+                        const e = (dayList && idx >= 0 && idx < dayList.length) ? dayList[idx] : null;
+                        if (e) cnt++;
+                        // ô chưa có kỳ: vẫn ghi STT DỰ KIẾN (mờ) để dễ đối chiếu 3 cột với nhau
+                        const stt3 = e ? e.s
+                            : (targetNum === null ? '—' : String((((targetNum + off) % 1000) + 1000) % 1000).padStart(3, '0'));
+                        let cls = 'hist-cell';
+                        if (r === win) cls += exact ? ' hit' : ' near';                // hàng GIỮA = ô có STT đang dò
+                        if (!e) cls += ' void';
+                        const tip = e
+                            ? ('SỐ ' + e.d + ' · ID kỳ ' + e.i + ' · NGÀY ' + e.day + ' · STT ' + e.s + (e.t ? ' · ' + fmtTime(e.t) : ''))
+                            : ('Ngày ' + ymdPretty(ymd) + ' chưa có kỳ STT ' + stt3 + ' trong dữ liệu đã tải');
+                        inner += '<div class="' + cls + '" data-stt="' + stt3 + '" title="' + tip + '">'
+                               + '<span class="h-stt">' + stt3 + '</span>'                                     /* HÀNG 1: STT */
+                               + '<span class="h-num">' + (e ? e.d : '–') + '</span>'                           /* HÀNG 2: SỐ CỦA KỲ */
+                               + (e ? ('<span class="h-day2">' + ((e.day !== '?') ? e.day : dayTxt) + '</span>') : '')
+                               + '</div>';
+                    }
+                    foundTotal += cnt;
+
+                    let sub;
+                    if (!dayList || !dayList.length) sub = '⚠ CHƯA TẢI ngày này';
+                    else if (!exact) sub = '⚠ không có STT ' + target + ' → hiện kỳ GẦN NHẤT (STT ' + dayList[pos].s + ') · ngày có ' + dayList.length + ' kỳ';
+                    else sub = cnt + '/' + rows + ' kỳ · ngày có ' + dayList.length + ' kỳ';
+
+                    html += '<div class="h3-col">'
+                          + '<div class="h3-colhead"><b>NGÀY ' + dayTxt + '</b><span>' + ymdPretty(ymd) + ' · ' + sub + '</span></div>'
+                          + '<div class="h3-cells">' + inner + '</div>'
+                          + '</div>';
+                }
+                box.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+                box.innerHTML = html;
+
+                const typedEl = document.getElementById('histSttInput');
+                const typedNow = String((typedEl && typedEl.value) || '').replace(/\D/g, '');
+                if (note) {
+                    note.textContent = (histDemoOn ? '🧪 DỮ LIỆU MẪU (không phải kết quả thật) · ' : '')
+                        + 'STT ' + target + (typedNow ? ' (bạn gõ)' : ' (đuôi ID kỳ · TỰ ĐỘNG lấy từ ô cuối hàng cuối bảng)')
+                        + (firstCenter ? (' · tra ra: ID ' + firstCenter.i + ' → SỐ ' + firstCenter.d) : '')
+                        + ' · dò trong ' + data.list.length + ' kỳ đã load (' + data.byDay.size + ' ngày: '
+                        + ymdPretty(data.oldestDay || data.newestDay) + ' → ' + ymdPretty(data.newestDay) + ')'
+                        + ' · ' + cols + ' cột = ' + days.map(d => d.slice(6, 8)).join('-') + '/' + days[0].slice(4, 6) + '/' + days[0].slice(0, 4)
+                        + ' · mỗi cột ' + rows + ' ô (±' + win + '), ô STT ở GIỮA khung · hiện ' + foundTotal + ' kỳ có số'
+                        + (noDay ? ' · ⚠️ KHÔNG cắt được NGÀY: ID kỳ trong kho không bắt đầu bằng YYYYMMDD (vd 20260913…). Kỳ mới nhất: ' + data.list[0].i
+                        : ' · bấm 1 ô để lấy STT ô đó làm tâm.');
+                }
+
+                // cuộn khung để HÀNG GIỮA (ô vàng có STT) nằm đúng GIỮA khung kết quả
+                try {
+                    const hitEl = (typeof box.querySelector === 'function') ? box.querySelector('.hist-cell.hit, .hist-cell.near') : null;
+                    if (hitEl) {
+                        const bR = box.getBoundingClientRect(), hR = hitEl.getBoundingClientRect();
+                        box.scrollTop = Math.max(0, box.scrollTop + (hR.top - bR.top) - box.clientHeight / 2 + hR.height / 2);
+                    }
+                } catch (e) {}
             }
-            
+
+            // Lấy STT của ô CUỐI CÙNG HÀNG CUỐI CÙNG trên bảng ghi vào ô nhập
+            function histUseBoardStt() {
+                const el = document.getElementById('histSttInput');
+                if (el) el.value = histBoardStt();
+                renderCellHistory();
+            }
+            // Xoá ô nhập → về chế độ TỰ ĐỘNG (luôn bám STT ô cuối bảng)
+            function histClearStt() {
+                const el = document.getElementById('histSttInput');
+                if (el) el.value = '';
+                renderCellHistory();
+            }
+
+            function bindHistControls() {
+                const s = document.getElementById('histSttInput');
+                if (s && s.dataset.bound !== '1') {
+                    s.dataset.bound = '1';
+                    let tm = null;
+                    s.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(renderCellHistory, 180); });
+                    s.addEventListener('change', renderCellHistory);
+                    s.addEventListener('keyup', e => { if (e.key === 'Enter') { clearTimeout(tm); renderCellHistory(); } });
+                }
+                const wn = document.getElementById('histWin');
+                if (wn && wn.dataset.bound !== '1') { wn.dataset.bound = '1'; wn.addEventListener('change', renderCellHistory); }
+                const co = document.getElementById('histCols');
+                if (co && co.dataset.bound !== '1') { co.dataset.bound = '1'; co.addEventListener('change', renderCellHistory); }
+                const box = document.getElementById('cellHistoryList');
+                if (box && box.dataset.bound !== '1') {
+                    box.dataset.bound = '1';
+                    box.addEventListener('click', e => {
+                        const c = (e.target && e.target.closest) ? e.target.closest('.hist-cell') : null;
+                        if (!c) return;
+                        const stt = c.getAttribute('data-stt');
+                        const el = document.getElementById('histSttInput');
+                        if (!stt || !el || !/^\d{3}$/.test(stt)) return;
+                        el.value = stt;          // lấy STT của ô vừa bấm làm TÂM mới
+                        renderCellHistory();
+                    });
+                }
+            }
+
+            // TỰ vẽ lại khi SANG NGÀY MỚI (cột ngày tự tăng: 13 → 14 → 15 …) hoặc khi ngày gốc đổi
+            setInterval(function () {
+                try {
+                    const b = histBaseDay(histData());
+                    if (histLastBase && b !== histLastBase) renderCellHistory();
+                } catch (e) {}
+            }, 30000);
+
             function bindDateBoxes() {
                 const box = document.getElementById('dateBoxes');
                 if (!box || box.dataset.bound === '1') return;
@@ -2304,14 +2930,15 @@
             loadRefCount();
             initGrid();
             bindDateBoxes();
+            bindHistControls();          // ô lịch sử 3 cột (HÀNG 1 = STT, HÀNG 2 = NGÀY)
             nextStt = 1;
             sttInput.value = '1';
             loadDayHistory();
             loadCellHistory();
-            renderCellHistory();
             loadGameArchive();
             renderGameArchiveInfo();
             loadBoardLocal();
+            renderCellHistory();         // vẽ ô lịch sử SAU khi đã nạp kho 5000 trang + bảng
             refreshDates();
             mainInput.focus();
             startRealtimeSync();
@@ -2324,14 +2951,21 @@
             // Lấy số từ game NGAY khi mở (không phải chờ 15s),
             // rồi TỰ ĐỘNG TẢI NỀN 5000 trang lịch sử (bảng tự mở rộng tới 51.000 ô).
             // Tải nền chạy ~1-2 tiếng; tắt tab / đóng app cũng được — mở lại sẽ tiếp tục từ chỗ dừng.
-            if (getToken()) {
-                fetchAndFill().then(() => {
+            // TRÌNH TỰ KHỞI ĐỘNG:
+            //  (1) ⬇️ kéo kho 5000 trang đã lưu trên FIREBASE về (không cần token game) → khỏi tải lại từ đầu
+            //  (2) 🔄 lấy kỳ mới nhất lên bảng (cần token)
+            //  (3) 📥 tải TIẾP từ TRANG CUỐI CÙNG (progress trong máy hoặc trên Firebase, lấy số lớn hơn)
+            (fbDB ? fbArchiveLoad() : Promise.resolve(false))
+                .catch(() => false)
+                .then(() => (getToken() ? fetchAndFill() : null))
+                .catch(() => null)
+                .then(() => {
+                    if (!getToken()) return;
                     let autoOn = true;
                     try { autoOn = localStorage.getItem('vn168_autoLoad') !== '0'; } catch (e) {}
                     if (autoOn) gameAutoFetch(AUTO_LOAD_PAGES);
                 });
-            }
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a7b8db8ab408b3',t:'MTc4OTMwODQ4Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
