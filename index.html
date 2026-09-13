@@ -458,7 +458,7 @@
             }
             .gp-archive-row { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
             .gp-archive-row span { font-size: 11px; color: var(--text-dim); flex: 1; }
-            .gp-status { margin-top: 6px; font-size: 11px; color: var(--text-dim); word-break: break-word; }
+            .gp-status { margin-top: 6px; font-size: 11px; color: var(--text-dim); word-break: break-word; white-space: pre-wrap; }
             .gp-note { font-size: 10px; color: #666; margin-top: 4px; }
         </style>
     </head>
@@ -549,6 +549,7 @@
                 <input type="number" id="gpN" min="1" max="9212" value="100" title="Số trang sẽ tải (kể từ trang 2)">
                 <button class="btn-fetch" id="btnGameAuto" onclick="gameAutoFetch()">📥 Tải trang 2→N + lưu</button>
                 <button class="btn-reset" id="btnGameStop" onclick="gameStopAuto()" disabled>■ Dừng</button>
+                <button class="btn-undo" id="btnApiTest" onclick="apiDiagnose()" title="Gửi 1 request thử và BÁO CHÍNH XÁC vì sao lỗi (Failed to fetch / HTTP / token / Cloudflare)">🩺 Test API</button>
             </div>
             <div class="gp-archive-row">
                 <span id="gpArchiveInfo">Kho lưu: 0 mục</span>
@@ -564,7 +565,7 @@
             <div class="gp-status" id="gpStatus">Chưa tải lịch sử game.</div>
             <div class="gp-note">Mở app là TỰ TẢI NỀN 5000 trang (tắt tab/đóng máy vẫn được — mở lại chạy TIẾP từ chỗ dừng, có nút ■ Dừng).
                 ☁️ Kho <b>TỰ LƯU LÊN FIREBASE</b> mỗi ~100 trang (collection <code>vn168_archive</code>: <code>progress</code> + <code>chunk_000…</code>, mỗi khối 5000 kỳ) và <b>TỰ KÉO VỀ</b> khi mở app → máy khác / cài lại trình duyệt / xoá cache vẫn <b>chỉ tải TIẾP từ trang cuối</b>, không tải lại 5000 trang.
-                Bảng 100×10 tự mở rộng tới 5.100 hàng = 51.000 ô, mỗi ô đủ số + STT. Tắt tự tải: F12 → localStorage.vn168_autoLoad='0'. Nên chạy trên máy tính.</div>
+                Bảng 100×10 tự mở rộng tới 5.100 hàng = 51.000 ô, mỗi ô đủ số + STT. <b>Mở file là TỰ tải 5000 trang + TỰ đẩy lên Firebase, KHÔNG cần bấm nút</b> (dán token xong nó tự chạy). Kho đã đủ 5000 trang thì mỗi lần mở chỉ tải lại 150 trang đầu để bắt kỳ mới. Tắt tự tải: F12 → localStorage.vn168_autoLoad='0'. Nên chạy trên máy tính.</div>
         </div>
         <div class="control-panel" style="display:none">
             <div class="oa-section">
@@ -606,6 +607,9 @@
             let boardRows = ROWS;
             let TOTAL = ROWS * COLS;      // ĐỘNG: bảng tự mở rộng dần khi nạp lịch sử (tối đa MAX_BOARD_ROWS hàng)
             const AUTO_LOAD_PAGES = 5000; // mỗi khi mở app: tự tải nền 2→5000 trang (tắt: LS vn168_autoLoad='0')
+            const AUTO_CATCHUP_PAGES = 150; // kho ĐÃ đủ 5000 trang → mỗi lần mở chỉ tải lại 150 trang ĐẦU để BẮT KỲ MỚI
+            const AUTO_MAX_CONSEC_FAIL = 4; // lỗi N trang LIÊN TIẾP (token chết / bị chặn cứng) → TỰ DỪNG, không đốt 5000 trang × 4 lần thử
+            const AUTO_RETRY_MAX = 6;       // bị chặn → tự thử lại tối đa 6 lần, chờ giãn dần 3→6→12→24→30→30 phút rồi HẲN dừng
             let bulkLoadMode = false;     // đang tải hàng loạt: gom ghi localStorage/Firebase/lịch sử theo đợt
             let boardCount = 0;           // số ô đang có số trên bảng
             
@@ -826,7 +830,8 @@
                     try { localStorage.setItem('vn168_token', currentToken); } catch (e) {}
                 }
                 if (fbDB && !applyingRemote) writeToFirebase();
-                setStatus('Đã lưu token ✓');
+                setStatus('Đã lưu token ✓ — app TỰ tải nền 5000 trang, không cần bấm nút.');
+                autoStartBulkLoad('saveToken');
             }
             
             function loadToken() {
@@ -865,6 +870,7 @@
                         }
                         if (fbDB && !applyingRemote) writeToFirebase();
                         setStatus('✓ Đã lấy token từ clipboard!');
+                        autoStartBulkLoad('clipboard');
                     } else {
                         setStatus('Clipboard không có token hợp lệ (eyJ...).');
                     }
@@ -873,20 +879,126 @@
                 }
             }
             
-            function apiPost(url, body) {
+            /* ===== "FAILED TO FETCH" LÀ GÌ? =====
+               fetch() bị REJECT (không nhận được phản hồi nào) → trình duyệt báo "Failed to fetch".
+               Nguyên nhân thường gặp: (1) Cloudflare chặn IP tạm vì gọi quá nhanh, (2) mất mạng/VPN,
+               (3) tiện ích chặn quảng cáo, (4) CORS khi mở file bằng file://.
+               => apiPost giờ PHÂN LOẠI lỗi + kèm HƯỚNG XỬ LÝ, và apiPostRetry tự thử lại có giãn cách. */
+            let deadToken = '';   // token đã bị server báo 401 → NGỪNG bắn request (kể cả auto-refresh 15s) tới khi người dùng dán token KHÁC
+            function tokenAlive() {
+                const t = getToken() || '';
+                if (!deadToken) return true;
+                if (t === deadToken) return false;
+                deadToken = '';   // token đã đổi → thử lại bình thường
+                return true;
+            }
+            function apiError(kind, msg, status) {
+                const e = new Error(msg);
+                e.kind = kind; e.status = status || 0;
+                e.hint = ({
+                    net : 'Request KHÔNG gửi được: chờ 1-2 phút cho hết chặn tạm, kiểm tra mạng/VPN, tắt tiện ích chặn quảng cáo. Nếu đang tải 5000 trang thì app tự giãn nhịp và thử lại.',
+                    http: 'HTTP ' + (status || '?') + ': 401 = token hết hạn (dán token mới) · 403/429/503 = bị chặn hoặc giới hạn tần suất (chờ vài phút, giảm tốc).',
+                    html: 'API trả về TRANG HTML (challenge Cloudflare) → mở trang game thật 1 lần rồi lấy lại token.',
+                    json: 'Phản hồi không phải JSON hợp lệ.',
+                    auth: 'Token hết hạn/sai → bấm 📋 Lấy token rồi Lưu token.'
+                })[kind] || '';
+                return e;
+            }
+            function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+            async function apiPost(url, body) {
                 const tok = extractToken(getToken() || '');
-                return fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json;charset=UTF-8',
-                        'Accept': 'application/json, text/plain, */*',
-                        'Authorization': 'Bearer ' + tok,
-                        'Ar-Origin': CFG.arOrigin
-                    },
-                    body: JSON.stringify(body)
-                }).then(r => r.json());
+                let res;
+                try {
+                    res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json;charset=UTF-8',
+                            'Accept': 'application/json, text/plain, */*',
+                            'Authorization': 'Bearer ' + tok,
+                            'Ar-Origin': CFG.arOrigin
+                        },
+                        body: JSON.stringify(body)
+                    });
+                } catch (err) {
+                    throw apiError('net', 'Failed to fetch (' + (err && err.message ? err.message : String(err)) + ')', 0);
+                }
+                const canText = (typeof res.text === 'function');
+                const text = canText ? await res.text().catch(() => '') : '';
+                if (!res.ok) {
+                    if (res.status === 401) deadToken = tok;   // hết hạn token: đừng gọi thêm nữa (gọi chỉ tốn request + dễ bị chặn)
+                    throw apiError(res.status === 401 ? 'auth' : 'http',
+                        'HTTP ' + res.status + ' ' + (res.statusText || '') + ' · ' + text.slice(0, 120).replace(/\s+/g, ' '), res.status);
+                }
+                if (!canText) {   // môi trường lạ không có .text() → đọc JSON thẳng
+                    try { return await res.json(); }
+                    catch (e) { throw apiError('json', 'Không đọc được phản hồi JSON: ' + e.message, res.status); }
+                }
+                if (!text) throw apiError('json', 'API trả về rỗng (HTTP ' + res.status + ')', res.status);
+                try { return JSON.parse(text); }
+                catch (e) {
+                    const isHtml = /^\s*<(!doctype|html|head|body|script)/i.test(text);
+                    throw apiError(isHtml ? 'html' : 'json',
+                        (isHtml ? 'API trả về TRANG HTML (Cloudflare chặn)' : 'JSON hỏng') + ': ' + text.slice(0, 100).replace(/\s+/g, ' '), res.status);
+                }
+            }
+
+            /* 🩺 TEST API: gửi ĐÚNG 1 request rồi báo chính xác chuyện gì xảy ra
+               (Failed to fetch / HTTP bao nhiêu / token / Cloudflare / bao lâu thì có phản hồi) */
+            async function apiDiagnose() {
+                const btn = document.getElementById('btnApiTest');
+                if (btn) btn.disabled = true;
+                const out = [];
+                gpStatus('🩺 Đang test kết nối API…');
+                const tok = getToken();
+                try {
+                    if (!tok) {
+                        out.push('❌ CHƯA CÓ TOKEN → bấm "📋 Lấy token" (hoặc dán tay) rồi "Lưu token".');
+                    } else {
+                        out.push('✔ Token: ' + tok.slice(0, 16) + '… (' + tok.length + ' ký tự)');
+                        out.push('✔ API: ' + CFG.apiResult);
+                        const t0 = Date.now();
+                        try {
+                            const res = await apiPost(CFG.apiResult, Object.assign({}, CFG.payload, { pageNo: 1, pageSize: 10 }));
+                            const rows = findRows(res);
+                            out.push('✔ PHẢN HỒI OK sau ' + (Date.now() - t0) + 'ms · ' + rows.length + ' kỳ'
+                                + (rows.length ? (' · kỳ mới nhất ' + rowIssue(rows[rows.length - 1]) + ' → số ' + valueToDigit(rowBitValue(rows[rows.length - 1]))) : ''));
+                            out.push('→ Kết nối tốt. Nếu lúc tải 5000 trang vẫn thỉnh thoảng lỗi "Failed to fetch" thì đó là BỊ CHẶN TẦN SUẤT: app đã tự giãn nhịp + thử lại 4 lần + tải bù trang lỗi.');
+                        } catch (e) {
+                            out.push('❌ ' + (e.kind ? ('[' + String(e.kind).toUpperCase() + '] ') : '') + e.message);
+                            if (e.hint) out.push('   → ' + e.hint);
+                            if (e.kind === 'net') out.push('   → "Failed to fetch" = trình duyệt KHÔNG gửi được/không nhận được phản hồi: hay gặp nhất là bị Cloudflare chặn tạm do gọi quá nhanh (chờ 1-2 phút), mất mạng/VPN, hoặc tiện ích chặn quảng cáo. Hiếm hơn: mở file bằng file:// bị chặn CORS — thử chạy qua web server cục bộ.');
+                            if (e.kind === 'http' && e.status === 429) out.push('   → HTTP 429 = quá nhiều request: chờ vài phút, app sẽ tự giãn nhịp.');
+                        }
+                    }
+                } catch (err) {
+                    out.push('❌ Lỗi không mong đợi: ' + err.message);
+                } finally {
+                    if (btn) btn.disabled = false;
+                    const el = document.getElementById('gpStatus');
+                    if (el) { el.style.whiteSpace = 'pre-wrap'; el.textContent = out.join('\n'); }
+                }
+            }
+
+            // Gọi kèm THỬ LẠI, chờ tăng dần (token hết hạn thì bỏ luôn, thử lại vô ích)
+            async function apiPostRetry(url, body, tries, gapMs) {
+                tries = tries || 3; gapMs = gapMs || 700;
+                let lastErr = null;
+                for (let i = 0; i < tries; i++) {
+                    try { return await apiPost(url, body); }
+                    catch (e) {
+                        lastErr = e;
+                        if (e.kind === 'auth') throw e;
+                        if (i < tries - 1) await sleep(gapMs * (i + 1) + Math.random() * 250);
+                    }
+                }
+                throw lastErr;
             }
             
+            function setVisStatus(msg) {   // chỉ cập nhật dòng trạng thái NGOÀI màn hình chính (không đụng tab game)
+                const b = document.getElementById('apiStatusVisible');
+                if (b) b.textContent = msg;
+            }
             function setStatus(msg) {
                 const a = document.getElementById('apiStatus');
                 if (a) a.textContent = msg;
@@ -1107,6 +1219,7 @@
                                     else localStorage.removeItem('vn168_token');
                                 } catch (e) {}
                             }
+                            if (tok) autoStartBulkLoad('token đồng bộ từ Firebase');
                         }
                     }
                     
@@ -1180,7 +1293,7 @@
                     }
                     setStatus('Đang lấy kết quả...');
                     
-                    const res = await apiPost(CFG.apiResult, CFG.payload);
+                    const res = await apiPostRetry(CFG.apiResult, CFG.payload, 3, 800);
                     if (epoch !== resetEpoch) return;
                     showRaw(res);
                     const allRows = findRows(res);
@@ -1313,7 +1426,7 @@
                         calls++;
                         setStatus(`Đang lấy lịch sử… ${label} (gọi thứ ${calls}, đã gom ${byIssue.size} kỳ)`);
                         let res;
-                        try { res = await apiPost(CFG.apiResult, payload); }
+                        try { res = await apiPostRetry(CFG.apiResult, payload, 2, 600); }
                         catch (e) { return { error: e.message }; }
                         if (epoch !== resetEpoch) return null;
                         const rows = findRows(res).filter(r => String(rowIssue(r) || '').trim());
@@ -1592,10 +1705,14 @@
                 let lastErr = null;
                 for (const payload of attempts) {
                     try {
-                        const res = await apiPost(CFG.apiResult, payload);
+                        const res = await apiPost(CFG.apiResult, payload);   // thử lại là việc của vòng NGOÀI (có giãn nhịp)
                         const rows = findRows(res);
                         if (rows.length) return { rows: rows, totalPage: findTotalPage(res) };
-                    } catch (e) { lastErr = e; }
+                    } catch (e) {
+                        lastErr = e;
+                        // lỗi MẠNG / TOKEN / Cloudflare thì đổi kiểu payload cũng vô ích → báo lên vòng ngoài thử lại sau
+                        if (e.kind === 'net' || e.kind === 'auth' || e.kind === 'html') throw e;
+                    }
                 }
                 if (lastErr) throw lastErr;
                 return { rows: [], totalPage: null };
@@ -1746,7 +1863,7 @@
             ========================================================================== */
             const FB_ARCHIVE_COL = 'vn168_archive';
             const FB_CHUNK_SIZE = 5000;        // kỳ/khối ≈ 110KB (Firestore tối đa 1MB/tài liệu)
-            const FB_SAVE_EVERY_FLUSH = 4;     // 4 đợt × 25 trang = cứ ~100 trang lại lưu đám mây 1 lần
+            const FB_SAVE_EVERY_FLUSH = 2;     // 2 đợt × 25 trang = cứ ~50 trang lại TỰ lưu lên Firebase 1 lần (đóng tab giữa chừng vẫn giữ được)
             let fbArchiveSig = [];             // chữ ký các khối đã đồng bộ (để khỏi ghi lại khối chưa đổi)
             let fbArchiveBusy = false;
             let fbFlushTick = 0;
@@ -1973,7 +2090,12 @@
             
             // Nparam: số trang đích (vd AUTO_LOAD_PAGES=5000 khi tự chạy lúc mở app);
             // không có Nparam thì đọc ô nhập gpN (chạy tay)
-            async function gameAutoFetch(Nparam) {
+            // opts: { forceStart: bắt đầu từ trang này (bỏ qua tiến độ đã lưu),
+            //         noProgress: KHÔNG ghi tiến độ (chế độ "bắt kỳ mới" — giữ nguyên mốc 5000 trang đã hoàn thành),
+            //         label: chữ hiện đầu dòng trạng thái }
+            async function gameAutoFetch(Nparam, opts) {
+                opts = opts || {};
+                const MODE = opts.label || '';
                 if (gameAutoRunning) return;
                 if (!getToken()) { gpStatus('⚠️ Chưa có token — không lấy được dữ liệu.'); return; }
                 const nEl = document.getElementById('gpN');
@@ -1981,13 +2103,16 @@
                 if (!(N >= 1)) N = 100;
                 N = Math.min(N, 9212);
                 let start = 2;
-                try {
-                    const p = JSON.parse(localStorage.getItem(LS_GAME_PROGRESS) || 'null');
-                    if (p) {
-                        if (p.running && p.nextPage) start = Math.min(p.nextPage, N + 1);   // dừng giữa chừng -> nạp lại đúng trang đang làm
-                        else if (p.lastPage) start = Math.min(p.lastPage + 1, N + 1);       // đã chạy tới lastPage -> tiếp trang sau
-                    }
-                } catch (e) {}
+                if (!opts.noProgress) {
+                    try {
+                        const p = JSON.parse(localStorage.getItem(LS_GAME_PROGRESS) || 'null');
+                        if (p) {
+                            if (p.running && p.nextPage) start = Math.min(p.nextPage, N + 1);   // dừng giữa chừng -> nạp lại đúng trang đang làm
+                            else if (p.lastPage) start = Math.min(p.lastPage + 1, N + 1);       // đã chạy tới lastPage -> tiếp trang sau
+                        }
+                    } catch (e) {}
+                }
+                if (typeof opts.forceStart === 'number' && opts.forceStart >= 1) start = Math.min(opts.forceStart, N);
                 if (start > N) {
                     gpStatus('✓ Đã tải đủ tới trang ' + N + '. Muốn tải sâu hơn: tăng N (ô số bên cạnh) rồi bấm lại.');
                     return;
@@ -1997,20 +2122,30 @@
                 if (btn) btn.disabled = true; if (stop) stop.disabled = false;
                 bulkLoadMode = true;   // gom ghi localStorage/Firebase/lịch sử mỗi 25 trang (bảng 50.000 ô ≈ 2MB — không thể ghi mỗi trang)
                 let savedTotal = 0, page = start, lastOk = page - 1, errPages = 0, lastErrMsg = '', sinceFlush = 0, endReason = '';
+                let consecFail = 0, hardAbort = false;   // lỗi LIÊN TIẾP nhiều trang → tự dừng (tránh bị Cloudflare chặn lâu hơn)
+                const failedPages = [];                 // trang lỗi → TẢI BÙ ở cuối đợt (kho không bị "lỗ hổng")
+                const PACE_MIN = 400, PACE_MAX = 8000;
+                let paceMs = 700, okStreak = 0;         // nhịp gọi API TỰ GIÃN khi lỗi, TỰ NHANH lại khi ổn
+                // chạy TỰ ĐỘNG thì báo tiến trình ra MÀN HÌNH CHÍNH (khỏi phải mở tab "Lịch sử game" mới thấy đang tải)
+                const visProg = () => { if (MODE) setVisStatus(MODE + '📥 trang ' + page + '/' + N + ' · kho '
+                    + gameArchive.length.toLocaleString('vi-VN') + ' kỳ · bảng ' + boardCount.toLocaleString('vi-VN') + ' ô'
+                    + (fbDB ? ' · ☁️ đã lưu Firebase' : ' · ☁️ CHƯA kết nối Firebase (kho chỉ ở máy này)')); };
                 const flush = () => {
                     saveGameArchive(); saveBoardLocal(); saveCellHistory(); renderCellHistory(); renderGameArchiveInfo();
-                    sinceFlush = 0;
+                    sinceFlush = 0; visProg();
                     // ☁️ TỰ ĐỘNG lưu kho lên Firebase (mỗi FB_SAVE_EVERY_FLUSH đợt ≈ 100 trang, chỉ đẩy khối đã đổi)
                     if (++fbFlushTick % FB_SAVE_EVERY_FLUSH === 0) fbArchiveSave();
                 };
                 try {
                     while (page <= N && !gameAutoStop && !endReason) {
-                        writeProgress({ running: true, nextPage: page, lastPage: lastOk });
-                        gpStatus('📥 Đang tải trang ' + page + '/' + N + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ')...');
+                        if (!opts.noProgress) writeProgress({ running: true, nextPage: page, lastPage: lastOk });
+                        gpStatus(MODE + '📥 Đang tải trang ' + page + '/' + N + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ')...');
                         let rows = [];
                         let pageErr = null;
-                        // thử 2 lần: lần 1 lỗi thì đợi 2s rồi thử lại (Cloudflare hay chặn nhịp gọi nhanh)
-                        for (let attempt = 0; attempt < 2 && !pageErr && !gameAutoStop; attempt++) {
+                        // thử tối đa 4 lần, chờ tăng dần (1,4s → 2,8s → 5,6s); lỗi mạng/Cloudflare thì kiên nhẫn hơn
+                        const ATTEMPTS = 4;
+                        for (let attempt = 0; attempt < ATTEMPTS && !gameAutoStop; attempt++) {
+                            pageErr = null;   // ⚠ phải XOÁ lỗi của lần trước, nếu không điều kiện lặp sẽ thoát ngay sau lần 1
                             try {
                                 const { rows: rr, totalPage } = await gameListFetch(page);
                                 rows = rr || [];
@@ -2020,20 +2155,48 @@
                                     const t = document.getElementById('gpTotal'); if (t) t.textContent = totalPage + ' trang';
                                 }
                                 pageErr = null;
-                                break;   // ✔ tải được rồi thì DỪNG — trước đây vòng lặp chạy đủ 2 lần
-                                       //   nên MỖI TRANG BỊ GỌI API 2 LẦN (5000 trang = 10.000 request,
-                                       //   vừa chậm gấp đôi vừa dễ bị Cloudflare chặn)
+                                break;   // ✔ tải được thì DỪNG ngay (trước đây vòng lặp chạy đủ 2 lần → mỗi trang gọi API 2 lần)
                             } catch (e) {
                                 pageErr = e;
-                                if (attempt === 0) {
-                                    gpStatus('⚠️ Trang ' + page + ' lỗi (lần 1): ' + e.message + ' — đợi 2s rồi thử lại...');
-                                    await new Promise(s => setTimeout(s, 2000));
+                                if (attempt < ATTEMPTS - 1 && !gameAutoStop) {
+                                    const waitMs = Math.min(20000, Math.round(paceMs * Math.pow(2, attempt + 1))) + Math.floor(Math.random() * 400);
+                                    gpStatus('⚠️ Trang ' + page + ' lỗi lần ' + (attempt + 1) + '/' + ATTEMPTS + ': ' + e.message
+                                        + ' — chờ ' + (waitMs / 1000).toFixed(1) + 's rồi thử lại… (nhịp gọi hiện ' + paceMs + 'ms)');
+                                    await sleep(waitMs);
                                 }
                             }
                         }
                         if (pageErr) {
-                            errPages++; lastErrMsg = pageErr.message;
-                            gpStatus('⚠️ Trang ' + page + ' lỗi: ' + pageErr.message + ' — bỏ qua, thử trang sau...');
+                            errPages++; failedPages.push(page);
+                            lastErrMsg = pageErr.message + (pageErr.hint ? (' → ' + pageErr.hint) : '');
+                            paceMs = Math.min(PACE_MAX, Math.round(paceMs * 2));   // giãn nhịp ra ngay
+                            okStreak = 0; consecFail++;
+                            gpStatus('⚠️ Trang ' + page + ' THẤT BẠI sau ' + ATTEMPTS + ' lần: ' + pageErr.message
+                                + ' — đã ghi nhận để TẢI BÙ cuối đợt, đi tiếp trang sau (nhịp giãn còn ' + paceMs + 'ms).');
+                            // ⛔ DỪNG SỚM: gọi tiếp chỉ làm bị chặn LÂU hơn. Mở lại app (hoặc dán token mới) sẽ TỰ tải tiếp đúng chỗ này.
+                            if (pageErr.kind === 'auth') {
+                                hardAbort = true;
+                                autoStartArmed = true;   // dán token MỚI vào là app TỰ tải tiếp ngay, không phải bấm nút
+                                endReason = '⛔ TOKEN HẾT HẠN / không hợp lệ — dán token mới vào ô Token API, app sẽ TỰ tải tiếp từ trang ' + page + '.';
+                            } else if (consecFail >= AUTO_MAX_CONSEC_FAIL) {
+                                hardAbort = true;
+                                autoRetryCount++;
+                                if (autoRetryCount <= AUTO_RETRY_MAX) {
+                                    // ⏳ chờ hết chặn tạm rồi TỰ chạy tiếp — không cần ai bấm nút (chờ giãn dần, có giới hạn số lần)
+                                    const waitMin = Math.min(30, 3 * Math.pow(2, autoRetryCount - 1));   // 3 → 6 → 12 → 24 → 30 → 30 phút
+                                    endReason = '⛔ Lỗi ' + consecFail + ' trang LIÊN TIẾP (' + (pageErr.kind || 'net')
+                                        + ') — nhiều khả năng bị Cloudflare chặn tạm. App TỰ DỪNG để không bị chặn lâu hơn, rồi TỰ thử lại (lần '
+                                        + autoRetryCount + '/' + AUTO_RETRY_MAX + ') sau ' + waitMin + ' phút, từ trang ' + page + '.';
+                                    if (autoRetryTimer) clearTimeout(autoRetryTimer);
+                                    autoRetryTimer = setTimeout(() => {
+                                        autoRetryTimer = null; autoStartArmed = true;
+                                        autoStartBulkLoad('tự thử lại sau chặn');
+                                    }, waitMin * 60000);
+                                } else {
+                                    endReason = '⛔ Lỗi ' + consecFail + ' trang LIÊN TIẾP — đã TỰ thử lại ' + AUTO_RETRY_MAX
+                                        + ' lần vẫn bị chặn, app NGỪNG tự tải phiên này (để không bị chặn lâu hơn). Kiểm tra mạng/VPN/tiện ích chặn quảng cáo, hoặc bấm 🩺 Test API; xong mở lại file — app sẽ TỰ tải tiếp từ trang ' + page + '.';
+                                }
+                            }
                         } else if (!rows.length) {
                             endReason = 'API không còn dữ liệu từ trang ' + page + ' (đã tới cuối lịch sử).';
                         } else {
@@ -2051,36 +2214,128 @@
                             renderGameArchiveInfo();
                             // ghi luôn lên bảng 100x10 (bảng TỰ MỞ RỘNG tới 51.000 ô)
                             boardPrependFromRows(rows);
-                            lastOk = page;
+                            lastOk = page; consecFail = 0; autoRetryCount = 0;   // tải được → xoá đếm lỗi & đếm lần tự thử lại
+                            if (++okStreak >= 10 && paceMs > PACE_MIN) { paceMs = Math.max(PACE_MIN, paceMs - 100); okStreak = 0; }   // ổn định → tăng tốc lại
                             if (gamePageState.totalPage && page >= gamePageState.totalPage) endReason = 'Đã tới trang cuối của API (' + gamePageState.totalPage + ').';
                         }
                         page++;
+                        if (MODE && (page - start) % 5 === 0) visProg();   // chế độ tự động: cứ 5 trang báo tiến trình 1 lần ra màn hình chính
                         if (++sinceFlush >= 25) flush();
-                        // nghỉ giữa các trang: chậm lại sau lỗi để tránh bị chặn
-                        if (page <= N && !gameAutoStop && !endReason) await new Promise(s => setTimeout(s, pageErr ? 1500 : 600));
+                        // nghỉ giữa các trang: nhịp THÍCH ỨNG (tự giãn khi lỗi, tự nhanh lại khi ổn) + jitter
+                        if (page <= N && !gameAutoStop && !endReason) await sleep(paceMs + Math.floor(Math.random() * 250));
                     }
-                    if (gameAutoStop) {
+                    // ===== 🔁 TẢI BÙ những trang bị lỗi (để kho không bị "lỗ hổng") =====
+                    if (failedPages.length && !gameAutoStop && !hardAbort) {
+                        gpStatus('🔁 Đang tải bù ' + failedPages.length + ' trang lỗi: ' + failedPages.slice(0, 12).join(', ') + (failedPages.length > 12 ? '…' : ''));
+                        await sleep(3000);
+                        const stillBad = [];
+                        for (let fi = 0; fi < failedPages.length; fi++) {
+                            const pg = failedPages[fi];
+                            if (gameAutoStop) { stillBad.push(pg); continue; }
+                            try {
+                                const rr2 = await gameListFetch(pg);
+                                const rows2 = rr2.rows || [];
+                                if (!rows2.length) { stillBad.push(pg); }
+                                else {
+                                    for (const r of rows2) {
+                                        const e = gameRowToEntry(r);
+                                        if (!e) continue;
+                                        const tail = gameArchive.length ? gameArchive[gameArchive.length - 1].i : null;
+                                        const add = (!tail || compareIssue(e.i, tail) < 0) ? gameArchivePushTail(e) : archiveInsert(e);
+                                        if (add) savedTotal++;
+                                    }
+                                    boardPrependFromRows(rows2);
+                                    errPages = Math.max(0, errPages - 1);
+                                }
+                            } catch (e2) { stillBad.push(pg); }
+                            await sleep(paceMs);
+                        }
+                        failedPages.length = 0;
+                        for (const pg of stillBad) failedPages.push(pg);
+                        flush();
+                    }
+                    if (gameAutoStop || hardAbort) {
                         // giữ tiến độ để bấm lại / mở lại app sẽ TỪ CHỖ DỪNG (trùng sẽ bị bỏ qua)
-                        writeProgress({ running: true, nextPage: page, lastPage: lastOk });
-                    } else {
+                        // hardAbort → quay lại đúng TRANG LỖ HỔNG ĐẦU TIÊN, không bỏ sót trang nào
+                        const resumePage = (hardAbort && failedPages.length) ? failedPages[0] : page;
+                        if (!opts.noProgress) writeProgress({ running: true, nextPage: resumePage, lastPage: lastOk });
+                    } else if (!opts.noProgress) {
                         writeProgress({ running: false, nextPage: null, lastPage: lastOk });
                     }
                     bulkLoadMode = false;
                     flush();
+                    if (MODE) setVisStatus(MODE + (gameAutoStop ? '■ đã dừng · ' : '✓ xong · ') + 'kho '
+                        + gameArchive.length.toLocaleString('vi-VN') + ' kỳ · bảng ' + boardCount.toLocaleString('vi-VN') + ' ô'
+                        + (fbDB ? ' · ☁️ đã đẩy lên Firebase' : '') + (errPages ? (' · ⚠ ' + errPages + ' trang lỗi') : ''));
                     searchPattern();
                     writeToFirebase();
                     fbArchiveSave();     // ☁️ chốt kho + trang cuối lên Firebase (dừng giữa chừng cũng lưu)
-                    const errNote = errPages ? (' · ' + errPages + ' trang lỗi (lỗi gần nhất: ' + lastErrMsg + ')') : '';
+                    const errNote = errPages ? (' · ' + errPages + ' trang lỗi (trang: ' + failedPages.slice(0, 12).join(',') + (failedPages.length > 12 ? '…' : '') + ' · lỗi gần nhất: ' + lastErrMsg + ')') : '';
                     gpStatus(gameAutoStop
-                        ? ('■ Đã dừng ở trang ' + lastOk + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + errNote + (endReason ? ' · ' + endReason : '') + '). Bấm lại (hoặc mở lại app) sẽ tiếp tục từ trang ' + page + '.')
-                        : ('✓ Xong — thêm ' + savedTotal + ' kỳ (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + (endReason ? ' — ' + endReason : ' (trang ' + start + '→' + lastOk + ')') + errNote + '.'));
+                        ? (MODE + '■ Đã dừng ở trang ' + lastOk + ' (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + errNote + (endReason ? ' · ' + endReason : '') + '). Bấm lại (hoặc mở lại app) sẽ tiếp tục từ trang ' + page + '.')
+                        : (MODE + '✓ Xong — thêm ' + savedTotal + ' kỳ (kho: ' + gameArchive.length + ' · bảng: ' + boardCount + '/' + TOTAL + ' ô)' + (endReason ? ' — ' + endReason : ' (trang ' + start + '→' + lastOk + ')') + errNote + '.'));
                 } finally {
                     bulkLoadMode = false;
                     gameAutoRunning = false;
                     if (btn) btn.disabled = false; if (stop) stop.disabled = true;
                 }
             }
-            function gameStopAuto() { gameAutoStop = true; }
+            function gameStopAuto() {   // bấm ⏹ = tắt hẳn tự tải của phiên này (kể cả hẹn giờ tự thử lại)
+                gameAutoStop = true; autoStartArmed = false;
+                if (autoRetryTimer) { clearTimeout(autoRetryTimer); autoRetryTimer = null; }
+            }
+
+            /* ================== ⚙️ MỞ FILE LÀ TỰ TẢI 5000 TRANG + TỰ ĐẨY LÊN FIREBASE (KHÔNG CẦN BẤM NÚT) ==================
+               Nổ khi: (a) mở app mà ĐÃ có token, hoặc (b) token vừa được dán/gõ/lấy từ clipboard/đồng bộ về từ Firebase.
+               - Kho CHƯA đủ 5000 trang → tải TIẾP từ trang đã lưu (trong máy hoặc trên Firebase, lấy mốc lớn hơn),
+                 cứ ~50 trang lại tự đẩy 1 khối lên Firebase; đóng tab giữa chừng thì mở lại chạy tiếp, không tải lại từ đầu.
+               - Kho ĐÃ đủ 5000 trang  → chỉ tải lại 150 trang ĐẦU để BẮT KỲ MỚI (không đốt lại 5000 trang),
+                 và KHÔNG ghi đè mốc tiến độ 5000.
+               - Bị Cloudflare chặn tạm → tự dừng, chờ 3 phút rồi TỰ thử lại (không cần ai bấm).
+               Tắt hẳn: F12 → localStorage.vn168_autoLoad = '0'
+            */
+            let autoStartArmed = true;   // còn "chực" tự khởi động (nổ 1 lần/phiên; tự nạp lại khi token chết)
+            let autoRetryCount = 0;      // số lần đã tự thử lại sau khi bị chặn
+            let noTokenNotice = false, deadTokenNotice = false;   // chỉ hiện thông báo chờ token 1 lần (tránh ghi đè trạng thái mỗi 10s)
+            let autoRetryTimer = null;   // hẹn giờ tự thử lại (để nút ⏹ huỷ được)
+            let bootReady = false;       // chỉ tự khởi động SAU khi đã kéo kho từ Firebase về (nếu không sẽ ghi đè kho trên mây)
+            function autoLoadEnabled() { try { return localStorage.getItem('vn168_autoLoad') !== '0'; } catch (e) { return true; } }
+            function autoStartBulkLoad(why) {
+                if (!autoStartArmed || !bootReady || !autoLoadEnabled()) return;
+                if (!getToken()) {
+                    if (!noTokenNotice) { noTokenNotice = true;
+                        gpStatus('⚙️ SẴN SÀNG tự tải ' + AUTO_LOAD_PAGES + ' trang — chỉ chờ TOKEN. Dán token vào ô "Token API" (hoặc bấm 📋 Lấy token) là app TỰ chạy + TỰ đẩy lên Firebase, KHÔNG cần bấm nút tải.'); }
+                    return;                                                  // chưa có token → chờ người dùng dán
+                }
+                noTokenNotice = false;
+                if (!tokenAlive()) {
+                    if (!deadTokenNotice) { deadTokenNotice = true;
+                        gpStatus('⛔ Token đang bị server báo HẾT HẠN (401) — app tạm ngừng gọi API. Dán token MỚI vào ô "Token API" là app TỰ tải tiếp ' + AUTO_LOAD_PAGES + ' trang ngay, không cần bấm nút.'); }
+                    return;                                                  // token chết → chờ token mới (cò vẫn còn "nổ")
+                }
+                deadTokenNotice = false;
+                if (gameAutoRunning || bulkLoadMode) return;                // đang tải rồi → khỏi nổ lần 2
+                if (fetchInProgress || deepInProgress) { setTimeout(() => autoStartBulkLoad(why), 5000); return; }
+                autoStartArmed = false;
+                const prog = readProgress();
+                const done = Number(prog.lastPage) || 0;
+                if (done >= AUTO_LOAD_PAGES) {
+                    gpStatus('🔎 Kho đã đủ ' + AUTO_LOAD_PAGES + ' trang — TỰ tải lại ' + AUTO_CATCHUP_PAGES
+                        + ' trang đầu để bắt kỳ mới (không tải lại cả 5000 trang)…');
+                    gameAutoFetch(AUTO_CATCHUP_PAGES, { forceStart: 2, noProgress: true, label: '🔎 Bắt kỳ mới · ' });
+                } else {
+                    gpStatus('⚙️ TỰ ĐỘNG tải nền trang ' + (done ? done + 1 : 2) + '→' + AUTO_LOAD_PAGES
+                        + ' (không cần bấm nút) · tự đẩy lên Firebase mỗi ~50 trang · tắt: F12 → localStorage.vn168_autoLoad=\'0\'');
+                    gameAutoFetch(AUTO_LOAD_PAGES, { label: '⚙️ Tự tải · ' });
+                }
+            }
+            // dán token bằng BẤT KỲ cách nào cũng tự chạy (gõ/dán vào ô, nút clipboard, Firebase đồng bộ về)
+            (function hookAutoStart() {
+                const el = document.getElementById('tokenInput');
+                if (el) ['paste', 'change', 'blur'].forEach(ev =>
+                    el.addEventListener(ev, () => setTimeout(() => autoStartBulkLoad('ô token'), 400)));
+                setInterval(() => autoStartBulkLoad('kiểm tra định kỳ'), 10000);   // lưới an toàn: token xuất hiện muộn vẫn nổ
+            })();
             
             function gameExportArchive() {
                 if (!gameArchive.length) { gpStatus('Kho đang trống.'); return; }
@@ -2106,8 +2361,12 @@
             }
             
             setInterval(() => {
+                // ⛔ Đang tải nền 5000 trang / đang lấy số / đang nạp sâu → KHÔNG bắn thêm request 15s.
+                //    Chính việc gọi CHỒNG LÊN NHAU là lý do hay bị "Failed to fetch"
+                //    (Cloudflare giới hạn tần suất theo IP → chặn tạm cả chuỗi request).
+                if (gameAutoRunning || bulkLoadMode || fetchInProgress || deepInProgress) return;
                 const cb = document.getElementById('autoRefresh');
-                if (cb && cb.checked && getToken()) fetchAndFill();
+                if (cb && cb.checked && getToken() && tokenAlive()) fetchAndFill();   // token chết → im lặng, chờ token mới
             }, 15000);
             
             loadToken();
@@ -2957,15 +3216,15 @@
             //  (3) 📥 tải TIẾP từ TRANG CUỐI CÙNG (progress trong máy hoặc trên Firebase, lấy số lớn hơn)
             (fbDB ? fbArchiveLoad() : Promise.resolve(false))
                 .catch(() => false)
-                .then(() => (getToken() ? fetchAndFill() : null))
-                .catch(() => null)
+                .then(() => { bootReady = true; return getToken() ? fetchAndFill() : null; })
+                .catch(() => { bootReady = true; return null; })
                 .then(() => {
-                    if (!getToken()) return;
-                    let autoOn = true;
-                    try { autoOn = localStorage.getItem('vn168_autoLoad') !== '0'; } catch (e) {}
-                    if (autoOn) gameAutoFetch(AUTO_LOAD_PAGES);
+                    bootReady = true;
+                    // ⚙️ TỰ ĐỘNG tải 5000 trang — KHÔNG cần bấm nút.
+                    // Chưa có token thì chưa nổ; dán token vào là tự chạy ngay (autoStartBulkLoad).
+                    autoStartBulkLoad('mở app');
                 });
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a7b8db8ab408b3',t:'MTc4OTMwODQ4Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a74b937ed20dad',t:'MTc4OTMwNDAxMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3a7fa944fc6bc74',t:'MTc4OTMxMTE3OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
