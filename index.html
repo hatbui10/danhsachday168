@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Bảng 8x10 Nhị Phân & Dịch Trái + STT</title>
+        <title>Bảng 100x10 Số Cuối 0-9 & Dịch Trái + STT</title>
         <!-- Firebase SDK (chạy khi mở file trong trình duyệt thật) -->
         <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -55,7 +54,7 @@
             
             h2 { color: var(--text); margin-bottom: 5px; text-align: center; }
             
-            /* Ô nhập STT phía trên 8 hàng */
+            /* Ô nhập STT phía trên bảng */
             .stt-header {
                 display: flex;
                 align-items: center;
@@ -83,8 +82,8 @@
             }
             #sttInput:focus { background-color: #3a2a55; }
             
-            /* ===== Hàng 4 ô NGÀY phía trên hộp "Đoạn trùng khớp gần nhất", trước ô STT(8,10) =====
-               Mỗi ô dùng lại đúng class .grid-cell / .stt-label / .val-input của bảng 8x10 */
+            /* ===== Hàng 4 ô DỰ ĐOÁN (4 số phía sau đoạn trùng) =====
+               Mỗi ô dùng lại đúng class .grid-cell / .stt-label / .val-input của bảng */
             .date-boxes {
                 display: flex;
                 gap: 3px;
@@ -105,38 +104,8 @@
             .date-cell.locked { background-color: #f9a825 !important; border-color: #ffd54f !important; }
             .date-cell.locked .val-input { color: #1a1a1a; }
             .date-cell.locked .stt-label { color: #3e2723; }
-            /* ===== Hộp LỊCH SỬ 3 dãy ngày (ngay dưới hàng "4 ô sau" trong hộp Đoạn trùng khớp) ===== */
-            .dayHistoryBox {
-                display: flex;
-                flex-direction: column;
-                gap: 4px;
-                background: #0d0d0d;
-                border: 1px solid var(--border);
-                border-radius: 6px;
-                padding: 6px 8px;
-                font-family: monospace;
-                font-size: 11px;
-                color: #9fd8c8;
-            }
-            .hist-head {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 6px;
-                color: #6d8f86;
-                font-size: 10px;
-            }
-            .hist-flag { padding: 0 5px; border-radius: 3px; font-weight: bold; white-space: nowrap; }
-            .hist-flag.ok { background: #064e3b; color: #34d9ab; }
-            .hist-flag.bad { background: #5b1a1a; color: #ff7b7b; }
-            .hist-flag.neutral { background: #2a2a2a; color: #999; }
-            .hist-line { display: flex; align-items: center; gap: 4px; justify-content: center; padding: 1px 0; }
-            .hist-line.cur { background: #10221c; border-radius: 4px; }
-            .hist-ix { color: #6d8f86; min-width: 15px; text-align: right; }
-            .hist-meta { color: #6d8f86; font-size: 10px; margin-left: 3px; white-space: nowrap; }
-            .hist-empty { color: #6d8f86; font-size: 10px; text-align: center; }
             
-            /* Bảng 8x10 - kích thước nhỏ vừa màn hình điện thoại */
+            /* Bảng 100x10 - MẶC ĐỊNH CHỈ HIỆN 4 HÀNG CUỐI, có thanh cuộn để xem toàn bộ */
             .grid-table {
                 display: grid;
                 grid-template-columns: repeat(10, 28px);
@@ -147,7 +116,14 @@
                 border-radius: 8px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.5);
                 max-width: 100%;
+                max-height: 155px;   /* ≈ 4 hàng (4×32 + 3×3 + padding + border) */
+                overflow-y: auto;
+                overflow-x: hidden;
             }
+            .grid-table::-webkit-scrollbar { width: 9px; }
+            .grid-table::-webkit-scrollbar-track { background: #1a1a1a; border-radius: 4px; }
+            .grid-table::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+            .grid-table::-webkit-scrollbar-thumb:hover { background: #5a5a5a; }
             
             .grid-cell {
                 width: 28px;
@@ -189,7 +165,7 @@
             }
             .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
             
-            /* Ô trùng dãy cuối hàng 8 - tô VÀNG nổi bật */
+            /* Ô trùng dãy mới nhất - tô VÀNG nổi bật */
             .highlight {
                 background-color: #f9a825 !important;
                 border: 2px solid #ffd54f !important;
@@ -197,7 +173,7 @@
             .highlight .val-input { color: #1a1a1a; font-weight: bold; }
             .highlight .stt-label { color: #3e2723; }
             
-            /* Ô tham chiếu cuối hàng 8: ô xanh */
+            /* Ô tham chiếu cuối bảng (hàng mới nhất): ô xanh */
             .reference {
                 background-color: #0b3d66 !important;
                 border-color: #4da3ff !important;
@@ -205,64 +181,62 @@
             .reference .val-input { color: #cfe8ff; }
             .reference .stt-label { color: #ffeb3b; }
             
-            /* Khung hiển thị danh sách dạng gọn gàng (div) */
-            .highlight-summary-panel {
+            /* Viền xanh 4 ô ngay sau đoạn trùng khớp (ghép 1-1 với 4 ô dự đoán) */
+            .after { border-color: var(--accent) !important; }
+            
+            /* Thanh trạng thái + nút lấy dữ liệu (thấy được ngay) */
+            .fetch-row {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+                justify-content: center;
+                margin-top: 2px;
+                margin-bottom: 8px;
+                max-width: 360px;
+            }
+            .fetch-row .btn-fetch { padding: 5px 10px; font-size: 11px; }
+            .visible-status { font-size: 11px; color: var(--accent); min-height: 14px; }
+            
+            /* Khung lịch sử tất cả số đã đi qua ô (100,10) */
+            .cell-history-panel {
                 background: var(--surface);
-                padding: 12px;
                 border-radius: 8px;
-                margin-bottom: 15px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.5);
                 width: 360px;
                 max-width: 100%;
                 box-sizing: border-box;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+                margin-bottom: 10px;
+                padding: 8px 10px;
             }
-            .highlight-summary-title {
-                font-size: 13px;
-                font-weight: bold;
+            .ch-head {
+                font-size: 12px;
                 color: #ffeb3b;
-                margin-bottom: 8px;
-                text-align: center;
-            }
-            .highlight-summary-content {
+                font-weight: bold;
+                margin-bottom: 6px;
                 display: flex;
-                flex-direction: column;
-                gap: 6px;
-                max-height: 150px;
-                overflow-y: auto;
-            }
-            
-            /* Dòng kết quả đơn lẻ định dạng mới */
-                    .summary-row {
-            display: flex;
-            align-items: center;
-            justify-content: center; /* Đổi từ space-between thành center */
-            gap: 6px;                 /* Khoảng cách vừa phải giữa các phần tử */
-            background: #0d0d0d;
-            padding: 6px 10px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            font-size: 12px;
-            font-family: monospace;
-                    }
-            .summary-pattern {
-                color: #ffeb3b;
-                font-weight: bold;
-            }
-            .summary-target {
-                display: inline-flex;
+                justify-content: space-between;
                 align-items: center;
-                justify-content: center;
-                background-color: #064e3b;
-                border: 1px solid #10b981;
-                color: #34d9ab;
-                padding: 2px 8px;
+            }
+            .ch-count { color: var(--text-dim); font-weight: normal; font-size: 11px; }
+            .ch-list {
+                max-height: 140px;
+                overflow-y: auto;
+                background: #0d0d0d;
                 border-radius: 4px;
-                font-weight: bold;
+                padding: 4px 6px;
+                font-family: monospace;
+                font-size: 11px;
             }
-            .summary-targets {
-                display: inline-flex;
-                gap: 4px;
-            }
+            .ch-list::-webkit-scrollbar { width: 8px; }
+            .ch-list::-webkit-scrollbar-track { background: #1a1a1a; border-radius: 4px; }
+            .ch-list::-webkit-scrollbar-thumb { background: #4a4a4a; border-radius: 4px; }
+            .ch-row { display: flex; align-items: center; gap: 8px; padding: 1px 0; color: #9fd8c8; }
+            .ch-stt { color: #6d8f86; min-width: 34px; text-align: right; }
+            .ch-d { color: #34d9ab; font-weight: bold; min-width: 14px; }
+            .ch-t { color: #6d8f86; font-size: 10px; }
+            .ch-empty { color: #6d8f86; text-align: center; padding: 6px 0; font-size: 11px; }
+            .ch-note { color: #6d8f86; font-size: 10px; text-align: center; padding: 2px 0; }
             
             /* Vùng điều khiển bên dưới */
             .control-panel {
@@ -376,35 +350,40 @@
 
     <body>
 
-        <h2>Bảng Nhị Phân 3 chiều</h2>
+        <h2>Bảng Số Cuối 0-9 (100 hàng × 10 cột)</h2>
 
-        <!-- Bảng chính 8x10 -->
+        <!-- Bảng chính 100x10: mặc định hiện 4 hàng cuối, cuộn để xem toàn bộ -->
         <div id="gridContainer" class="grid-table"></div>
 
-        <!-- 4 ô NGÀY (bù trừ với ô trung) + Ô nhập STT phía trên -->
+        <!-- 4 ô DỰ ĐOÁN (4 số phía sau đoạn trùng) + Ô nhập STT phía trên -->
         <div class="stt-header">
-            <div id="dateBoxes" class="date-boxes" title="Ô ngày = giá trị bù của ô trung tương ứng (ngày + trung = 1). Bấm vào ô để khoá / tự lật."></div>
-            <label for="sttInput">STT (8,10):</label>
+            <div id="dateBoxes" class="date-boxes" title="Ô dự đoán = 4 số ngay phía sau đoạn trùng khớp gần nhất. Bấm vào ô để khoá / bỏ khoá."></div>
+            <label for="sttInput">STT (100,10):</label>
             <input type="tel" inputmode="numeric" pattern="[0-9]*" id="sttInput" autocomplete="off">
         </div>
-        <!-- Khung hiển thị danh sách dạng gọn gàng -->
-        <div class="highlight-summary-panel">
-            <div class="highlight-summary-title">Đoạn trùng khớp gần nhất (ô 7-10 dòng 8):</div>
-            <div id="highlightSummaryContent" class="highlight-summary-content" style="color: var(--text-dim); text-align: center; padding: 6px;">Chưa có dữ liệu.</div>
-        </div>
         <div class="api-row">
-            <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối hàng 8:
+            <label style="font-size:12px;color:var(--text-dim)">Số ô xanh cuối bảng:
                 <select id="refCountSelect" onchange="onRefCountChange(this.value)" style="margin-left:4px">
-                    <option value="6">6</option>
-                    <option value="5">5</option>
                     <option value="4">4</option>
+                    <option value="3">3</option>
+                    <option value="2">2</option>
                 </select>
             </label>
+        </div>
+        <!-- Nút lấy dữ liệu + trạng thái (thấy được ngay) -->
+        <div class="fetch-row">
+            <button class="btn-fetch" onclick="fetchAndFill()">🔄 Lấy số từ game</button>
+            <span class="visible-status" id="apiStatusVisible">Chưa lấy dữ liệu.</span>
+        </div>
+        <!-- Khung lịch sử TẤT CẢ số đã đi qua ô (100,10) -->
+        <div class="cell-history-panel">
+            <div class="ch-head">Lịch sử số qua ô (100,10) <span class="ch-count" id="chCount">0 số</span></div>
+            <div class="ch-list" id="cellHistoryList"><div class="ch-empty">Chưa có số nào đi qua ô (100,10).</div></div>
         </div>
         <div class="control-panel" style="display:none">
             <div class="oa-section">
                 <span class="oa-label">Ô A</span>
-                <input type="tel" inputmode="numeric" pattern="[01]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0/1">
+                <input type="tel" inputmode="numeric" pattern="[0-9]" id="mainInput" maxlength="1" autocomplete="off" placeholder="0-9">
                 <button class="btn-undo" onclick="undo()">Hoàn tác</button>
                 <button class="btn-reset" onclick="resetAll()">Làm mới</button>
             </div>
@@ -435,7 +414,7 @@
         </div>
 
         <script>
-            const ROWS = 8;
+            const ROWS = 100;
             const COLS = 10;
             const TOTAL = ROWS * COLS;
             
@@ -452,6 +431,12 @@
             let boardCleared = false;
             let localClearedAt = 0;
             let resetEpoch = 0;
+            let lastAutoScrollKey = null;   // để chỉ tự cuộn khi đoạn trùng THAY ĐỔI
+            
+            // Lịch sử tất cả số đã đi qua ô (100,10)
+            const CELL_HIST_MAX = 5000;                   // giữ tối đa 5000 số mới nhất
+            const LS_CELL_HIST = 'vn168_cell_history_v1';
+            let cellHistory = [];                         // [{ s: STT kỳ, d: chữ số, t: thời gian }] – mới nhất ở đầu
             
             const CFG = {
                 arOrigin: "https://373vn.com",
@@ -470,17 +455,17 @@
                         const box = document.createElement('div');
                         box.className = 'grid-cell';
                         if (r === ROWS - 1 && c >= COLS - refCount) box.classList.add('reference');
-            
+                        
                         const sttEl = document.createElement('span');
                         sttEl.className = 'stt-label';
-            
+                        
                         const valEl = document.createElement('span');
                         valEl.className = 'val-input';
-            
+                        
                         box.appendChild(sttEl);
                         box.appendChild(valEl);
                         gridContainer.appendChild(box);
-            
+                        
                         cells.push({ stt: null, value: '', valEl: valEl, sttEl: sttEl });
                     }
                 }
@@ -520,28 +505,29 @@
                 mainInput.focus();
             }
             
-            function pushBit(bit) {
+            function pushValue(digit) {
                 boardCleared = false;
                 undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
-            
+                
                 let N = parseInt(sttInput.value, 10);
                 if (!(Number.isInteger(N) && N >= 1)) {
                     N = nextStt;
                 }
-            
+                
                 for (let i = 0; i < TOTAL - 1; i++) {
                     cells[i].value = cells[i + 1].value;
                     cells[i].stt = cells[i + 1].stt;
                 }
-            
-                cells[TOTAL - 1].value = String(bit);
+                
+                cells[TOTAL - 1].value = String(digit);
                 cells[TOTAL - 1].stt = N;
-            
+                recordCellNumber(N, digit);
+                
                 renderAll();
-            
+                
                 nextStt = N + 1;
                 sttInput.value = nextStt;
-            
+                
                 searchPattern();
                 saveBoardLocal();
                 writeToFirebase();
@@ -550,21 +536,22 @@
             mainInput.addEventListener('keyup', function(e) {
                 let val = mainInput.value.trim();
                 if (val === '') return;
-                if (val !== '0' && val !== '1') { mainInput.value = ''; return; }
+                if (!/^[0-9]$/.test(val)) { mainInput.value = ''; return; }
                 mainInput.value = '';
-                pushBit(val);
+                pushValue(val);
                 mainInput.focus();
             });
             
-            function pushBitRaw(bit, stt) {
+            function pushValueRaw(digit, stt) {
                 boardCleared = false;
                 undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
                 for (let i = 0; i < TOTAL - 1; i++) {
                     cells[i].value = cells[i + 1].value;
                     cells[i].stt = cells[i + 1].stt;
                 }
-                cells[TOTAL - 1].value = String(bit);
+                cells[TOTAL - 1].value = String(digit);
                 cells[TOTAL - 1].stt = stt;
+                recordCellNumber(stt, digit);
                 renderAll();
                 searchPattern();
                 saveBoardLocal();
@@ -657,8 +644,10 @@
             }
             
             function setStatus(msg) {
-                const el = document.getElementById('apiStatus');
-                if (el) el.textContent = msg;
+                const a = document.getElementById('apiStatus');
+                if (a) a.textContent = msg;
+                const b = document.getElementById('apiStatusVisible');
+                if (b) b.textContent = msg;
             }
             
             function showRaw(text) {
@@ -671,22 +660,19 @@
                 if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
             }
             
-            function valueToBit(v) {
+            // Chuyển kết quả kỳ xổ thành chữ số 0-9 (lấy chữ số CUỐI của kết quả)
+            function valueToDigit(v) {
                 if (v === null || v === undefined) return null;
-                let bit;
+                let s;
                 if (typeof v === 'number') {
-                    bit = v >= 5 ? 1 : 0;
+                    if (!Number.isFinite(v)) return null;
+                    s = String(Math.abs(v));
                 } else {
-                    const s = String(v).trim();
-                    if (/lớn|lon|big|tài|tai|cao|high|大|上/.test(s.toLowerCase())) bit = 1;
-                    else if (/nhỏ|nho|small|xiu|xỉu|thấp|thap|low|小|下/.test(s.toLowerCase())) bit = 0;
-                    else {
-                        const m = s.match(/[0-9]/);
-                        if (!m) return null;
-                        bit = parseInt(m[0], 10) >= 5 ? 1 : 0;
-                    }
+                    s = String(v).trim();
                 }
-                return bit === 1 ? '1' : '0';
+                const digits = s.replace(/\D/g, '');
+                if (!digits) return null;
+                return digits.charAt(digits.length - 1);
             }
             
             function findRows(json) {
@@ -746,7 +732,7 @@
             const FB_DOC = 'data';
             let applyingRemote = false;
             let remoteUnsub = null;
-            const LS_BOARD = 'vn168_board_v3';
+            const LS_BOARD = 'vn168_board_v100';
             
             function saveBoardLocal() {
                 try {
@@ -786,7 +772,8 @@
                             clearedAt: localClearedAt || 0,
                             cells: cells.map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt }))
                         },
-                        dayHistory: dayHistory.slice(0, HISTORY_MAX)
+                        dayHistory: dayHistory.slice(0, HISTORY_MAX),
+                        cellHistory: cellHistory.slice(0, CELL_HIST_MAX)
                     }, { merge: true });
                 } catch (e) {}
             }
@@ -810,16 +797,18 @@
                             }
                         }
                     }
-            
+                    
                     if ('dayHistory' in d) mergeRemoteHistory(d.dayHistory);
-            
+                    
+                    if ('cellHistory' in d) mergeRemoteCellHistory(d.cellHistory);
+                    
                     const rb = d.board;
                     if (rb && Array.isArray(rb.cells) && rb.cells.length === TOTAL) {
                         const remoteLast = rb.lastIssue ? String(rb.lastIssue) : null;
                         const localLast = lastInsertedIssue ? String(lastInsertedIssue) : null;
                         const localEmpty = cells.every(c => c.value === '');
                         const remoteClearedAt = rb.clearedAt ? Number(rb.clearedAt) : 0;
-            
+                        
                         let apply = false;
                         if (boardCleared) {
                             apply = false;
@@ -832,7 +821,7 @@
                                 apply = isNewerIssue(remoteLast, localLast);
                             }
                         }
-            
+                        
                         if (apply) {
                             for (let i = 0; i < TOTAL; i++) {
                                 cells[i].value = rb.cells[i].v;
@@ -868,26 +857,26 @@
             async function fetchAndFill() {
                 if (fetchInProgress) return;
                 fetchInProgress = true;
-                const epoch = resetEpoch;
+                const epoch = resetEpoch;   // "chốt" thời điểm gọi để bỏ kết quả cũ nếu bấm Làm mới giữa chừng
                 const btn = document.getElementById('btnFetch');
                 if (btn) btn.disabled = true;
                 try {
                     if (!getToken()) {
-                        setStatus('⚠️ Chưa có token.');
+                        setStatus('⚠️ Chưa có token — không lấy được số từ game.');
                         return;
                     }
                     setStatus('Đang lấy kết quả...');
-            
+                    
                     const res = await apiPost(CFG.apiResult, CFG.payload);
                     if (epoch !== resetEpoch) return;
                     showRaw(res);
                     const allRows = findRows(res);
-            
+                    
                     if (allRows.length === 0) {
                         setStatus('Không tìm thấy dữ liệu kết quả.');
                         return;
                     }
-            
+                    
                     const sorted = allRows
                         .filter(r => String(rowIssue(r) || '').trim())
                         .sort((a, b) => {
@@ -900,44 +889,48 @@
                         setStatus('Không xác định được kỳ xổ.');
                         return;
                     }
-            
-                    const newestIssue = String(rowIssue(sorted[sorted.length - 1]));
-            
+                    
                     if (lastInsertedIssue === null) {
-                        const take = Math.min(20, sorted.length);
+                        // Nạp TỐI ĐA lịch sử API cho (đủ 100 hàng nếu API có)
+                        const take = Math.min(TOTAL, sorted.length);
                         const batch = sorted.slice(sorted.length - take);
-            
+                        
                         for (let i = 0; i < TOTAL; i++) { cells[i].value = ''; cells[i].stt = null; }
-            
+                        
                         const start = TOTAL - batch.length;
                         for (let k = 0; k < batch.length; k++) {
                             const row = batch[k];
-                            const bit = valueToBit(rowBitValue(row));
-                            if (bit === null) continue;
+                            const dg = valueToDigit(rowBitValue(row));
+                            if (dg === null) continue;
                             const issue = String(rowIssue(row));
-                            cells[start + k].value = bit;
-                            cells[start + k].stt = issue.padStart(3, '0').slice(-3);
+                            const sttShort = issue.padStart(3, '0').slice(-3);
+                            cells[start + k].value = dg;
+                            cells[start + k].stt = sttShort;
+                            recordCellNumber(sttShort, dg);   // mỗi kỳ trong batch cũng từng đi qua ô (100,10)
                         }
-            
+                        
                         lastInsertedIssue = String(rowIssue(batch[batch.length - 1]));
-            
+                        
                         const ls = cells[TOTAL - 1].stt;
                         if (ls !== null && ls !== '') {
                             const n = parseInt(ls, 10);
                             if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
                         }
-            
+                        
                         renderAll();
                         searchPattern();
                         saveBoardLocal();
-            
+                        
                         await writeToFirebase();
                         boardCleared = false;
-            
+                        
+                        // Lần đầu nạp: cuộn về 4 hàng mới nhất (nếu không có đoạn trùng)
+                        if (lastAutoScrollKey === null) scrollGridToBottom('auto');
+                        
                         setStatus(`✓ Đã nạp ${batch.length} kết quả mới nhất.`);
                         return;
                     }
-            
+                    
                     const toPush = sorted.filter(r => {
                         const i = String(rowIssue(r) || '');
                         return i && issueGreater(i, String(lastInsertedIssue));
@@ -946,32 +939,32 @@
                         setStatus(`Chưa có kết quả mới.`);
                         return;
                     }
-            
+                    
                     let filled = 0;
                     for (const row of toPush) {
-                        const bit = valueToBit(rowBitValue(row));
-                        if (bit === null) continue;
+                        const dg = valueToDigit(rowBitValue(row));
+                        if (dg === null) continue;
                         const issue = String(rowIssue(row));
                         const stt = issue.padStart(3, '0').slice(-3);
-            
+                        
                         const prevStt = cells[TOTAL - 1].stt;
                         if (prevStt !== null && String(prevStt) === stt) {
                             lastInsertedIssue = issue;
                             continue;
                         }
-            
+                        
                         lastInsertedIssue = issue;
-                        pushBitRaw(bit, stt);
+                        pushValueRaw(dg, stt);
                         filled++;
                     }
-            
+                    
                     const numStt = parseInt(String(cells[TOTAL - 1].stt), 10);
                     if (Number.isInteger(numStt)) { nextStt = numStt + 1; sttInput.value = String(numStt); }
-            
+                    
                     searchPattern();
                     setStatus(`✓ Đã đưa ${filled} kết quả mới.`);
                 } catch (err) {
-                    setStatus('Lỗi: ' + err.message);
+                    setStatus('⚠️ Lỗi lấy dữ liệu: ' + err.message);
                 } finally {
                     fetchInProgress = false;
                     if (btn) btn.disabled = false;
@@ -985,39 +978,70 @@
             
             loadToken();
             
-            // Hàm searchPattern lấy toàn bộ kết quả trùng khớp, sau đó chỉ lấy tối đa 4 kết quả ở cuối (gần hàng 8 nhất)
+            // Cuộn bảng (chỉ khu vực bảng, không kéo theo trang) đến hàng chứa ô idx, căn giữa ô đó
+            function scrollGridToCell(idx, behavior) {
+                const container = document.getElementById('gridContainer');
+                const cellEl = (cells[idx] && cells[idx].valEl) ? cells[idx].valEl.parentElement : null;
+                if (!container || !cellEl) return;
+                const compute = () => {
+                    const cRect = container.getBoundingClientRect();
+                    const eRect = cellEl.getBoundingClientRect();
+                    const cellOffsetInContent = container.scrollTop + (eRect.top - cRect.top);
+                    return Math.max(0, cellOffsetInContent - (container.clientHeight / 2) + (eRect.height / 2));
+                };
+                const target = compute();
+                try {
+                    if (typeof container.scrollTo === 'function') container.scrollTo({ top: target, behavior: behavior || 'smooth' });
+                    else container.scrollTop = target;
+                } catch (e) {
+                    try { container.scrollTop = compute(); } catch (e2) {}
+                }
+            }
+            
+            // Cuộn bảng xuống cuối (hiện các hàng MỚI NHẤT)
+            function scrollGridToBottom(behavior) {
+                const container = document.getElementById('gridContainer');
+                if (!container) return;
+                const target = Math.max(0, container.scrollHeight - container.clientHeight);
+                try {
+                    if (typeof container.scrollTo === 'function') container.scrollTo({ top: target, behavior: behavior || 'smooth' });
+                    else container.scrollTop = target;
+                } catch (e) {
+                    try { container.scrollTop = target; } catch (e2) {}
+                }
+            }
+            
+            // Hàm searchPattern: tìm đoạn trùng khớp (so khớp theo chữ số 0-9) GẦN HÀNG MỚI NHẤT,
+            // tô vàng + tự cuộn bảng đến hàng đó; hết trùng thì tự quay về 4 hàng cuối.
             function searchPattern() {
                 clearHighlights();
-            
+                
                 let pattern = [];
-                for (let i = 79; i >= 0 && pattern.length < refCount; i--) {
+                for (let i = TOTAL - 1; i >= 0 && pattern.length < refCount; i--) {
                     const v = cells[i].value;
-                    if (v === '0' || v === '1') {
+                    if (/^[0-9]$/.test(v)) {
                         pattern.unshift(v);
                     } else {
                         break;
                     }
                 }
                 
-                const summaryEl = document.getElementById('highlightSummaryContent');
-                
                 if (pattern.length < 2) {
-                    if (summaryEl) {
-                        summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Chưa đủ dữ liệu mẫu (cần ít nhất 2 ô).</span>';
-                    }
                     lastMatch = { start: -1, len: null };
+                    // Chưa đủ mẫu: quay về 4 hàng cuối (nếu trước đó đang xem đoạn trùng)
+                    if (lastAutoScrollKey !== null) { lastAutoScrollKey = null; scrollGridToBottom(); }
                     const emptyInfo = buildDateInfo(-1, null);
                     recordHistory(emptyInfo);
-                    drawDates(emptyInfo, true);
+                    drawDates(emptyInfo);
                     return;
                 }
-            
+                
                 const len = pattern.length;
-                const p0 = 80 - len;
-            
+                const p0 = TOTAL - len;
+                
                 let i = 0;
                 let matchStarts = []; // Lưu vị trí bắt đầu của các đoạn trùng khớp
-            
+                
                 while (i <= TOTAL - len) {
                     let matched = true;
                     for (let k = 0; k < len; k++) {
@@ -1030,56 +1054,37 @@
                         i += 1;
                     }
                 }
-            
-                // Chỉ lấy đoạn trùng khớp GẦN NHẤT với hàng 8 (đoạn cuối cùng trong bảng)
+                
+                // Chỉ lấy đoạn trùng khớp GẦN NHẤT với hàng mới nhất (đoạn cuối cùng trong bảng)
                 const matchStart = matchStarts.length > 0 ? matchStarts[matchStarts.length - 1] : -1;
-            
+                
                 // Tô vàng trên bảng chỉ cho đoạn trùng khớp gần nhất này
                 if (matchStart >= 0) {
                     for (let k = 0; k < len; k++) {
                         cells[matchStart + k].valEl.parentElement.classList.add('highlight');
                     }
                 }
-            
+                
                 lastMatch = { start: matchStart, len: len };
-                const dateInfo = buildDateInfo(matchStart, len);
-                if (summaryEl) {
-                    if (matchStart >= 0) {
-                        // Dãy số thứ tự (ngày) của đoạn trùng khớp
-                        let segmentStts = [];
-                        for (let k = 0; k < len; k++) {
-                            segmentStts.push(cells[matchStart + k].stt !== null ? cells[matchStart + k].stt : '?');
-                        }
-                        let firstStt = segmentStts[0];
-                        let lastStt = segmentStts[segmentStts.length - 1];
-                        let rangeText = segmentStts.length > 2 ? `${firstStt} ... ${lastStt}` : segmentStts.join(', ');
-            
-                        // 4 ô ngay phía sau đoạn trùng khớp đó (chính là 4 ô mà hàng "ô ngày" ở trên bù trừ)
-                        let nextVals = [];
-                        for (let k = 0; k < DAY_BOXES; k++) {
-                            const idx = matchStart + len + k;
-                            if (idx < TOTAL) {
-                                nextVals.push(cells[idx].value !== '' ? cells[idx].value : '?');
-                            } else {
-                                nextVals.push('—');
-                            }
-                        }
-            
-                        summaryEl.innerHTML = `
-                            <div class="summary-row">
-                                <span><span class="summary-pattern">${rangeText}</span></span>
-                                <span style="color:#999">→ 4 ô sau:</span>
-                                <span class="summary-targets">
-                                    ${nextVals.map(v => `<span class="summary-target">${v}</span>`).join('')}
-                                </span>
-                            </div>
-                        `;
-                    } else {
-                        summaryEl.innerHTML = '<span style="color: var(--text-dim); text-align: center; display: block;">Không tìm thấy đoạn trùng khớp.</span>';
+                
+                // Tự cuộn: CÓ trùng -> cuộn đến đoạn trùng (chỉ khi đoạn trùng THAY ĐỔI, để không giật khi cuộn tay)
+                //            HẾT trùng -> quay về 4 hàng cuối
+                if (matchStart >= 0) {
+                    const scrollKey = String(cells[matchStart].stt) + ':' + len;
+                    if (scrollKey !== lastAutoScrollKey) {
+                        lastAutoScrollKey = scrollKey;
+                        scrollGridToCell(matchStart);
+                    }
+                } else {
+                    if (lastAutoScrollKey !== null) {
+                        lastAutoScrollKey = null;
+                        scrollGridToBottom();
                     }
                 }
+                
+                const dateInfo = buildDateInfo(matchStart, len);
                 recordHistory(dateInfo);
-                drawDates(dateInfo, true);
+                drawDates(dateInfo);
             }
             
             function clearHighlights() {
@@ -1089,17 +1094,16 @@
                 }
             }
             
-            /* ================= 4 Ô NGÀY =================
-               - Luôn 4 ô, ghép 1-1 với 4 ô "→ 4 ô sau" trong hộp "Đoạn trùng khớp gần nhất"
-               - Giá trị ô ngày = PHẦN BÙ của ô sau tương ứng  =>  ô ngày + ô sau = 1
-               - Nhãn "ngày"   = STT của chính ô sau đó (chưa có thì suy từ kỳ cuối +1, +2, ...)
-               - 4 ô sau trên bảng được viền xanh để nhìn rõ ô nào ghép với ô nào
-               - Bấm ô: khoá giá trị ; bấm tiếp: lật 0<->1 ; nhấp đúp: bỏ khoá (tự bù lại)
+            /* ================= 4 Ô DỰ ĐOÁN =================
+               - Luôn 4 ô, ghép 1-1 với 4 số "phía sau đoạn trùng" (4 ô bị viền xanh trên bảng)
+               - Giá trị ô = CHỮ SỐ (0-9) NGAY PHÍA SAU đoạn trùng khớp gần nhất (dự đoán 4 kỳ tiếp theo)
+               - Nhãn = STT của chính ô "sau" đó (chưa có thì suy từ kỳ cuối +1, +2, ...)
+               - Bấm ô: khoá / bỏ khoá giá trị ; nhấp đúp: bỏ khoá
             ================================================ */
             const DAY_BOXES = 4;
             const HISTORY_MAX = 3;
-            const LS_HISTORY = 'vn168_day_history_v1';
-            let dayHistory = [];      // [{ seq:'1011', stt:'81', ts: 1699... }] – mới nhất ở đầu
+            const LS_HISTORY = 'vn168_day_history_v2';
+            let dayHistory = [];      // [{ seq:'5678', stt:'81', ts: 1699... }] – mới nhất ở đầu
             let dateLocks = [];
             let lastDateInfo = null;
             let lastMatch = { start: -1, len: null };
@@ -1129,23 +1133,24 @@
                 const base = cells[TOTAL - 1].stt;
                 const baseNum = parseSttNum(base);
                 const baseDigits = baseNum !== null ? String(baseNum) : String(base || '').trim();
-            
+                
                 const pairs = [];
                 for (let k = 0; k < DAY_BOXES; k++) {
                     const nextIdx = (matchStart >= 0 && Number.isInteger(len)) ? (matchStart + len + k) : -1;
                     const cell = (nextIdx >= 0 && nextIdx < TOTAL) ? cells[nextIdx] : null;
-                    const after = cell ? cell.value : '';                    // giá trị ô sau đang hiện trong hộp
-                    const auto = (after === '0') ? '1' : (after === '1' ? '0' : '?');
-                    const lock = (dateLocks[k] && dateLocks[k].locked) ? dateLocks[k] : null;
-                    const day = lock ? lock.day : auto;
+                    const after = cell ? cell.value : '';                    // chữ số 0-9 của ô "sau" đoạn trùng
                     const afterStt = (cell && cell.stt !== null && String(cell.stt).trim() !== '') ? String(cell.stt).trim() : '';
-                    // Nhãn = STT KẾ TIẾP của ô (10,hàng 8): (10,8)=100 -> 4 ô ngày là 101, 102, 103, 104
-                    let label = '?';
-                    if (baseNum !== null) label = dayLabel(String(baseNum + k + 1));
-                    else if (baseDigits) label = dayLabel(baseDigits + '+' + (k + 1));
+                    const lock = (dateLocks[k] && dateLocks[k].locked) ? dateLocks[k] : null;
+                    const day = lock ? lock.day : (after !== '' ? after : '?');   // giá trị hiển thị = chữ số sau đoạn trùng
+                    // Nhãn: ưu tiên STT của chính ô sau; nếu chưa có thì suy từ kỳ cuối +1, +2, ...
+                    let label = afterStt;
+                    if (!label) {
+                        if (baseNum !== null) label = dayLabel(String(baseNum + k + 1));
+                        else if (baseDigits) label = dayLabel(baseDigits + '+' + (k + 1));
+                        else label = '?';
+                    }
                     pairs.push({
-                        day: day, auto: auto, after: after,
-                        sum: (day !== '?' && (after === '0' || after === '1')) ? (parseInt(day, 10) + parseInt(after, 10)) : null,
+                        day: day, after: after,
                         label: label,
                         idx: nextIdx,
                         pos: posLabel(nextIdx),
@@ -1161,11 +1166,11 @@
                 if (!box) return;
                 if (!info) { box.innerHTML = ''; return; }
                 box.innerHTML = info.pairs.map((p, k) => {
-                    const sumTxt = (p.sum === null) ? 'chưa có ô sau' : (p.day + ' + ' + p.after + ' = ' + p.sum);
-                    const tip = 'Ô ngày kỳ ' + p.label + ' (kế tiếp ô (8,10)) · lấy bù với ô sau ' + p.pos
-                              + (p.afterStt ? ' kỳ ' + p.afterStt : '') + ': ' + sumTxt
+                    const tip = 'Ô dự đoán kỳ ' + p.label
+                              + ' = số ngay phía sau đoạn trùng (ô ' + p.pos + ')'
+                              + (p.afterStt ? ' · STT ô sau = ' + p.afterStt : '')
                               + (p.locked ? ' · ĐANG KHOÁ' : '')
-                              + ' · Bấm: khoá/lật, nhấp đúp: bỏ khoá';
+                              + ' · Bấm: khoá/bỏ khoá, nhấp đúp: bỏ khoá';
                     return '<div class="grid-cell date-cell' + (p.locked ? ' locked' : '') + '" data-k="' + k + '" title="' + tip + '">'
                          + '<span class="stt-label">' + p.label + '</span>'
                          + '<span class="val-input">' + p.day + '</span>'
@@ -1173,37 +1178,21 @@
                 }).join('');
             }
             
-            /* ---------- LỊCH SỬ 3 DÃY 4 SỐ (dãy giá trị của 4 ô ngày mới thêm) ----------
+            /* ---------- LỊCH SỬ 3 DÃY 4 SỐ (dãy 4 số sau đoạn trùng mới thêm) ----------
                - Ghi mỗi khi có KỲ MỚI được đẩy vào bảng (bấm tay / API / Firebase)
-               - Mỗi dòng: #thứ tự + 4 chữ số + "kỳ <STT> · giờ"; tối đa 3 dòng, dòng mới nhất trên cùng
                - Lưu localStorage + Firebase (field dayHistory) nên reload / máy khác vẫn thấy
             ------------------------------------------------------------------------- */
             function daySeq(info) {
                 if (!info || !info.pairs || info.pairs.length !== DAY_BOXES) return '';
                 let out = '';
                 for (const p of info.pairs) {
-                    if (p.day !== '0' && p.day !== '1') return '';
+                    if (!/^[0-9]$/.test(p.day)) return '';
                     out += p.day;
                 }
                 return out;
             }
             
-            function fmtTime(ts) {
-                const n = Number(ts);
-                if (!Number.isFinite(n) || n <= 0) return '?';
-                const d = new Date(n);
-                const z = x => (x < 10 ? '0' + x : String(x));
-                return z(d.getHours()) + ':' + z(d.getMinutes());
-            }
-            
             function histKey(seq, stt) { return seq + '@' + String(stt || ''); }
-            
-            // "kỳ 101–104" : dãy 4 số tương ứng 4 ô ngày 101,102,103,104
-            function histRangeLabel(stt) {
-                const n = parseSttNum(stt);
-                if (n === null) return stt ? 'kỳ ' + stt : 'kỳ ?';
-                return 'kỳ ' + n + '–' + (n + DAY_BOXES - 1);
-            }
             
             function saveHistoryFirebase() {
                 if (!fbDB) return;
@@ -1225,7 +1214,7 @@
                 try { arr = JSON.parse(localStorage.getItem(LS_HISTORY) || 'null'); } catch (e) {}
                 if (!Array.isArray(arr)) return;
                 dayHistory = arr
-                    .filter(e => e && typeof e.seq === 'string' && /^[01]{4}$/.test(e.seq))
+                    .filter(e => e && typeof e.seq === 'string' && /^[0-9]{4}$/.test(e.seq))
                     .slice(0, HISTORY_MAX)
                     .map(e => ({ seq: e.seq, stt: String(e.stt || ''), ts: Number(e.ts) || 0 }));
             }
@@ -1234,7 +1223,7 @@
             function mergeRemoteHistory(remote) {
                 if (!Array.isArray(remote)) return;
                 const clean = remote
-                    .filter(e => e && typeof e.seq === 'string' && /^[01]{4}$/.test(e.seq))
+                    .filter(e => e && typeof e.seq === 'string' && /^[0-9]{4}$/.test(e.seq))
                     .map(e => ({ seq: e.seq, stt: String(e.stt || ''), ts: Number(e.ts) || 0 }));
                 const byKey = new Map();
                 clean.concat(dayHistory).forEach(e => {
@@ -1252,7 +1241,7 @@
             function recordHistory(info) {
                 const seq = daySeq(info);
                 if (!seq) return;
-                // dòng lịch sử gắn với kỳ đầu của dãy (vd 101 cho dãy 101..104); mỗi kỳ mới là một key khác nhau
+                // dòng lịch sử gắn với kỳ đầu của dãy 4 số sau; mỗi kỳ mới là một key khác nhau
                 const stt = (info && info.pairs && info.pairs[0]) ? String(info.pairs[0].label || '') : '';
                 const key = histKey(seq, stt);
                 if (dayHistory.some(e => histKey(e.seq, e.stt) === key)) return;
@@ -1261,33 +1250,85 @@
                 saveDayHistory();
             }
             
-            function renderHistoryBlock(info) {
-                const curSeq = info ? daySeq(info) : '';
-                const sums = (info && info.pairs) ? info.pairs.map(p => p.sum) : [];
-                const checked = sums.filter(x => x !== null);
-                let flagCls = 'neutral', flagTxt = 'chưa có 4 ô sau';
-                if (checked.length) {
-                    const bad = checked.filter(x => x !== 1).length;
-                    flagCls = bad ? 'bad' : 'ok';
-                    flagTxt = bad ? '⚠ ' + bad + ' ô lệch = 1' : '✓ ngày + ô sau = 1';
+            /* ---------- LỊCH SỬ TẤT CẢ SỐ ĐÃ ĐI QUA Ô (100,10) ----------
+               - Ghi MỌI chữ số vừa đi qua ô cuối bảng (100,10): nhập tay, API, hoặc đồng bộ Firebase
+               - Mới nhất trên cùng, kèm STT kỳ + thời gian; lưu localStorage + Firebase
+               - Hiển thị trong khung "Lịch sử số qua ô (100,10)" (giữ tối đa CELL_HIST_MAX số)
+            ------------------------------------------------------------------ */
+            function recordCellNumber(stt, digit, ts) {
+                const d = String(digit === null || digit === undefined ? '' : digit);
+                if (!/^[0-9]$/.test(d)) return;
+                const s = String(stt === null || stt === undefined ? '' : stt).trim();
+                cellHistory.unshift({ s: s, d: d, t: ts || Date.now() });
+                if (cellHistory.length > CELL_HIST_MAX) cellHistory.length = CELL_HIST_MAX;
+                saveCellHistory();
+                renderCellHistory();
+            }
+            
+            function saveCellHistory() {
+                try { localStorage.setItem(LS_CELL_HIST, JSON.stringify(cellHistory)); } catch (e) {}
+            }
+            
+            function loadCellHistory() {
+                let arr = null;
+                try { arr = JSON.parse(localStorage.getItem(LS_CELL_HIST) || 'null'); } catch (e) {}
+                if (!Array.isArray(arr)) return;
+                cellHistory = arr
+                    .filter(e => e && typeof e.d === 'string' && /^[0-9]$/.test(e.d))
+                    .slice(0, CELL_HIST_MAX)
+                    .map(e => ({ s: String(e.s || ''), d: e.d, t: Number(e.t) || 0 }));
+            }
+            
+            // Gộp lịch sử từ Firebase về: theo key (STT + thời gian), sắp theo thời gian giảm dần
+            function mergeRemoteCellHistory(remote) {
+                if (!Array.isArray(remote)) return;
+                const clean = remote
+                    .filter(e => e && typeof e.d === 'string' && /^[0-9]$/.test(e.d))
+                    .map(e => ({ s: String(e.s || ''), d: e.d, t: Number(e.t) || 0 }));
+                const byKey = new Map();
+                clean.concat(cellHistory).forEach(e => {
+                    const k = e.s + '@' + e.t;
+                    const prev = byKey.get(k);
+                    if (!prev || e.t > prev.t) byKey.set(k, e);
+                });
+                const merged = Array.from(byKey.values()).sort((x, y) => y.t - x.t).slice(0, CELL_HIST_MAX);
+                if (JSON.stringify(merged) === JSON.stringify(cellHistory)) return;
+                cellHistory = merged;
+                saveCellHistory();
+                renderCellHistory();
+            }
+            
+            function fmtTime(ts) {
+                const n = Number(ts);
+                if (!Number.isFinite(n) || n <= 0) return '';
+                const d = new Date(n);
+                const z = x => (x < 10 ? '0' + x : String(x));
+                return z(d.getMonth() + 1) + '/' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes());
+            }
+            
+            function renderCellHistory() {
+                const el = document.getElementById('cellHistoryList');
+                const countEl = document.getElementById('chCount');
+                if (countEl) countEl.textContent = cellHistory.length + ' số';
+                if (!el) return;
+                if (!cellHistory.length) {
+                    el.innerHTML = '<div class="ch-empty">Chưa có số nào đi qua ô (100,10).</div>';
+                    return;
                 }
-                const flag = '<span class="hist-flag ' + flagCls + '">' + flagTxt + '</span>';
-                let rows;
-                if (!dayHistory.length) {
-                    rows = '<div class="hist-empty">Chưa có dãy nào được lưu – sẽ lưu khi có kỳ mới.</div>';
-                } else {
-                    rows = dayHistory.map((e, k) => {
-                        const chips = e.seq.split('').map(d => '<span class="summary-target">' + d + '</span>').join('');
-                        const curStt = (info && info.pairs && info.pairs[0]) ? String(info.pairs[0].label) : '';
-                        const isCur = (e.seq === curSeq && e.stt === curStt) ? ' cur' : '';
-                        return '<div class="hist-line' + isCur + '">'
-                             + '<span class="hist-ix">#' + (k + 1) + '</span>'
-                             + chips
-                             + '<span class="hist-meta">' + histRangeLabel(e.stt) + ' · ' + fmtTime(e.ts) + '</span>'
-                             + '</div>';
-                    }).join('');
+                // Chỉ vẽ tối đa 800 dòng đầu để nhẹ; tổng số vẫn hiện ở tiêu đề
+                const SHOW_MAX = 800;
+                let html = '';
+                if (cellHistory.length > SHOW_MAX) {
+                    html += '<div class="ch-note">hiện ' + SHOW_MAX + ' số mới nhất / tổng ' + cellHistory.length + '</div>';
                 }
-                return '<div class="hist-head"><span>Lịch sử ' + HISTORY_MAX + ' dãy 4 số mới thêm</span>' + flag + '</div>' + rows;
+                html += cellHistory.slice(0, SHOW_MAX).map(e =>
+                    '<div class="ch-row">'
+                    + '<span class="ch-stt">' + (e.s || '?') + '</span>'
+                    + '<span class="ch-d">' + e.d + '</span>'
+                    + '<span class="ch-t">' + fmtTime(e.t) + '</span>'
+                    + '</div>'
+                ).join('');
+                el.innerHTML = html;
             }
             
             function bindDateBoxes() {
@@ -1302,10 +1343,7 @@
                     if (lastDateInfo && lastDateInfo.pairs[k]) {
                         const p = lastDateInfo.pairs[k];
                         if (!p.locked) dateLocks[k] = { locked: true, day: p.day };
-                        else {
-                            const d = (p.day === '0') ? '1' : (p.day === '1' ? '0' : p.day);
-                            dateLocks[k] = { locked: true, day: d };
-                        }
+                        else delete dateLocks[k];
                     }
                     refreshDates();
                 });
@@ -1319,29 +1357,18 @@
                 });
             }
             
-            // Vẽ lại 4 ô ngày + khối tổng kiểm tra, bám theo 4 ô sau của đoạn trùng khớp gần nhất
+            // Vẽ lại 4 ô dự đoán + viền 4 ô sau, bám theo đoạn trùng khớp gần nhất
             function refreshDates() {
-                drawDates(buildDateInfo(lastMatch.start, lastMatch.len), true);
+                drawDates(buildDateInfo(lastMatch.start, lastMatch.len));
             }
             
-            function drawDates(info, updateSummary) {
+            function drawDates(info) {
                 lastDateInfo = info;
                 renderDateBoxes(info);
                 markAfterCells(info);
-                if (!updateSummary) return;
-                const el = document.getElementById('highlightSummaryContent');
-                if (!el || !el.querySelector) return;
-                let node = el.querySelector('.dayHistoryBox');
-                if (!info || !info.pairs || !info.pairs.length) { if (node && node.remove) node.remove(); return; }
-                if (!node) {
-                    node = document.createElement('div');
-                    node.className = 'dayHistoryBox';
-                    el.appendChild(node);
-                }
-                node.innerHTML = renderHistoryBlock(info);
             }
             
-            // Viền xanh 4 ô ngay sau đoạn trùng khớp (chính là 4 ô trong hộp)
+            // Viền xanh 4 ô ngay sau đoạn trùng khớp (chính là 4 số của 4 ô dự đoán)
             function markAfterCells(info) {
                 for (let i = 0; i < TOTAL; i++) {
                     if (cells[i] && cells[i].valEl) cells[i].valEl.parentElement.classList.remove('after');
@@ -1356,7 +1383,7 @@
             
             function onRefCountChange(v) {
                 const n = parseInt(v, 10);
-                if (!Number.isInteger(n) || n < 4 || n > 6) return;
+                if (!Number.isInteger(n) || n < 2 || n > 4) return;
                 refCount = n;
                 dateLocks = [];
                 try { localStorage.setItem('vn168_refCount', String(n)); } catch (e) {}
@@ -1377,7 +1404,7 @@
             function loadRefCount() {
                 let saved = 4;
                 try { saved = parseInt(localStorage.getItem('vn168_refCount'), 10); } catch (e) {}
-                if (!Number.isInteger(saved) || saved < 4 || saved > 6) saved = 4;
+                if (!Number.isInteger(saved) || saved < 2 || saved > 4) saved = 4;
                 refCount = saved;
                 const sel = document.getElementById('refCountSelect');
                 if (sel) sel.value = String(saved);
@@ -1388,9 +1415,13 @@
                 localClearedAt = Date.now();
                 boardCleared = true;
                 undoStack = [];
-                dateLocks = [];      // lịch sử dãy ngày (dayHistory) được GIỮ LẠI
+                dateLocks = [];      // lịch sử dãy (dayHistory) được GIỮ LẠI
                 lastInsertedIssue = null;
                 fetchInProgress = false;
+                lastAutoScrollKey = null;
+                cellHistory = [];    // làm mới log số qua ô (100,10) — batch nạp lại sẽ ghi đè
+                saveCellHistory();
+                renderCellHistory();
                 for (let i = 0; i < TOTAL; i++) {
                     cells[i].stt = null;
                     cells[i].value = '';
@@ -1401,10 +1432,10 @@
                 renderAll();
                 searchPattern();
                 mainInput.focus();
-            
+                
                 try { localStorage.removeItem(LS_BOARD); } catch (e) {}
                 saveBoardLocal();
-            
+                
                 if (fbDB) {
                     fbDB.collection(FB_COLLECTION).doc(FB_DOC).set(
                         {
@@ -1413,12 +1444,13 @@
                                 lastIssue: null,
                                 clearedAt: localClearedAt,
                                 cells: cells.map(c => ({ v: '', s: '' }))
-                            }
+                            },
+                            cellHistory: []
                         },
                         { merge: true }
                     ).catch(err => {});
                 }
-            
+                
                 setStatus('Đã xoá. Đang nạp lại...');
                 fetchAndFill();
             }
@@ -1429,11 +1461,21 @@
             nextStt = 1;
             sttInput.value = '1';
             loadDayHistory();
+            loadCellHistory();
+            renderCellHistory();
             loadBoardLocal();
             refreshDates();
             mainInput.focus();
             startRealtimeSync();
+            
+            // Mặc định: cuộn xuống CUỐI bảng (hiện 4 hàng mới nhất) — trừ khi đang có đoạn trùng
+            requestAnimationFrame(() => {
+                if (lastAutoScrollKey === null) scrollGridToBottom('auto');
+            });
+            
+            // Lấy số từ game NGAY khi mở (không phải chờ 15s)
+            if (getToken()) fetchAndFill();
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a36b3d0c9bbad4b4',t:'MTc4ODY3NDI3MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    </body>
 
 </html>
