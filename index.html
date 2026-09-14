@@ -655,13 +655,32 @@
                 const short = cell.stt ? String(cell.stt).trim().padStart(3,'0').slice(-3) : '';
                 const digit = cell.value ? String(cell.value).trim() : '';
                 if (!short || !digit) return false;
-                // 1) nếu ô có fullId thì chỉ check fullId chính xác → tránh vàng nhầm do STT trùng ngày khác
-                if (full) {
-                    if (predictHitsSet.has(full)) return true;
-                    // không dùng SHORT fallback khi đã có full, để tránh STT trùng ngày khác bị vàng oan
-                    return false;
-                }
-                // 2) ô thiếu fullId (cũ): check SHORT nhưng phải khớp cả short+digit
+                // CHỈ tô vàng khi trong lịch sử dự đoán có TRÚNG (hit===true) - theo yêu cầu mới
+                // check trong predictLog trước
+                try {
+                    for (const e of predictLog) {
+                        if (e.hit!==true) continue; // chỉ TRÚNG mới vàng
+                        if (full && e.forFullId && String(e.forFullId).trim()===full) return true;
+                        if (full && e.actualFullId && String(e.actualFullId).trim()===full) return true;
+                        if (String(e.forSTT).padStart(3,'0').slice(-3)===short) {
+                            // nếu có fullId thì phải khớp fullId, nếu không thì khớp short
+                            if (full && e.forFullId) {
+                                if (String(e.forFullId).trim()===full) return true;
+                            } else if (!full) {
+                                return true; // ô thiếu full, khớp short là đủ
+                            } else {
+                                // ô có full nhưng log chỉ có short (trường hợp cũ) - vẫn cho vàng nếu short khớp và digit khớp (actualDigit)
+                                // để tránh vàng nhầm ngày khác, chỉ cho nếu full rỗng trong log hoặc log có cùng ngày? Tạm cho nếu short khớp
+                                // nhưng sẽ được cleanPredictHitsAgainstLog dọn
+                                // Ở đây ưu tiên check predictHitsSet đã được làm sạch
+                            }
+                        }
+                    }
+                } catch(e){}
+                // fallback: check predictHitsSet đã được làm sạch chỉ chứa TRÚNG
+                if (full && predictHitsSet.has(full)) return true;
+                // không dùng SHORT fallback khi có full để tránh vàng nhầm
+                if (full) return false;
                 const shortPrefix = 'SHORT:'+short+'|'+digit+'|';
                 for (const k of predictHitsSet) if (k.startsWith(shortPrefix)) return true;
                 for (const e of predictHits) if (!e.f && String(e.s).padStart(3,'0').slice(-3)===short && String(e.d)===String(digit)) return true;
@@ -1119,7 +1138,7 @@
                     for (let c = 0; c < COLS; c++) {
                         const box = document.createElement('div');
                         box.className = 'grid-cell';
-                        if (r === ROWS - 1 && c >= COLS - refCount) box.classList.add('reference');
+                        // ĐÃ BỎ màu xanh 4 ô cuối theo yêu cầu - không tô gì cả
                         
                         const sttEl = document.createElement('span');
                         sttEl.className = 'stt-label';
@@ -1165,12 +1184,10 @@
                 cells.unshift.apply(cells, newCells);   // hàng mới ở đầu mảng (trên bảng) — ô đã có số vẫn ở cuối
                 boardRows = targetRows;
                 TOTAL = boardRows * COLS;
-                // ô xanh "hàng mới nhất" phải di chuyển xuống hàng cuối của bảng mới
+                // ĐÃ BỎ màu xanh 4 ô cuối - xóa hết class reference, chỉ giữ vàng trúng
                 for (let i = 0; i < TOTAL; i++) {
-                    const rr = Math.floor(i / COLS), cc = i % COLS;
                     const box = cells[i].valEl.parentElement;
-                    if (rr === boardRows - 1 && cc >= COLS - refCount) box.classList.add('reference');
-                    else box.classList.remove('reference');
+                    if (box) { box.classList.remove('reference'); box.classList.remove('after'); }
                 }
                 scrollGridToBottom('auto');
                 try { renderLastRow(); } catch(e){}
@@ -1192,19 +1209,21 @@
                     let tip = full ? ('ID ' + full + (ymd ? ' · ngày ' + ymdPretty(ymd) + ' · STT ' + String(full).slice(-3) + ' · số ' + cells[i].value : '')) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value + ' · (thiếu ID đầy đủ → có thể trùng ngày)');
                     let isPersistent = false;
                     try { isPersistent = isPredictHitCell(cells[i]); } catch(e){ isPersistent=false; }
-                    // nếu là ô cuối cùng (100,10): kiểm tra trúng dự đoán L/N mới nhất + resolve lịch sử
+                    // FIX: resolve lịch sử cho BẤT KỲ ô nào có số, không chỉ ô cuối - để STT cũ không bị CHỜ mãi
+                    try {
+                        if (cells[i].value && /^[0-9]$/.test(cells[i].value) && cells[i].stt) {
+                            resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value);
+                        }
+                    } catch(e){}
+                    // nếu là ô cuối cùng (100,10): kiểm tra trúng dự đoán L/N mới nhất + vàng
                     if (i === TOTAL-1) {
                         try {
                             let pred = window.lastPredictBS || localStorage.getItem('vn168_lastPredictBS') || null;
                             let actual = /^[0-9]$/.test(cells[i].value) ? digitToBS(cells[i].value) : null;
                             if (pred && actual && pred===actual) {
                                 addPredictHitFromCell(cells[i], pred);
-                                try { resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value); } catch(e){}
                                 isPersistent = true;
                                 tip += ' · ✅ TRÚNG DỰ ĐOÁN '+bsLabel(pred)+' · đã lưu vàng vĩnh viễn';
-                            } else if (actual) {
-                                // dù trượt vẫn resolve để lịch sử hiện TRƯỢT
-                                try { resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value); } catch(e){}
                             }
                         } catch(e){}
                     }
@@ -1219,6 +1238,8 @@
             function renderAll() {
                 for (let i = 0; i < TOTAL; i++) renderCell(i);
                 try { renderLastRow(); } catch(e){}
+                // sau khi render tất cả, quét lại các pending còn CHỜ (fix 779 CHỜ trong khi 781 đã trúng)
+                try { setTimeout(()=>{ tryResolveAllPendingPredictLogs(); renderPredictLog(); }, 200); } catch(e){}
             }
             function renderLastRow() {
                 const grid = document.getElementById('lastRowGrid');
@@ -4355,15 +4376,10 @@
             
             // Viền xanh 4 ô ngay sau đoạn trùng khớp (chính là 4 số của 4 ô dự đoán)
             function markAfterCells(info) {
+                // ĐÃ BỎ màu 4 ô sau đoạn trùng theo yêu cầu - chỉ giữ vàng trúng
                 for (let i = 0; i < TOTAL; i++) {
                     if (cells[i] && cells[i].valEl) cells[i].valEl.parentElement.classList.remove('after');
                 }
-                if (!info || !info.pairs) return;
-                info.pairs.forEach(p => {
-                    if (Number.isInteger(p.idx) && p.idx >= 0 && p.idx < TOTAL && cells[p.idx]) {
-                        cells[p.idx].valEl.parentElement.classList.add('after');
-                    }
-                });
             }
             
             function onRefCountChange(v) {
@@ -4376,12 +4392,10 @@
             }
             
             function updateRefCells() {
+                // ĐÃ BỎ màu xanh 4 ô cuối theo yêu cầu
                 for (let i = 0; i < TOTAL; i++) {
-                    const r = Math.floor(i / COLS);
-                    const c = i % COLS;
                     const box = cells[i].valEl.parentElement;
-                    if (r === boardRows - 1 && c >= COLS - refCount) box.classList.add('reference');
-                    else box.classList.remove('reference');
+                    if (box) box.classList.remove('reference');
                 }
                 if (!bulkLoadMode) searchPattern();
             }
@@ -4549,5 +4563,5 @@
                     autoStartBulkLoad('mở app');
                 });
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3ad9688bc5e781d',t:'MTc4OTM2OTk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b0314f5bfe06ff',t:'MTc4OTM5NzMwNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3ad9688bc5e781d',t:'MTc4OTM2OTk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b040cccf4bcabc',t:'MTc4OTM5Nzk0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
