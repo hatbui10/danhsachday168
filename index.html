@@ -532,6 +532,15 @@
                 <label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="predictHistoryOnlyHit" onchange="renderPredictLog()"> Chỉ hiện trúng ✅</label>
                 <label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="predictHistoryOnlyPending" onchange="renderPredictLog()"> Chỉ hiện chờ ⏳</label>
             </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-size:10px">
+                <label for="predictHistoryPercentFilter" style="color:#e9d5ff;display:flex;align-items:center;gap:4px">🔎 Tìm tỷ lệ %:</label>
+                <input id="predictHistoryPercentFilter" type="number" min="0" max="100" step="1" inputmode="numeric" placeholder="vd 25"
+                    aria-label="Lọc lịch sử dự đoán theo tỷ lệ phần trăm"
+                    oninput="savePredictPercentFilter();renderPredictLog()"
+                    style="width:58px;background:#0d0d0d;color:#fff;border:1px solid #a78bfa;border-radius:4px;padding:3px 5px;font-size:11px;box-sizing:border-box">
+                <span style="color:#aaa">hiện mục có L hoặc N bằng số này</span>
+                <button class="btn-mini" type="button" onclick="clearPredictPercentFilter()" style="padding:3px 6px">✕ Xoá lọc %</button>
+            </div>
             <div id="predictHistoryStats" style="background:#0f0f23;border:1px solid #4c1d95;border-radius:6px;padding:6px 8px;margin-bottom:6px;font-size:11px;color:#e0e0e0;line-height:1.45">Chưa có dữ liệu dự đoán.</div>
             <div id="predictHistoryList" style="max-height:360px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;padding:2px 0;font-family:monospace;font-size:11px"></div>
             <div style="font-size:9px;color:#666;margin-top:4px">Lưu local (vn168_predictLog_v1) + Firebase (predictLog). Reload 20s vẫn giữ. Mỗi STT chỉ ghi 1 lần để tránh spam. Hiển thị STT → LỚN/NHỎ L xx% / N yy% → TRÚNG/TRƯỢT.</div>
@@ -810,7 +819,54 @@
 
             // ===== 📜 LỊCH SỬ Ô DỰ ĐOÁN - KIỂM TRA ĐÚNG/SAI =====
             const LS_PREDICT_LOG = 'vn168_predictLog_v1';
+            const LS_PREDICT_PERCENT_FILTER = 'vn168_predictPercentFilter_v1';
             let predictLog = []; // [{at, forSTT, forFullId, lastSTT, lastFullId, pred L/N, conf, pctL, pctN, pattern, topMethod, actualDigit, actualBS, hit, resolvedAt, actualFullId}]
+
+            // Bộ lọc tỷ lệ % được lưu riêng để sau mỗi lần reload vẫn giữ nguyên màn hình đang xem.
+            function getPredictPercentFilter() {
+                const el = document.getElementById('predictHistoryPercentFilter');
+                const raw = el ? String(el.value || '').trim() : '';
+                if (raw === '') return null;
+                const n = Number(raw);
+                return Number.isInteger(n) && n >= 0 && n <= 100 ? n : null;
+            }
+            function savePredictPercentFilter() {
+                const el = document.getElementById('predictHistoryPercentFilter');
+                if (!el) return;
+                let raw = String(el.value || '').trim();
+                if (raw !== '') {
+                    const n = Number(raw);
+                    if (!Number.isInteger(n) || n < 0 || n > 100) {
+                        raw = '';
+                        el.value = '';
+                    } else {
+                        raw = String(n);
+                        el.value = raw;
+                    }
+                }
+                try {
+                    if (raw === '') localStorage.removeItem(LS_PREDICT_PERCENT_FILTER);
+                    else localStorage.setItem(LS_PREDICT_PERCENT_FILTER, raw);
+                } catch (e) {}
+            }
+            function loadPredictPercentFilter() {
+                const el = document.getElementById('predictHistoryPercentFilter');
+                if (!el) return;
+                try {
+                    const raw = localStorage.getItem(LS_PREDICT_PERCENT_FILTER) || '';
+                    const n = Number(raw);
+                    el.value = raw !== '' && Number.isInteger(n) && n >= 0 && n <= 100 ? String(n) : '';
+                } catch (e) {
+                    el.value = '';
+                }
+            }
+            function clearPredictPercentFilter() {
+                const el = document.getElementById('predictHistoryPercentFilter');
+                if (el) el.value = '';
+                try { localStorage.removeItem(LS_PREDICT_PERCENT_FILTER); } catch (e) {}
+                renderPredictLog();
+            }
+
             function loadPredictLog() {
                 try {
                     const raw = localStorage.getItem(LS_PREDICT_LOG);
@@ -1056,10 +1112,17 @@
                 const onlyMiss = document.getElementById('predictHistoryOnlyMiss')?.checked;
                 const onlyHit = document.getElementById('predictHistoryOnlyHit')?.checked;
                 const onlyPending = document.getElementById('predictHistoryOnlyPending')?.checked;
+                const percentFilter = getPredictPercentFilter();
                 let filtered = predictLog.slice();
                 if (onlyMiss) filtered = filtered.filter(e=> e.hit===false);
                 if (onlyHit) filtered = filtered.filter(e=> e.hit===true);
                 if (onlyPending) filtered = filtered.filter(e=> e.actualDigit==null);
+                // Nhập 25 sẽ hiện mọi dự đoán có L 25% hoặc N 25%.
+                if (percentFilter !== null) {
+                    filtered = filtered.filter(e =>
+                        Number(e.pctL) === percentFilter || Number(e.pctN) === percentFilter
+                    );
+                }
 
                 const total = predictLog.length;
                 const resolved = predictLog.filter(e=> e.actualDigit!=null);
@@ -1068,14 +1131,19 @@
                 const pending = total - resolved.length;
                 const hitRate = resolved.length ? (hits/resolved.length*100).toFixed(1) : '0.0';
 
-                if (countEl) countEl.textContent = hits+' trúng / '+misses+' trượt · '+hitRate+'%';
+                const hasFilter = onlyMiss || onlyHit || onlyPending || percentFilter !== null;
+                const filterLabel = percentFilter !== null ? ' · lọc '+percentFilter+'%: '+filtered.length+'/'+total+' mục' : '';
+                if (countEl) countEl.textContent = hits+' trúng / '+misses+' trượt · '+hitRate+'%'+filterLabel;
 
                 if (statsEl) {
-                    statsEl.innerHTML = '<span style="color:#4ade80;font-weight:bold">✅ '+hits+' TRÚNG</span> · <span style="color:#f87171;font-weight:bold">❌ '+misses+' TRƯỢT</span> · <span style="color:#a78bfa">⏳ '+pending+' chờ</span> · Tỷ lệ <b style="color:'+(parseFloat(hitRate)>=50?'#4ade80':'#f87171')+'">'+hitRate+'%</b> / '+resolved.length+' kỳ';
+                    statsEl.innerHTML = '<span style="color:#4ade80;font-weight:bold">✅ '+hits+' TRÚNG</span> · <span style="color:#f87171;font-weight:bold">❌ '+misses+' TRƯỢT</span> · <span style="color:#a78bfa">⏳ '+pending+' chờ</span> · Tỷ lệ <b style="color:'+(parseFloat(hitRate)>=50?'#4ade80':'#f87171')+'">'+hitRate+'%</b> / '+resolved.length+' kỳ'
+                        + (hasFilter ? '<br><span style="color:#e9d5ff">🔎 Đang lọc: <b>'+filtered.length+'</b> mục hiển thị</span>' : '');
                 }
 
                 if (!filtered.length) {
-                    listEl.innerHTML = '<div style="padding:10px;text-align:center;color:#666">Chưa có dự đoán nào.</div>';
+                    listEl.innerHTML = '<div style="padding:10px;text-align:center;color:#666">'
+                        + (percentFilter !== null ? 'Không có dự đoán nào có L hoặc N = '+percentFilter+'%.' : 'Chưa có dự đoán nào.')
+                        + '</div>';
                     return;
                 }
 
@@ -1107,6 +1175,7 @@
             }
 // nạp ngay khi định nghĩa để renderCell dùng được - FIX hiện rồi biến mất
             try { loadPredictHits(); } catch(e){}
+            try { loadPredictPercentFilter(); } catch(e){}
             try { loadPredictLog(); } catch(e){}
             try { dedupePredictLog(); } catch(e){}
             try { renderPredictLog(); } catch(e){} // <-- render ngay sau load để không biến mất
@@ -4563,5 +4632,5 @@
                     autoStartBulkLoad('mở app');
                 });
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3ad9688bc5e781d',t:'MTc4OTM2OTk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b040cccf4bcabc',t:'MTc4OTM5Nzk0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3ad9688bc5e781d',t:'MTc4OTM2OTk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b040cccf4bcabc',t:'MTc4OTM5Nzk0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b2d205bf6109fc',t:'MTc4OTQyNDg2MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
