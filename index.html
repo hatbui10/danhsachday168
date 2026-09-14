@@ -511,7 +511,28 @@
                     <select id="predictBacktestN"><option value="100">100</option><option value="200" selected>200</option><option value="500">500</option></select>
                 </label>
             </div>
-            <div id="predictBestBox" style="margin-top:6px;padding:6px;background:#0f172a;border:1px solid #334155;border-radius:6px;display:none"></div>
+            
+            <!-- 📈 BIỂU ĐỒ GIAO NHAU PHƯƠNG PHÁP -->
+            <div id="methodsChartPanel" style="margin-top:12px;padding:10px;background:#0f172a;border:1px solid #334155;border-radius:8px">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                    <div style="font-size:12px;color:#f9a825;font-weight:bold">📈 Biểu đồ TOP 7 - Tìm điểm giao nhau (đồng thuận)</div>
+                    <div style="display:flex;gap:6px">
+                        <button class="btn-mini" onclick="renderMethodsChart()" style="background:#1e40af;border-color:#60a5fa;color:#fff">🔄 Vẽ lại biểu đồ</button>
+                        <button class="btn-mini" onclick="document.getElementById('methodsChartPanel').style.display='none'" style="font-size:9px">Ẩn</button>
+                    </div>
+                </div>
+                <div style="font-size:10px;color:#94a3b8;margin-top:4px">Mỗi đường = 1 phương pháp (L=1, N=0). Điểm giao nhau = tất cả TOP 7 cùng dự đoán L hoặc N → độ tin cậy cao. Chấm vàng = đồng thuận đúng, chấm đỏ = đồng thuận sai.</div>
+                <div style="margin-top:8px;overflow-x:auto">
+                    <canvas id="methodsChart" width="900" height="260" style="background:#020617;border:1px solid #1e293b;border-radius:6px;max-width:100%"></canvas>
+                </div>
+                <div id="methodsChartStats" style="margin-top:6px;font-size:11px;color:#cfe8ff;line-height:1.4"></div>
+                <div style="margin-top:8px;overflow-x:auto">
+                    <canvas id="intersectionChart" width="900" height="120" style="background:#020617;border:1px solid #1e293b;border-radius:6px;max-width:100%"></canvas>
+                </div>
+                <div id="intersectionStats" style="margin-top:6px;font-size:11px;color:#cfe8ff;line-height:1.4"></div>
+            </div>
+            <div id="predictBestBox"
+ id="predictBestBox" style="margin-top:6px;padding:6px;background:#0f172a;border:1px solid #334155;border-radius:6px;display:none"></div>
         </div>
 
 
@@ -754,23 +775,68 @@
             function isPredictHitCell(cell) {
                 if (!cell) return false;
                 const full = cell.sttFull ? String(cell.sttFull).trim() : '';
-                const short = cell.stt ? String(cell.stt).trim() : '';
+                const short = cell.stt ? String(cell.stt).trim().padStart(3,'0').slice(-3) : '';
                 const digit = cell.value ? String(cell.value).trim() : '';
-                if (full && predictHitsSet.has(full)) return true;
-                // nếu ô có full nhưng hit cũ chỉ lưu SHORT (thiếu ID) → vẫn coi là trúng nếu short+digit khớp
-                if (short && digit) {
-                    const shortPrefix = 'SHORT:'+short+'|'+digit+'|';
-                    for (const k of predictHitsSet) if (k.startsWith(shortPrefix)) return true;
-                    // cũng check trong mảng predictHits trực tiếp (phòng khi Set chưa có SHORT)
-                    for (const e of predictHits) if (!e.f && e.s===short && e.d===digit) return true;
+                if (!short || !digit) return false;
+                // 1) nếu ô có fullId thì chỉ check fullId chính xác → tránh vàng nhầm do STT trùng ngày khác
+                if (full) {
+                    if (predictHitsSet.has(full)) return true;
+                    // không dùng SHORT fallback khi đã có full, để tránh STT trùng ngày khác bị vàng oan
+                    return false;
                 }
-                // fallback cho ô cũ không có full: so khớp short+digit
-                if (!full && short) {
-                    const keyPrefix = 'SHORT:'+short+'|'+digit+'|';
-                    for (const k of predictHitsSet) if (k.startsWith(keyPrefix)) return true;
-                }
+                // 2) ô thiếu fullId (cũ): check SHORT nhưng phải khớp cả short+digit
+                const shortPrefix = 'SHORT:'+short+'|'+digit+'|';
+                for (const k of predictHitsSet) if (k.startsWith(shortPrefix)) return true;
+                for (const e of predictHits) if (!e.f && String(e.s).padStart(3,'0').slice(-3)===short && String(e.d)===String(digit)) return true;
                 return false;
             }
+            // làm sạch vàng nếu lịch sử báo TRƯỢT (fix bug vàng cả khi trượt)
+            function cleanPredictHitsAgainstLog() {
+                if (!predictLog.length || !predictHits.length) return 0;
+                // map log theo fullId và theo short
+                const logByFull = new Map();
+                const logByShort = new Map(); // short -> latest log entry
+                for (const e of predictLog) {
+                    if (e.forFullId) logByFull.set(String(e.forFullId).trim(), e);
+                    if (e.forSTT) {
+                        const k = String(e.forSTT).padStart(3,'0').slice(-3);
+                        // giữ bản mới nhất
+                        if (!logByShort.has(k) || (e.at||0) > (logByShort.get(k).at||0)) logByShort.set(k, e);
+                    }
+                }
+                let removed = 0;
+                const kept = [];
+                for (const hit of predictHits) {
+                    let logEntry = null;
+                    if (hit.f && logByFull.has(String(hit.f).trim())) logEntry = logByFull.get(String(hit.f).trim());
+                    else if (hit.s) {
+                        const k = String(hit.s).padStart(3,'0').slice(-3);
+                        if (logByShort.has(k)) logEntry = logByShort.get(k);
+                    }
+                    // nếu log báo TRƯỢT thì không giữ vàng
+                    if (logEntry && logEntry.hit===false) {
+                        removed++;
+                        continue;
+                    }
+                    // nếu log báo TRÚNG hoặc chưa có log thì giữ
+                    kept.push(hit);
+                }
+                if (removed>0) {
+                    predictHits = kept;
+                    // rebuild Set
+                    predictHitsSet = new Set();
+                    for (const e of predictHits) {
+                        const full = e.f ? String(e.f).trim() : '';
+                        const key = full || ('SHORT:'+String(e.s).padStart(3,'0').slice(-3)+'|'+e.d+'|'+e.at);
+                        predictHitsSet.add(key);
+                        if (full) predictHitsSet.add(full);
+                    }
+                    savePredictHits();
+                    try { renderAll(); updateHitCountDisplay(); } catch(e){}
+                }
+                return removed;
+            }
+
             function findFullIdForHit(short, digit) {
                 if (!short) return '';
                 short = String(short).padStart(3,'0').slice(-3);
@@ -1142,19 +1208,12 @@
                 }
                 listEl.innerHTML = htmlOut;
             }
-            // nạp ngay
-            try { loadPredictLog(); } catch(e){}
-            try { dedupePredictLog(); } catch(e){}
-// nạp ngay
-            try { loadPredictLog(); } catch(e){}
-            try { dedupePredictLog(); } catch(e){}
-// nạp ngay
-            try { loadPredictLog(); } catch(e){}
-            try { dedupePredictLog(); } catch(e){}
-
-
-            // nạp ngay khi định nghĩa để renderCell dùng được
+// nạp ngay khi định nghĩa để renderCell dùng được
             try { loadPredictHits(); } catch(e){}
+            try { loadPredictLog(); } catch(e){}
+            try { dedupePredictLog(); } catch(e){}
+            // tự làm sạch vàng sai (trượt mà vẫn vàng) ngay khi khởi động
+            try { setTimeout(()=>{ const r=cleanPredictHitsAgainstLog(); if(r>0) console.log('[CLEAN] đã xóa '+r+' ô vàng sai do trượt'); }, 1500); } catch(e){}
             
             const CFG = {
                 arOrigin: "https://373vn.com",
@@ -4064,6 +4123,314 @@
                 return {pattern, ensembleBS:ensembleBSDigit, ensemble:ensembleDigit, topMethodBS, evaluated, evaluatedAll, avgTop, avgRest};
             }
 
+            
+            // ===== 📈 BIỂU ĐỒ GIAO NHAU - TÍNH PREDICTIONS THEO THỜI GIAN =====
+            function getMethodPredSeries(methodId, history, patternLen, testN) {
+                const series = []; // [{idx, predBS, actualBS, hit}]
+                if (history.length < testN + patternLen + 10) return series;
+                const start = history.length - testN -1;
+                for (let i=start; i<history.length-1; i++) {
+                    if (i < patternLen) continue;
+                    const histUpTo = history.slice(0, i+1);
+                    const histBSUpTo = histUpTo.map(d=> digitToBS(d));
+                    const actualBS = digitToBS(history[i+1]);
+                    let predBS = null;
+                    try {
+                        if (methodId.startsWith('ln_') || methodId.startsWith('balance') || methodId.startsWith('streak') || methodId.startsWith('bayesian') || methodId.startsWith('decay')) {
+                            // reuse logic from backtest_Method_BS getPredBS
+                            if (methodId.startsWith('ln_ngram')) {
+                                const l = parseInt(methodId.replace('ln_ngram',''),10)||3;
+                                for (let ll=l; ll>=2; ll--) {
+                                    const pat = histBSUpTo.slice(-ll);
+                                    const nexts=[];
+                                    for (let k=0;k<=histBSUpTo.length-ll-2;k++) {
+                                        let ok=true; for (let j=0;j<ll;j++) if (histBSUpTo[k+j]!==pat[j]) {ok=false;break;}
+                                        if (ok) nexts.push(histBSUpTo[k+ll]);
+                                    }
+                                    if (nexts.length>0) { const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); if(b){ predBS=b.digit; break; } }
+                                }
+                            } else if (methodId==='ln_m1') {
+                                const last = histBSUpTo[histBSUpTo.length-1];
+                                const nexts=[]; for (let k=0;k<histBSUpTo.length-1;k++) if (histBSUpTo[k]===last) nexts.push(histBSUpTo[k+1]);
+                                const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); predBS=b?b.digit:null;
+                            } else if (methodId==='ln_m2') {
+                                if (histBSUpTo.length>=3) {
+                                    const a=histBSUpTo[histBSUpTo.length-2], b2=histBSUpTo[histBSUpTo.length-1];
+                                    const nexts=[]; for (let k=0;k<histBSUpTo.length-2;k++) if (histBSUpTo[k]===a && histBSUpTo[k+1]===b2) nexts.push(histBSUpTo[k+2]);
+                                    const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); predBS=b?b.digit:null;
+                                }
+                            } else if (methodId==='ln_m3') {
+                                if (histBSUpTo.length>=4) {
+                                    const a=histBSUpTo[histBSUpTo.length-3], b2=histBSUpTo[histBSUpTo.length-2], c=histBSUpTo[histBSUpTo.length-1];
+                                    const nexts=[]; for (let k=0;k<histBSUpTo.length-3;k++) if (histBSUpTo[k]===a && histBSUpTo[k+1]===b2 && histBSUpTo[k+2]===c) nexts.push(histBSUpTo[k+3]);
+                                    const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); predBS=b?b.digit:null;
+                                }
+                            } else if (methodId.startsWith('balance')) {
+                                const win = parseInt(methodId.replace('balance',''),10)||50;
+                                const slice = histBSUpTo.slice(-win); let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; } predBS = cL>cN ? 'N' : 'L';
+                            } else if (methodId.startsWith('streak')) {
+                                const k = parseInt(methodId.replace('streak',''),10)||3;
+                                const slice = histBSUpTo.slice(-k); const allSame = slice.length===k && slice.every(v=> v===slice[0]); predBS = allSame ? (slice[0]==='L'?'N':'L') : histBSUpTo[histBSUpTo.length-1];
+                            } else if (methodId.startsWith('bayesian')) {
+                                let win = methodId==='bayesian'? histBSUpTo.length : parseInt(methodId.replace('bayesian',''),10)||50;
+                                const slice = histBSUpTo.slice(-win); let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; } const pL=(cL+1)/(cL+cN+2); predBS=pL>0.5?'L':'N';
+                            } else if (methodId.startsWith('decay')) {
+                                let decay=0.02; if (methodId==='decay_fast') decay=0.05; else if (methodId==='decay_slow') decay=0.01;
+                                let wL=0,wN=0; for (let k=0;k<histBSUpTo.length;k++){ const w=Math.exp(-decay*(histBSUpTo.length-1-k)); if (histBSUpTo[k]==='L') wL+=w; else wN+=w; } predBS=wL>wN?'L':'N';
+                            }
+                        } else {
+                            let freqDigits=null;
+                            if (methodId==='ngram' || methodId==='ngramW') {
+                                for (let l=patternLen; l>=2; l--) {
+                                    const pat = history.slice(i+1-l, i+1);
+                                    const r = methodId==='ngram' ? predict_NGram(history.slice(0,i+1), pat) : predict_NGramWeighted(history.slice(0,i+1), pat);
+                                    if (r.freq && Object.keys(r.freq).length>0) { freqDigits=r.freq; break; }
+                                }
+                            } else if (methodId==='m1') { const r=predict_Markov1(histUpTo); freqDigits=r.freq; }
+                            else if (methodId==='m2') { const r=predict_Markov2(histUpTo); freqDigits=r.freq; }
+                            else if (methodId.startsWith('hot')) { const win=parseInt(methodId.replace('hot',''),10); const r=predict_Hot(histUpTo, win); freqDigits=r.freq; }
+                            if (freqDigits) { const bsF={L:0,N:0}; for (const [d,c] of Object.entries(freqDigits)) { const kk=digitToBS(d); bsF[kk]=(bsF[kk]||0)+c; } const b=bestFromFreq(bsF); predBS=b?b.digit:null; }
+                        }
+                        // áp dụng đảo nếu acc <50 (logic từ TOP 7)
+                        // để đơn giản, nếu method này trong evaluatedAll và isInverted thì đảo
+                        // sẽ xử lý ở ngoài
+                    } catch(e){ predBS=null; }
+                    if (predBS) {
+                        series.push({idx:i, predBS, actualBS, hit: predBS===actualBS});
+                    }
+                }
+                return series;
+            }
+
+            function renderMethodsChart() {
+                const canvas = document.getElementById('methodsChart');
+                const canvas2 = document.getElementById('intersectionChart');
+                const statsEl = document.getElementById('methodsChartStats');
+                const interStatsEl = document.getElementById('intersectionStats');
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const ctx2 = canvas2 ? canvas2.getContext('2d') : null;
+
+                const lenEl = document.getElementById('predictLen');
+                const btEl = document.getElementById('predictBacktestN');
+                let pLen = parseInt(lenEl && lenEl.value,10); if (!(pLen>=2&&pLen<=5)) pLen=3;
+                let btN = parseInt(btEl && btEl.value,10); if (!(btN>=50)) btN=200;
+                const hist = getBoardDigits();
+                if (hist.length < btN+20) {
+                    if (statsEl) statsEl.textContent = 'Cần ít nhất '+(btN+20)+' số, hiện có '+hist.length;
+                    return;
+                }
+
+                // lấy TOP 7 hiện tại từ lần predict gần nhất, nếu chưa có thì tính lại
+                let topMethods = [];
+                try {
+                    const res = predictNext(true); // tính lại để có evaluated
+                    if (res && res.evaluated) topMethods = res.evaluated;
+                } catch(e){
+                    // fallback: tự tính pool
+                    topMethods = [];
+                }
+                if (!topMethods.length) {
+                    if (statsEl) statsEl.textContent = 'Không lấy được TOP 7';
+                    return;
+                }
+
+                // tính series cho từng method trong TOP 7
+                const allSeries = [];
+                const colors = ['#4ade80','#fbbf24','#60a5fa','#a78bfa','#f87171','#2dd4bf','#f472b6'];
+                for (let mIdx=0; mIdx<topMethods.length; mIdx++) {
+                    const ev = topMethods[mIdx];
+                    const ser = getMethodPredSeries(ev.id, hist, pLen, btN);
+                    // áp dụng đảo nếu cần
+                    const finalSer = ser.map(pt=>{
+                        let p = pt.predBS;
+                        if (ev.isInverted) p = p==='L' ? 'N' : 'L';
+                        return {...pt, predBS: p, hit: p===pt.actualBS};
+                    });
+                    allSeries.push({ev, ser: finalSer, color: colors[mIdx%colors.length]});
+                }
+
+                // ===== VẼ BIỂU ĐỒ 1: L/N theo thời gian =====
+                const W = canvas.width, H = canvas.height;
+                const pad = {l:40, r:10, t:20, b:25};
+                ctx.clearRect(0,0,W,H);
+                ctx.fillStyle = '#020617';
+                ctx.fillRect(0,0,W,H);
+                // grid
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 0.5;
+                for (let y=0;y<=4;y++) {
+                    const yy = pad.t + (H-pad.t-pad.b)*y/4;
+                    ctx.beginPath(); ctx.moveTo(pad.l, yy); ctx.lineTo(W-pad.r, yy); ctx.stroke();
+                }
+                // trục
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H-pad.b); ctx.lineTo(W-pad.r, H-pad.b); ctx.stroke();
+                // labels Y: N=0, L=1
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px monospace';
+                ctx.fillText('LỚN (1)', 2, pad.t+10);
+                ctx.fillText('NHỎ (0)', 2, H-pad.b);
+
+                const N = btN;
+                const xStep = (W-pad.l-pad.r) / Math.max(1, N-1);
+
+                // vẽ từng method
+                for (const {ser, color} of allSeries) {
+                    if (!ser.length) continue;
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1.2;
+                    ctx.beginPath();
+                    for (let i=0;i<ser.length;i++) {
+                        const pt = ser[i];
+                        const x = pad.l + i * xStep;
+                        const yVal = pt.predBS==='L' ? 1 : 0;
+                        const y = H-pad.b - yVal*(H-pad.t-pad.b) + (Math.random()*2-1)*2; // jitter nhỏ để không đè
+                        if (i===0) ctx.moveTo(x,y);
+                        else ctx.lineTo(x,y);
+                    }
+                    ctx.stroke();
+                }
+
+                // tìm điểm giao nhau: tất cả TOP 7 cùng dự đoán
+                const consensus = [];
+                const len = allSeries[0]?.ser.length||0;
+                for (let i=0;i<len;i++) {
+                    const preds = allSeries.map(s=> s.ser[i]?.predBS).filter(Boolean);
+                    if (preds.length===topMethods.length) {
+                        const allL = preds.every(p=> p==='L');
+                        const allN = preds.every(p=> p==='N');
+                        if (allL || allN) {
+                            const actual = allSeries[0].ser[i].actualBS;
+                            const hit = (allL?'L':'N')===actual;
+                            consensus.push({i, pred: allL?'L':'N', actual, hit});
+                        }
+                    }
+                }
+
+                // vẽ điểm giao nhau
+                for (const c of consensus) {
+                    const x = pad.l + c.i * xStep;
+                    const y = H-pad.b - (c.pred==='L'?1:0)*(H-pad.t-pad.b);
+                    ctx.fillStyle = c.hit ? '#f9a825' : '#ef4444';
+                    ctx.beginPath(); ctx.arc(x, y, c.hit?4:3, 0, Math.PI*2); ctx.fill();
+                    if (c.hit) {
+                        ctx.strokeStyle = '#f9a825';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H-pad.b); ctx.globalAlpha=0.15; ctx.stroke(); ctx.globalAlpha=1;
+                    }
+                }
+
+                // legend
+                let lx = pad.l, ly = 8;
+                ctx.font = '10px monospace';
+                for (let mi=0;mi<allSeries.length;mi++) {
+                    const {ev, color} = allSeries[mi];
+                    ctx.fillStyle = color;
+                    ctx.fillRect(lx, ly, 10, 3);
+                    ctx.fillStyle = '#cfe8ff';
+                    const label = ev.name + ' ' + ev.effAcc.toFixed(1)+'%' + (ev.isInverted?'🔄':'');
+                    ctx.fillText(label, lx+14, ly+8);
+                    lx += ctx.measureText(label).width + 30;
+                    if (lx > W-150) { lx = pad.l; ly += 12; }
+                }
+
+                // stats
+                if (statsEl) {
+                    const totalConsensus = consensus.length;
+                    const hitConsensus = consensus.filter(c=>c.hit).length;
+                    const rate = totalConsensus ? (hitConsensus/totalConsensus*100).toFixed(1) : '0';
+                    let htmlOut = '<b>📊 TOP 7 giao nhau:</b> '+totalConsensus+' lần đồng thuận / '+len+' kỳ ('+(totalConsensus/len*100).toFixed(1)+'%) · ';
+                    htmlOut += 'Trong đó <span style="color:#4ade80">✅ '+hitConsensus+' đúng</span> · <span style="color:#f87171">❌ '+(totalConsensus-hitConsensus)+' sai</span> · ';
+                    htmlOut += 'Tỷ lệ đúng khi đồng thuận: <b style="color:'+(parseFloat(rate)>=60?'#4ade80': parseFloat(rate)>=50?'#fbbf24':'#f87171')+'">'+rate+'%</b>';
+                    if (parseFloat(rate)>=60) htmlOut += ' <span style="background:#052e16;color:#4ade80;padding:2px 6px;border-radius:10px">🔥 Điểm vàng - nên cược khi giao nhau</span>';
+                    // liệt kê các điểm giao gần nhất
+                    const recent = consensus.slice(-10).reverse();
+                    if (recent.length) {
+                        htmlOut += '<br><span style="color:#94a3b8">10 lần giao nhau gần nhất:</span> ';
+                        htmlOut += recent.map(c=> '<span style="color:'+(c.hit?'#4ade80':'#f87171')+'">'+(c.pred==='L'?'L':'N')+'→'+(c.hit?'✅':'❌')+'</span>').join(' ');
+                    }
+                    statsEl.innerHTML = htmlOut;
+                }
+
+                // ===== BIỂU ĐỒ 2: ĐỘ ĐỒNG THUẬN THEO THỜI GIAN =====
+                if (canvas2 && ctx2) {
+                    const W2 = canvas2.width, H2 = canvas2.height;
+                    const pad2 = {l:40, r:10, t:10, b:20};
+                    ctx2.clearRect(0,0,W2,H2);
+                    ctx2.fillStyle = '#020617';
+                    ctx2.fillRect(0,0,W2,H2);
+                    // grid
+                    ctx2.strokeStyle = '#1e293b';
+                    ctx2.lineWidth = 0.5;
+                    for (let y=0;y<=4;y++) {
+                        const yy = pad2.t + (H2-pad2.t-pad2.b)*y/4;
+                        ctx2.beginPath(); ctx2.moveTo(pad2.l, yy); ctx2.lineTo(W2-pad2.r, yy); ctx2.stroke();
+                    }
+                    ctx2.strokeStyle = '#334155';
+                    ctx2.beginPath(); ctx2.moveTo(pad2.l, pad2.t); ctx2.lineTo(pad2.l, H2-pad2.b); ctx2.lineTo(W2-pad2.r, H2-pad2.b); ctx2.stroke();
+
+                    // tính độ đồng thuận: số method đồng ý với đa số / tổng
+                    const agreement = [];
+                    for (let i=0;i<len;i++) {
+                        const preds = allSeries.map(s=> s.ser[i]?.predBS).filter(Boolean);
+                        if (!preds.length) { agreement.push(0); continue; }
+                        const cL = preds.filter(p=>p==='L').length;
+                        const cN = preds.length - cL;
+                        const max = Math.max(cL,cN);
+                        agreement.push(max / preds.length);
+                    }
+                    // vẽ agreement line
+                    ctx2.strokeStyle = '#a78bfa';
+                    ctx2.lineWidth = 1.5;
+                    ctx2.beginPath();
+                    for (let i=0;i<agreement.length;i++) {
+                        const x = pad2.l + i * xStep;
+                        const y = H2-pad2.b - agreement[i]*(H2-pad2.t-pad2.b);
+                        if (i===0) ctx2.moveTo(x,y); else ctx2.lineTo(x,y);
+                    }
+                    ctx2.stroke();
+                    // fill area
+                    ctx2.fillStyle = 'rgba(167,139,250,0.15)';
+                    ctx2.lineTo(pad2.l + (agreement.length-1)*xStep, H2-pad2.b);
+                    ctx2.lineTo(pad2.l, H2-pad2.b);
+                    ctx2.closePath(); ctx2.fill();
+
+                    // vẽ threshold 100% = giao nhau
+                    ctx2.fillStyle = '#f9a825';
+                    for (let i=0;i<agreement.length;i++) if (agreement[i]===1) {
+                        const x = pad2.l + i*xStep;
+                        ctx2.fillRect(x, pad2.t, 1.5, H2-pad2.t-pad2.b);
+                    }
+
+                    ctx2.fillStyle = '#94a3b8';
+                    ctx2.font = '10px monospace';
+                    ctx2.fillText('Đồng thuận 100% = giao nhau', pad2.l, pad2.t+8);
+                    ctx2.fillText('50%', 2, H2-pad2.b - 0.5*(H2-pad2.t-pad2.b));
+                    ctx2.fillText('100%', 2, pad2.t+4);
+
+                    if (interStatsEl) {
+                        const avgAgree = agreement.reduce((a,b)=>a+b,0)/agreement.length;
+                        const fullAgree = agreement.filter(v=>v===1).length;
+                        interStatsEl.innerHTML = '📈 Độ đồng thuận trung bình: <b>'+(avgAgree*100).toFixed(1)+'%</b> · Số lần 100% đồng thuận: <b style="color:#f9a825">'+fullAgree+'</b> / '+len+' · Càng gần 100% càng đáng tin.';
+                    }
+                }
+            }
+
+            // tự vẽ biểu đồ sau khi predictNext xong
+            const _origPredictNextForChart = predictNext;
+            // sẽ gọi renderMethodsChart trong predictNext đã có, thêm hook
+            // để không loop vô hạn, chỉ vẽ khi có dữ liệu
+            try {
+                const orig = predictNext;
+                window.predictNext = function(force){
+                    const r = orig(force);
+                    try { setTimeout(()=>renderMethodsChart(), 300); } catch(e){}
+                    return r;
+                };
+            } catch(e){}
+
             function backtestAllMethods() {
                 const lenEl = document.getElementById('predictLen');
                 const btEl = document.getElementById('predictBacktestN');
@@ -4074,8 +4441,7 @@
                 predictNext(true);
             }
 
-            // ================= 🤖 AUTO BET
-// ================= 🤖 AUTO BET 28s + LỚN/NHỎ + GẤP THẾP DÃY TỰ NHẬP =================
+            // ================= 🤖 AUTO BET 28s + LỚN/NHỎ + GẤP THẾP DÃY TỰ NHẬP =================
             const LS_AUTOBET = 'vn168_autobet_cfg_v1';
             const LS_MART = 'vn168_martingale_v1';
             let autoBetLastIssue = '';
