@@ -3,7 +3,8 @@
 <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Bảng 100x10 Số Cuối 0-9 & Dịch Trái + STT</title>
+        <!-- preview fix 2026-09-14 -->
+<title>Bảng 100x10 Số Cuối 0-9 & Dịch Trái + STT</title>
         <!-- Firebase SDK (chạy khi mở file trong trình duyệt thật) -->
         <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
         <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -21,7 +22,7 @@
             let fbApp = null, fbDB = null;
             try {
                 fbApp = firebase.initializeApp(firebaseConfig);
-                fbDB = firebase.firestore(fbApp);
+                fbDB = firebase.firestore();
                 console.log('[FB] Firebase đã kết nối.');
             } catch (e) {
                 console.log('[FB] Firebase chưa khả dụng:', e.message);
@@ -3399,12 +3400,11 @@
                 }
                 return {freq:gaps, lastPos};
             }
-            // backtest cho LỚN/NHỎ - ĐÃ NÂNG CẤP 14 phương pháp
+            // backtest cho LỚN/NHỎ - TỰ ĐỘNG CHỌN TOP 7 TỶ LỆ CAO NHẤT
             function backtest_Method_BS(methodId, history, patternLen, testN) {
                 if (history.length < testN + patternLen + 10) return {acc:0, hits:0, total:0};
                 let hits=0, total=0;
                 const start = history.length - testN -1;
-                // helper inside backtest for BS ngram
                 function bsNGram(histBS, patBS) {
                     const pLen = patBS.length;
                     const nexts=[];
@@ -3417,6 +3417,75 @@
                     const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
                     return {freq, count:nexts.length};
                 }
+                function getPredBS(method, histBSUpTo) {
+                    if (!histBSUpTo || histBSUpTo.length<2) return null;
+                    if (method.startsWith('ln_ngram')) {
+                        const l = parseInt(method.replace('ln_ngram',''),10)||3;
+                        for (let ll=l; ll>=2; ll--) {
+                            const pat = histBSUpTo.slice(-ll);
+                            const r = bsNGram(histBSUpTo.slice(0,-1), pat);
+                            if (r.count>0) { const b=bestFromFreq(r.freq); if (b) return b.digit; }
+                        }
+                        return null;
+                    } else if (method==='ln_m1') {
+                        const last = histBSUpTo[histBSUpTo.length-1];
+                        const nexts=[]; for (let k=0;k<histBSUpTo.length-1;k++) if (histBSUpTo[k]===last) nexts.push(histBSUpTo[k+1]);
+                        const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
+                        const b=bestFromFreq(freq); return b?b.digit:null;
+                    } else if (method==='ln_m2') {
+                        if (histBSUpTo.length<3) return null;
+                        const a=histBSUpTo[histBSUpTo.length-2], b2=histBSUpTo[histBSUpTo.length-1];
+                        const nexts=[]; for (let k=0;k<histBSUpTo.length-2;k++) if (histBSUpTo[k]===a && histBSUpTo[k+1]===b2) nexts.push(histBSUpTo[k+2]);
+                        const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
+                        const b=bestFromFreq(freq); return b?b.digit:null;
+                    } else if (method==='ln_m3') {
+                        if (histBSUpTo.length<4) return null;
+                        const a=histBSUpTo[histBSUpTo.length-3], b2=histBSUpTo[histBSUpTo.length-2], c=histBSUpTo[histBSUpTo.length-1];
+                        const nexts=[]; for (let k=0;k<histBSUpTo.length-3;k++) if (histBSUpTo[k]===a && histBSUpTo[k+1]===b2 && histBSUpTo[k+2]===c) nexts.push(histBSUpTo[k+3]);
+                        const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
+                        const b=bestFromFreq(freq); return b?b.digit:null;
+                    } else if (method.startsWith('balance')) {
+                        const win = parseInt(method.replace('balance',''),10)||50;
+                        const slice = histBSUpTo.slice(-win);
+                        let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; }
+                        return cL>cN ? 'N' : 'L';
+                    } else if (method.startsWith('streak')) {
+                        const k = parseInt(method.replace('streak',''),10)||3;
+                        const slice = histBSUpTo.slice(-k);
+                        const allSame = slice.length===k && slice.every(v=> v===slice[0]);
+                        if (allSame) return slice[0]==='L' ? 'N' : 'L';
+                        else return histBSUpTo[histBSUpTo.length-1];
+                    } else if (method.startsWith('bayesian')) {
+                        let win = null;
+                        if (method==='bayesian') win = histBSUpTo.length;
+                        else win = parseInt(method.replace('bayesian',''),10)||50;
+                        const slice = histBSUpTo.slice(-win);
+                        let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; }
+                        const pL = (cL+1)/(cL+cN+2);
+                        return pL>0.5 ? 'L' : 'N';
+                    } else if (method.startsWith('decay')) {
+                        let decay=0.02;
+                        if (method==='decay_fast') decay=0.05;
+                        else if (method==='decay_slow') decay=0.01;
+                        else if (method==='decay') decay=0.02;
+                        else {
+                            const v = method.replace('decay','');
+                            if (v) { const f=parseFloat(v); if (!isNaN(f)) decay=f/100; }
+                        }
+                        let wL=0,wN=0;
+                        for (let k=0;k<histBSUpTo.length;k++) {
+                            const w = Math.exp(-decay*(histBSUpTo.length-1-k));
+                            if (histBSUpTo[k]==='L') wL+=w; else wN+=w;
+                        }
+                        return wL>wN ? 'L' : 'N';
+                    } else if (method==='ngram' || method==='ngramW' || method==='m1' || method==='m2' || method.startsWith('hot')) {
+                        // fallback: chuyển sang L/N qua digit
+                        // sẽ xử lý riêng ở backtest digit bên dưới
+                        return null;
+                    }
+                    return null;
+                }
+
                 for (let i=start; i<history.length-1; i++) {
                     if (i < patternLen) continue;
                     const histUpTo = history.slice(0, i+1);
@@ -3424,12 +3493,27 @@
                     const actualBS = digitToBS(history[i+1]);
                     let predBS = null;
                     try {
-                        if (methodId==='ngram' || methodId==='ngramW') {
+                        if (methodId.startsWith('ln_') || methodId.startsWith('balance') || methodId.startsWith('streak') || methodId.startsWith('bayesian') || methodId.startsWith('decay')) {
+                            predBS = getPredBS(methodId, histBSUpTo);
+                        } else {
+                            // old methods: predict digit then convert
                             let freqDigits = null;
-                            for (let l=patternLen; l>=2; l--) {
-                                const pat = history.slice(i+1-l, i+1);
-                                const r = methodId==='ngram' ? predict_NGram(history.slice(0,i+1), pat) : predict_NGramWeighted(history.slice(0,i+1), pat);
-                                if (r.freq && Object.keys(r.freq).length>0) { freqDigits = r.freq; break; }
+                            if (methodId==='ngram' || methodId==='ngramW') {
+                                for (let l=patternLen; l>=2; l--) {
+                                    const pat = history.slice(i+1-l, i+1);
+                                    const r = methodId==='ngram' ? predict_NGram(history.slice(0,i+1), pat) : predict_NGramWeighted(history.slice(0,i+1), pat);
+                                    if (r.freq && Object.keys(r.freq).length>0) { freqDigits = r.freq; break; }
+                                }
+                            } else if (methodId==='m1') {
+                                const r = predict_Markov1(histUpTo);
+                                freqDigits = r.freq;
+                            } else if (methodId==='m2') {
+                                const r = predict_Markov2(histUpTo);
+                                freqDigits = r.freq;
+                            } else if (methodId.startsWith('hot')) {
+                                const win = parseInt(methodId.replace('hot',''),10);
+                                const r = predict_Hot(histUpTo, win);
+                                freqDigits = r.freq;
                             }
                             if (freqDigits) {
                                 const bsF = {L:0,N:0};
@@ -3437,64 +3521,6 @@
                                 const best = bestFromFreq(bsF);
                                 predBS = best ? best.digit : null;
                             }
-                        } else if (methodId==='m1') {
-                            const r = predict_Markov1(histUpTo);
-                            const bsF={L:0,N:0}; for (const [d,c] of Object.entries(r.freq)) { const k=digitToBS(d); bsF[k]=(bsF[k]||0)+c; }
-                            const b=bestFromFreq(bsF); predBS=b?b.digit:null;
-                        } else if (methodId==='m2') {
-                            const r = predict_Markov2(histUpTo);
-                            const bsF={L:0,N:0}; for (const [d,c] of Object.entries(r.freq)) { const k=digitToBS(d); bsF[k]=(bsF[k]||0)+c; }
-                            const b=bestFromFreq(bsF); predBS=b?b.digit:null;
-                        } else if (methodId.startsWith('hot')) {
-                            const win = parseInt(methodId.replace('hot',''),10);
-                            const r = predict_Hot(histUpTo, win);
-                            const bsF={L:0,N:0}; for (const [d,c] of Object.entries(r.freq)) { const k=digitToBS(d); bsF[k]=(bsF[k]||0)+c; }
-                            const b=bestFromFreq(bsF); predBS=b?b.digit:null;
-                        } else if (methodId.startsWith('ln_ngram')) {
-                            const l = parseInt(methodId.replace('ln_ngram',''),10)||3;
-                            for (let ll=l; ll>=2; ll--) {
-                                const pat = histBSUpTo.slice(-ll);
-                                const r = bsNGram(histBSUpTo.slice(0,-1), pat);
-                                if (r.count>0) { const b=bestFromFreq(r.freq); predBS=b?b.digit:null; if (predBS) break; }
-                            }
-                        } else if (methodId==='ln_m1') {
-                            if (histBSUpTo.length>=2) {
-                                const last = histBSUpTo[histBSUpTo.length-1];
-                                const nexts=[]; for (let k=0;k<histBSUpTo.length-1;k++) if (histBSUpTo[k]===last) nexts.push(histBSUpTo[k+1]);
-                                const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
-                                const b=bestFromFreq(freq); predBS=b?b.digit:null;
-                            }
-                        } else if (methodId==='ln_m2') {
-                            if (histBSUpTo.length>=3) {
-                                const a=histBSUpTo[histBSUpTo.length-2], b2=histBSUpTo[histBSUpTo.length-1];
-                                const nexts=[]; for (let k=0;k<histBSUpTo.length-2;k++) if (histBSUpTo[k]===a && histBSUpTo[k+1]===b2) nexts.push(histBSUpTo[k+2]);
-                                const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
-                                const best=bestFromFreq(freq); predBS=best?best.digit:null;
-                            }
-                        } else if (methodId.startsWith('balance')) {
-                            const win = parseInt(methodId.replace('balance',''),10)||50;
-                            const slice = histBSUpTo.slice(-win);
-                            let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; }
-                            // dự đoán thiểu số để cân bằng về 50% (mean reversion)
-                            predBS = cL>cN ? 'N' : 'L';
-                        } else if (methodId.startsWith('streak')) {
-                            const k = parseInt(methodId.replace('streak',''),10)||3;
-                            const slice = histBSUpTo.slice(-k);
-                            const allSame = slice.length===k && slice.every(v=> v===slice[0]);
-                            if (allSame) predBS = slice[0]==='L' ? 'N' : 'L'; // đảo khi streak dài
-                            else predBS = histBSUpTo[histBSUpTo.length-1]; // theo quán tính
-                        } else if (methodId==='bayesian') {
-                            let cL=0,cN=0; for (const x of histBSUpTo) { if (x==='L') cL++; else cN++; }
-                            // Laplace smoothing
-                            const pL = (cL+1)/(cL+cN+2);
-                            predBS = pL>0.5 ? 'L' : 'N';
-                        } else if (methodId==='decay') {
-                            let wL=0,wN=0; const decay=0.02;
-                            for (let k=0;k<histBSUpTo.length;k++) {
-                                const w = Math.exp(-decay*(histBSUpTo.length-1-k));
-                                if (histBSUpTo[k]==='L') wL+=w; else wN+=w;
-                            }
-                            predBS = wL>wN ? 'L' : 'N';
                         }
                     } catch(e){ predBS=null; }
                     if (predBS!==null) { total++; if (predBS===actualBS) hits++; }
@@ -3516,17 +3542,62 @@
                             for (let l=patternLen; l>=2; l--) {
                                 const pat = history.slice(i+1-l, i+1);
                                 const r = methodId==='ngram' ? predict_NGram(history.slice(0,i+1), pat) : predict_NGramWeighted(history.slice(0,i+1), pat);
-                                if (r.freq && Object.keys(r.freq).length>0) { const b = bestFromFreq(r.freq); pred = b ? b.digit : null; if (pred) break; }
+                                if (r.freq && Object.keys(r.freq).length>0) { const b=bestFromFreq(r.freq); pred=b?b.digit:null; if (pred) break; }
                             }
-                        } else if (methodId==='m1') { const r = predict_Markov1(histUpTo); const b = bestFromFreq(r.freq); pred = b ? b.digit : null; }
-                        else if (methodId==='m2') { const r = predict_Markov2(histUpTo); const b = bestFromFreq(r.freq); pred = b ? b.digit : null; }
-                        else if (methodId.startsWith('hot')) { const win = parseInt(methodId.replace('hot',''),10); const r = predict_Hot(histUpTo, win); const b = bestFromFreq(r.freq); pred = b ? b.digit : null; }
-                        else {
-                            // các pp mới chỉ dự đoán L/N, không dự đoán số chính xác -> bỏ qua trong BT số
-                            pred = null;
+                        } else if (methodId==='m1') {
+                            const r = predict_Markov1(histUpTo); const b=bestFromFreq(r.freq); pred=b?b.digit:null;
+                        } else if (methodId==='m2') {
+                            const r = predict_Markov2(histUpTo); const b=bestFromFreq(r.freq); pred=b?b.digit:null;
+                        } else if (methodId.startsWith('hot')) {
+                            const win = parseInt(methodId.replace('hot',''),10); const r = predict_Hot(histUpTo, win); const b=bestFromFreq(r.freq); pred=b?b.digit:null;
+                        } else {
+                            // với pp L/N, map L/N sang digit phổ biến nhất trong lịch sử thuộc loại đó
+                            const histBSUpTo = histUpTo.map(d=> digitToBS(d));
+                            let predBS=null;
+                            // reuse getPredBS logic quick
+                            if (methodId.startsWith('ln_ngram')) {
+                                const l = parseInt(methodId.replace('ln_ngram',''),10)||3;
+                                for (let ll=l; ll>=2; ll--) {
+                                    const pat = histBSUpTo.slice(-ll);
+                                    const nexts=[];
+                                    for (let k=0;k<=histBSUpTo.length-ll-2;k++) {
+                                        let ok=true; for (let j=0;j<ll;j++) if (histBSUpTo[k+j]!==pat[j]) {ok=false;break;}
+                                        if (ok) nexts.push(histBSUpTo[k+ll]);
+                                    }
+                                    if (nexts.length>0) { const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); predBS=b?b.digit:null; if (predBS) break; }
+                                }
+                            } else if (methodId==='ln_m1') {
+                                const last = histBSUpTo[histBSUpTo.length-1];
+                                const nexts=[]; for (let k=0;k<histBSUpTo.length-1;k++) if (histBSUpTo[k]===last) nexts.push(histBSUpTo[k+1]);
+                                const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); predBS=b?b.digit:null;
+                            } else if (methodId==='ln_m2') {
+                                if (histBSUpTo.length>=3) {
+                                    const a=histBSUpTo[histBSUpTo.length-2], b2=histBSUpTo[histBSUpTo.length-1];
+                                    const nexts=[]; for (let k=0;k<histBSUpTo.length-2;k++) if (histBSUpTo[k]===a && histBSUpTo[k+1]===b2) nexts.push(histBSUpTo[k+2]);
+                                    const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1; const b=bestFromFreq(freq); predBS=b?b.digit:null;
+                                }
+                            } else if (methodId.startsWith('balance')) {
+                                const win = parseInt(methodId.replace('balance',''),10)||50;
+                                const slice = histBSUpTo.slice(-win); let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; } predBS = cL>cN ? 'N' : 'L';
+                            } else if (methodId.startsWith('streak')) {
+                                const k = parseInt(methodId.replace('streak',''),10)||3;
+                                const slice = histBSUpTo.slice(-k); const allSame = slice.length===k && slice.every(v=> v===slice[0]); predBS = allSame ? (slice[0]==='L'?'N':'L') : histBSUpTo[histBSUpTo.length-1];
+                            } else if (methodId.startsWith('bayesian')) {
+                                let win = methodId==='bayesian'? histBSUpTo.length : parseInt(methodId.replace('bayesian',''),10)||50;
+                                const slice = histBSUpTo.slice(-win); let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; } const pL=(cL+1)/(cL+cN+2); predBS=pL>0.5?'L':'N';
+                            } else if (methodId.startsWith('decay')) {
+                                let decay=0.02; if (methodId==='decay_fast') decay=0.05; else if (methodId==='decay_slow') decay=0.01;
+                                let wL=0,wN=0; for (let k=0;k<histBSUpTo.length;k++){ const w=Math.exp(-decay*(histBSUpTo.length-1-k)); if (histBSUpTo[k]==='L') wL+=w; else wN+=w; } predBS=wL>wN?'L':'N';
+                            }
+                            if (predBS) {
+                                // chọn số phổ biến nhất trong loại L/N đó
+                                const candidates = histUpTo.filter(d=> digitToBS(d)===predBS);
+                                const freq={}; for (const x of candidates) freq[x]=(freq[x]||0)+1;
+                                const b=bestFromFreq(freq); pred=b?b.digit:null;
+                            }
                         }
                     } catch(e){ pred=null; }
-                    if (pred!==null) { total++; if (pred===actual) hits++; }
+                    if (pred!==null) { total++; if (String(pred)===String(actual)) hits++; }
                 }
                 return {acc: total? (hits/total*100):0, hits, total};
             }
@@ -3605,6 +3676,7 @@
                     return {freq:{}, totalW:0, count:0};
                 }
 
+                // ===== TÍNH TOÁN CURRENT PREDICTION CHO TỪNG PP =====
                 const res_ngram = ngramWithFallback(hist, pattern);
                 const res_ngramW = ngramWWithFallback(hist, pattern);
                 const res_m1 = predict_Markov1(hist);
@@ -3613,10 +3685,10 @@
                 const res_hot200 = predict_Hot(hist, 200);
                 const res_hot500 = predict_Hot(hist, 500);
 
-                // MỚI: trực tiếp trên L/N
                 const res_ln_ngram2 = bsNGramWithFallback(allBS, allBS.slice(-2));
                 const res_ln_ngram3 = bsNGramWithFallback(allBS, allBS.slice(-3));
                 const res_ln_ngram4 = bsNGramWithFallback(allBS, allBS.slice(-4));
+                const res_ln_ngram5 = bsNGramWithFallback(allBS, allBS.slice(-5));
                 const res_ln_m1 = (function(){
                     if (allBS.length<2) return {freq:{}};
                     const last = allBS[allBS.length-1];
@@ -3631,32 +3703,48 @@
                     const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
                     return {freq, count:nexts.length};
                 })();
-                const res_balance50 = (function(){
-                    const slice = allBS.slice(-50); let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; }
-                    // thiểu số
-                    const freq = {}; freq[cL>cN ? 'N' : 'L'] = 1; // dự đoán thiểu số
-                    // để có trọng số, dùng freq theo số lượng ngược
-                    freq['L'] = cN+1; freq['N'] = cL+1;
-                    return {freq, cL, cN};
+                const res_ln_m3 = (function(){
+                    if (allBS.length<4) return {freq:{}};
+                    const a=allBS[allBS.length-3], b=allBS[allBS.length-2], c=allBS[allBS.length-1];
+                    const nexts=[]; for (let i=0;i<allBS.length-3;i++) if (allBS[i]===a && allBS[i+1]===b && allBS[i+2]===c) nexts.push(allBS[i+3]);
+                    const freq={}; for (const x of nexts) freq[x]=(freq[x]||0)+1;
+                    return {freq, count:nexts.length};
                 })();
-                const res_streak3 = (function(){
-                    const slice = allBS.slice(-3); const allSame = slice.length===3 && slice.every(v=> v===slice[0]);
+                function makeBalance(win){
+                    const slice = allBS.slice(-win); let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; }
+                    const freq={}; freq['L']=cN+1; freq['N']=cL+1;
+                    return {freq, cL, cN, win};
+                }
+                const res_balance30 = makeBalance(30);
+                const res_balance50 = makeBalance(50);
+                const res_balance100 = makeBalance(100);
+                function makeStreak(k){
+                    const slice = allBS.slice(-k); const allSame = slice.length===k && slice.every(v=> v===slice[0]);
                     const freq={}; if (allSame) { freq[slice[0]==='L'?'N':'L']=1; } else { freq[allBS[allBS.length-1]]=1; }
-                    return {freq, streak:slice.join('')};
-                })();
-                const res_bayesian = (function(){
-                    let cL=0,cN=0; for (const x of allBS) { if (x==='L') cL++; else cN++; }
+                    return {freq, streak:slice.join(''), k};
+                }
+                const res_streak2 = makeStreak(2);
+                const res_streak3 = makeStreak(3);
+                const res_streak4 = makeStreak(4);
+                function makeBayesian(win){
+                    const slice = win ? allBS.slice(-win) : allBS; let cL=0,cN=0; for (const x of slice) { if (x==='L') cL++; else cN++; }
                     const freq={}; freq['L']=cL+1; freq['N']=cN+1;
-                    return {freq, cL, cN};
-                })();
-                const res_decay = (function(){
-                    let wL=0,wN=0; const decay=0.02;
+                    return {freq, cL, cN, win: win||allBS.length};
+                }
+                const res_bayesian = makeBayesian(null);
+                const res_bayesian50 = makeBayesian(50);
+                const res_bayesian100 = makeBayesian(100);
+                function makeDecay(decay){
+                    let wL=0,wN=0;
                     for (let k=0;k<allBS.length;k++) {
                         const w = Math.exp(-decay*(allBS.length-1-k));
                         if (allBS[k]==='L') wL+=w; else wN+=w;
                     }
-                    return {freq:{L:wL, N:wN}};
-                })();
+                    return {freq:{L:wL, N:wN}, decay};
+                }
+                const res_decay = makeDecay(0.02);
+                const res_decay_fast = makeDecay(0.05);
+                const res_decay_slow = makeDecay(0.01);
 
                 function toBest(res) {
                     const b = bestFromFreq(res.freq);
@@ -3665,7 +3753,6 @@
                     return {digit:b.digit, count:b.count, total:b.total, conf, sorted:b.sorted, freq:res.freq};
                 }
                 function toBestBS(res) {
-                    // nếu res.freq đã là L/N thì dùng trực tiếp, nếu là digit thì convert
                     let bsF = {L:0,N:0};
                     let isBS = false;
                     for (const k of Object.keys(res.freq)) { if (k==='L' || k==='N') isBS=true; }
@@ -3683,7 +3770,8 @@
                     return {digit:b.digit, label:bsLabel(b.digit), count:b.count, total:b.total, conf, sorted:b.sorted, freq:bsF};
                 }
 
-                const methods = [
+                // ===== POOL ĐẦY ĐỦ (22 phương pháp) =====
+                const poolMethods = [
                     {id:'ngram', name:'N-Gram '+pLen+' số', res:res_ngram, group:'cũ'},
                     {id:'ngramW', name:'N-Gram trọng số', res:res_ngramW, group:'cũ'},
                     {id:'m1', name:'Markov 1', res:res_m1, group:'cũ'},
@@ -3691,33 +3779,67 @@
                     {id:'hot100', name:'Hot 100', res:res_hot100, group:'cũ'},
                     {id:'hot200', name:'Hot 200', res:res_hot200, group:'cũ'},
                     {id:'hot500', name:'Hot 500', res:res_hot500, group:'cũ'},
-                    // MỚI - tỷ lệ cao hơn
-                    {id:'ln_ngram2', name:'🆕 L/N N-Gram 2', res:res_ln_ngram2, group:'mới'},
-                    {id:'ln_ngram3', name:'🆕 L/N N-Gram 3', res:res_ln_ngram3, group:'mới'},
-                    {id:'ln_ngram4', name:'🆕 L/N N-Gram 4', res:res_ln_ngram4, group:'mới'},
-                    {id:'ln_m1', name:'🆕 L/N Markov 1', res:res_ln_m1, group:'mới'},
-                    {id:'ln_m2', name:'🆕 L/N Markov 2', res:res_ln_m2, group:'mới'},
-                    {id:'balance50', name:'🆕 Cân bằng 50 (thiểu số)', res:res_balance50, group:'mới'},
-                    {id:'streak3', name:'🆕 Đảo chuỗi 3', res:res_streak3, group:'mới'},
-                    {id:'bayesian', name:'🆕 Bayesian', res:res_bayesian, group:'mới'},
-                    {id:'decay', name:'🆕 Decay L/N', res:res_decay, group:'mới'},
+                    {id:'ln_ngram2', name:'L/N N-Gram 2', res:res_ln_ngram2, group:'mới'},
+                    {id:'ln_ngram3', name:'L/N N-Gram 3', res:res_ln_ngram3, group:'mới'},
+                    {id:'ln_ngram4', name:'L/N N-Gram 4', res:res_ln_ngram4, group:'mới'},
+                    {id:'ln_ngram5', name:'L/N N-Gram 5', res:res_ln_ngram5, group:'mới'},
+                    {id:'ln_m1', name:'L/N Markov 1', res:res_ln_m1, group:'mới'},
+                    {id:'ln_m2', name:'L/N Markov 2', res:res_ln_m2, group:'mới'},
+                    {id:'ln_m3', name:'L/N Markov 3', res:res_ln_m3, group:'mới'},
+                    {id:'balance30', name:'Cân bằng 30', res:res_balance30, group:'mới'},
+                    {id:'balance50', name:'Cân bằng 50', res:res_balance50, group:'mới'},
+                    {id:'balance100', name:'Cân bằng 100', res:res_balance100, group:'mới'},
+                    {id:'streak2', name:'Đảo chuỗi 2', res:res_streak2, group:'mới'},
+                    {id:'streak3', name:'Đảo chuỗi 3', res:res_streak3, group:'mới'},
+                    {id:'streak4', name:'Đảo chuỗi 4', res:res_streak4, group:'mới'},
+                    {id:'bayesian', name:'Bayesian All', res:res_bayesian, group:'mới'},
+                    {id:'bayesian50', name:'Bayesian 50', res:res_bayesian50, group:'mới'},
+                    {id:'bayesian100', name:'Bayesian 100', res:res_bayesian100, group:'mới'},
+                    {id:'decay', name:'Decay 0.02', res:res_decay, group:'mới'},
+                    {id:'decay_fast', name:'Decay Fast 0.05', res:res_decay_fast, group:'mới'},
+                    {id:'decay_slow', name:'Decay Slow 0.01', res:res_decay_slow, group:'mới'},
                 ];
 
-                const evaluated = methods.map(m=>{
+                const evaluatedAll = poolMethods.map(m=>{
                     const best = toBest(m.res);
                     const bestBS = toBestBS(m.res);
                     const bt = backtest_Method(m.id, hist, pLen, btN);
                     const btBS = backtest_Method_BS(m.id, hist, pLen, btN);
-                    return {...m, best, bestBS, bt, btBS};
+                    // nếu tỷ lệ <50% thì đảo ngược sẽ thắng nhiều hơn
+                    const origAcc = btBS.acc;
+                    const isInverted = origAcc < 50 && btBS.total >= 10; // chỉ đảo khi có đủ mẫu
+                    const effAcc = isInverted ? (100 - origAcc) : origAcc;
+                    // đảo dự đoán hiện tại nếu cần
+                    let flippedBestBS = bestBS;
+                    if (isInverted) {
+                        const flippedDigit = bestBS.digit==='L' ? 'N' : (bestBS.digit==='N' ? 'L' : '?');
+                        const flippedLabel = flippedDigit==='L' ? 'LỚN' : (flippedDigit==='N' ? 'NHỎ' : '?');
+                        // giữ nguyên conf, total nhưng đổi freq
+                        const flippedFreq = {L: bestBS.freq['N']||0, N: bestBS.freq['L']||0};
+                        // nếu freq rỗng (do convert) thì tạo freq mới
+                        if ((flippedFreq.L+flippedFreq.N)===0) {
+                            flippedFreq[flippedDigit]=1;
+                        }
+                        flippedBestBS = {...bestBS, digit: flippedDigit, label: flippedLabel, freq: flippedFreq};
+                    }
+                    return {...m, best, bestBS, bestBSOrig: bestBS, bestBSEff: flippedBestBS, bt, btBS, origAcc, effAcc, isInverted};
                 });
 
-                // Ensemble - trọng số theo BT L/N, ưu tiên mới
+                // ===== SẮP XẾP THEO EFF ACC CAO NHẤT (sau khi đảo) =====
+                evaluatedAll.sort((a,b)=> b.effAcc - a.effAcc);
+                const TOP_K = 7;
+                const evaluated = evaluatedAll.slice(0, TOP_K); // chỉ lấy 7 pp tốt nhất sau khi đảo
+                const evaluatedRest = evaluatedAll.slice(TOP_K);
+
+                // Ensemble chỉ dùng TOP 7 với eff
                 const ensembleBS = {L:0,N:0};
                 for (const ev of evaluated) {
-                    let w = 0.5 + (ev.btBS.acc/100)*4;
-                    if (ev.group==='mới') w *= 1.25; // ưu tiên pp mới
-                    for (const [k,c] of Object.entries(ev.bestBS.freq)) {
-                        const norm = ev.bestBS.total ? c/ev.bestBS.total : 0;
+                    let w = 0.5 + (ev.effAcc/100)*5; // trọng số mạnh hơn theo effAcc
+                    if (ev.btBS.total > btN*0.8) w *= 1.15;
+                    // nếu đảo thì đã dùng bestBSEff
+                    const useBS = ev.bestBSEff || ev.bestBS;
+                    for (const [k,c] of Object.entries(useBS.freq)) {
+                        const norm = useBS.total ? c/useBS.total : 0;
                         ensembleBS[k] = (ensembleBS[k]||0) + norm * w;
                     }
                 }
@@ -3727,25 +3849,36 @@
 
                 const ensembleFreq = {};
                 for (const ev of evaluated) {
-                    if (ev.group!=='cũ') continue; // ensemble số chỉ dùng pp cũ
-                    const w = 0.5 + (ev.bt.acc/100)*2;
+                    if (ev.group!=='cũ') continue;
+                    const w = 0.5 + (ev.effAcc/100)*3;
                     for (const [d,c] of Object.entries(ev.res.freq)) {
                         const norm = ev.best.total ? c/ev.best.total : 0;
                         ensembleFreq[d] = (ensembleFreq[d]||0) + norm * w;
+                    }
+                }
+                if (Object.keys(ensembleFreq).length===0) {
+                    const fallbackOld = evaluatedAll.filter(e=> e.group==='cũ').sort((a,b)=> b.effAcc - a.effAcc).slice(0,3);
+                    for (const ev of fallbackOld) {
+                        const w = 0.5 + (ev.effAcc/100)*2;
+                        for (const [d,c] of Object.entries(ev.res.freq)) {
+                            const norm = ev.best.total ? c/ev.best.total : 0;
+                            ensembleFreq[d] = (ensembleFreq[d]||0) + norm * w;
+                        }
                     }
                 }
                 const ensembleBest = bestFromFreq(ensembleFreq);
                 const ensembleDigit = ensembleBest ? ensembleBest.digit : '?';
                 const ensembleSorted = ensembleBest ? ensembleBest.sorted : [];
 
-                evaluated.sort((a,b)=> b.btBS.acc - a.btBS.acc);
                 const topMethodBS = evaluated[0];
-                const evaluatedByDigit = [...evaluated].filter(e=> e.group==='cũ').sort((a,b)=> b.bt.acc - a.bt.acc);
-                const topNew = evaluated.filter(e=> e.group==='mới').sort((a,b)=> b.btBS.acc - a.btBS.acc)[0];
-                const avgOld = evaluated.filter(e=> e.group==='cũ').reduce((s,e)=> s+e.btBS.acc,0)/7;
-                const avgNew = evaluated.filter(e=> e.group==='mới').reduce((s,e)=> s+e.btBS.acc,0)/ (evaluated.filter(e=> e.group==='mới').length||1);
+                const avgTop = evaluated.reduce((s,e)=> s+e.effAcc,0)/evaluated.length;
+                const avgRest = evaluatedRest.length ? evaluatedRest.reduce((s,e)=> s+e.effAcc,0)/evaluatedRest.length : 0;
+                const avgOldAll = evaluatedAll.filter(e=> e.group==='cũ').reduce((s,e)=> s+e.effAcc,0)/7;
+                const avgNewAll = evaluatedAll.filter(e=> e.group==='mới').reduce((s,e)=> s+e.effAcc,0)/ (evaluatedAll.filter(e=> e.group==='mới').length||1);
+                const winCount = evaluated.filter(e=> e.effAcc>=50).length;
+                const loseCount = evaluated.filter(e=> e.effAcc<50).length;
 
-                // === TÍNH STT TIẾP THEO ===
+// === TÍNH STT TIẾP THEO ===
                 let lastCellForNext = null;
                 let lastSttForNext = '';
                 let lastFullForNext = '';
@@ -3758,79 +3891,85 @@
                         }
                     }
                 } catch(e){}
-                let nextSttNum = null;
-                if (lastSttForNext) {
-                    const n = parseInt(lastSttForNext,10);
-                    if (Number.isFinite(n)) nextSttNum = n+1;
-                }
-                if (nextSttNum===null) {
-                    try { if (typeof nextStt === 'number' && Number.isFinite(nextStt)) nextSttNum = nextStt; } catch(e){}
-                }
-                if (nextSttNum===null) nextSttNum = 1;
-                const nextSttShort = String(nextSttNum).padStart(3,'0').slice(-3);
-                const lastSttShortDisp = lastSttForNext ? String(lastSttForNext).padStart(3,'0').slice(-3) : '?';
-                let nextFullId = '';
-                if (lastFullForNext && /^\d+$/.test(lastFullForNext)) {
-                    const pref = lastFullForNext.slice(0, -3);
-                    nextFullId = pref + nextSttShort;
-                }
-                try {
-                    window.lastNextStt = nextSttShort;
-                    window.lastNextSttNum = nextSttNum;
-                    window.lastNextFullId = nextFullId;
-                    window.lastLastStt = lastSttShortDisp;
-                    window.lastLastFullId = lastFullForNext;
-                } catch(e){}
 
-                if (cntEl) cntEl.textContent = hist.length+' số · mẫu '+pattern.join('')+' · Top mới '+ (topNew? topNew.btBS.acc.toFixed(1)+'% '+topNew.name : '') +' · Cũ TB '+avgOld.toFixed(1)+'% · Mới TB '+avgNew.toFixed(1)+'% · tiếp: '+nextSttShort;
-
+                // === HIỂN THỊ ===
                 if (panel) {
-                    let htmlOut = '';
-                    htmlOut += '<div><b>Mẫu cuối ('+pLen+'):</b> <span style="color:#ffd54a;font-weight:bold;font-size:13px">'+pattern.join('')+'</span> '
-                    htmlOut += '· L/N mẫu: <span style="color:#4da3ff;font-weight:bold">'+patternBS.join('')+'</span> · Tổng '+hist.length+' số · BT '+btN+' kỳ</div>';
-                    htmlOut += '<div style="margin-top:6px;padding:6px 8px;background:#1e1b4b;border:1px solid #a78bfa;border-radius:6px;font-size:11px;color:#ddd6fe;line-height:1.4">';
-                    htmlOut += '📍 Ô cuối (100,10): <b style="color:#f9a825">STT '+lastSttShortDisp+'</b> ' + (lastFullForNext ? '(ID '+lastFullForNext+')' : '') + '<br>';
-                    htmlOut += '➡️ Ô DỰ ĐOÁN TIẾP THEO = STT <b style="color:#4ade80">'+nextSttShort+'</b> (sau '+lastSttShortDisp+') ' + (nextFullId ? '<span style="color:#a78bfa">ID '+nextFullId+'</span>' : '') + '</div>';
+                    let lastSttShortDisp = lastSttForNext ? lastSttForNext.padStart(3,'0') : '???';
+                    let nextSttShort = '???';
+                    let nextFullId = '';
+                    try {
+                        if (lastSttForNext && lastFullForNext) {
+                            const n = parseInt(lastSttForNext,10);
+                            if (!isNaN(n)) {
+                                const nextN = n+1;
+                                nextSttShort = String(nextN).padStart(3,'0');
+                                if (lastFullForNext.length>=14) {
+                                    const datePart = lastFullForNext.substring(0,8);
+                                    const prefix = lastFullForNext.charAt(8);
+                                    nextFullId = datePart + prefix + nextSttShort;
+                                }
+                            }
+                        }
+                    } catch(e){}
+
+                    let htmlOut = '<div style=\"font-size:11px;color:#94a3b8\">Mẫu '+pLen+' số: <span style=\"color:#f9a825;font-weight:bold\">'+pattern.join('')+'</span> · L/N: <span style=\"color:#a78bfa;font-weight:bold\">'+patternBS.join('')+'</span> · Tổng '+hist.length+' số · BT '+btN+' kỳ · Pool '+evaluatedAll.length+' → chọn <b style=\"color:#4ade80\">TOP '+TOP_K+'</b></div>';
+                    htmlOut += '<div style=\"margin-top:6px;padding:6px 8px;background:#1e1b4b;border:1px solid #a78bfa;border-radius:6px;font-size:11px;color:#ddd6fe;line-height:1.4\">';
+                    htmlOut += '📍 Ô cuối (100,10): <b style=\"color:#f9a825\">STT '+lastSttShortDisp+'</b> ' + (lastFullForNext ? '(ID '+lastFullForNext+')' : '') + '<br>';
+                    htmlOut += '➡️ Ô DỰ ĐOÁN TIẾP THEO = STT <b style=\"color:#4ade80\">'+nextSttShort+'</b> (sau '+lastSttShortDisp+') ' + (nextFullId ? '<span style=\"color:#a78bfa\">ID '+nextFullId+'</span>' : '') + '</div>';
 
                     const bsConf = ensembleBSBest ? Math.round(ensembleBSBest.count/ (ensembleBS.L+ensembleBS.N) *100) : 0;
                     const isLarge = ensembleBSDigit==='L';
-                    htmlOut += '<div style="margin-top:8px;padding:8px;background:'+(isLarge?'#1a3a1a':'#2a1a1a')+';border:2px solid '+(isLarge?'#4ade80':'#f87171')+';border-radius:8px;text-align:center">';
-                    htmlOut += '<div style="font-size:11px;color:#94a3b8">DỰ ĐOÁN Ô STT <b style="color:#4ade80;font-size:14px">'+nextSttShort+'</b> SẼ RA</div>';
-                    htmlOut += '<div style="font-size:32px;font-weight:bold;color:'+(isLarge?'#4ade80':'#fbbf24')+';margin:2px 0">'+ensembleBSLabel+'</div>';
-                    htmlOut += '<div style="font-size:11px;color:#cfe8ff">Ensemble (ưu tiên pp mới): <b>'+bsConf+'%</b> · Top: '+topMethodBS.name+' BT '+topMethodBS.btBS.acc.toFixed(1)+'% · Mới TB '+avgNew.toFixed(1)+'% vs Cũ TB '+avgOld.toFixed(1)+'%</div>';
-                    htmlOut += '<div style="margin-top:4px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap">';
+                    htmlOut += '<div style=\"margin-top:8px;padding:8px;background:'+(isLarge?'#1a3a1a':'#2a1a1a')+';border:2px solid '+(isLarge?'#4ade80':'#f87171')+';border-radius:8px;text-align:center\">';
+                    htmlOut += '<div style=\"font-size:11px;color:#94a3b8\">DỰ ĐOÁN Ô STT <b style=\"color:#4ade80;font-size:14px\">'+nextSttShort+'</b> SẼ RA (TOP 7 Ensemble)</div>';
+                    htmlOut += '<div style=\"font-size:32px;font-weight:bold;color:'+(isLarge?'#4ade80':'#fbbf24')+';margin:2px 0\">'+ensembleBSLabel+'</div>';
+                    htmlOut += '<div style=\"font-size:11px;color:#cfe8ff\">Ensemble TOP 7: <b>'+bsConf+'%</b> · TB TOP 7: <b style=\"color:#4ade80\">'+avgTop.toFixed(1)+'%</b> · TB còn lại: '+avgRest.toFixed(1)+'% · Top: '+topMethodBS.name+' '+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?' 🔄':'') + '</div>';
+                    htmlOut += '<div style=\"margin-top:4px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap\">';
                     const totalBS = ensembleBS.L+ensembleBS.N;
                     const pctL = totalBS? Math.round(ensembleBS.L/totalBS*100):0;
                     const pctN = 100-pctL;
-                    htmlOut += '<span style="background:'+(isLarge?'#4ade80':'#334155')+';color:'+(isLarge?'#000':'#94a3b8')+';padding:3px 8px;border-radius:12px;font-weight:bold">LỚN ≥5: '+pctL+'%</span>';
-                    htmlOut += '<span style="background:'+(!isLarge?'#fbbf24':'#334155')+';color:'+(!isLarge?'#000':'#94a3b8')+';padding:3px 8px;border-radius:12px;font-weight:bold">NHỎ <5: '+pctN+'%</span>';
+                    htmlOut += '<span style=\"background:'+(isLarge?'#4ade80':'#334155')+';color:'+(isLarge?'#000':'#94a3b8')+';padding:3px 8px;border-radius:12px;font-weight:bold\">LỚN ≥5: '+pctL+'%</span>';
+                    htmlOut += '<span style=\"background:'+(!isLarge?'#fbbf24':'#334155')+';color:'+(!isLarge?'#000':'#94a3b8')+';padding:3px 8px;border-radius:12px;font-weight:bold\">NHỎ <5: '+pctN+'%</span>';
                     htmlOut += '</div></div>';
 
-                    // bảng so sánh mới vs cũ
-                    htmlOut += '<div style="margin-top:8px;border:1px solid #334155;border-radius:4px;overflow:hidden">';
-                    htmlOut += '<div style="display:grid;grid-template-columns:1.1fr 0.6fr 0.5fr 0.7fr;gap:2px;background:#1e293b;padding:3px 4px;font-size:10px;color:#94a3b8;font-weight:bold"><span>Phương pháp (16)</span><span>L/N dự đoán</span><span>Conf</span><span>Backtest L/N</span></div>';
-                    for (const ev of evaluated) {
-                        const isTop = ev.id===topMethodBS.id;
+                    // bảng TOP 7
+                    htmlOut += '<div style=\"margin-top:8px;border:1px solid #4ade80;border-radius:6px;overflow:hidden\">';
+                    htmlOut += '<div style=\"background:#052e16;padding:4px 6px;font-size:11px;color:#4ade80;font-weight:bold\">🏆 TOP 7 PHƯƠNG PHÁP TỶ LỆ CAO NHẤT (được chọn để dự đoán) - TB '+avgTop.toFixed(1)+'%</div>';
+                    htmlOut += '<div style=\"display:grid;grid-template-columns:0.3fr 1fr 0.6fr 0.5fr 0.7fr;gap:2px;background:#1e293b;padding:3px 4px;font-size:10px;color:#94a3b8;font-weight:bold\"><span>#</span><span>Phương pháp</span><span>L/N dự đoán</span><span>Conf</span><span>Backtest L/N</span></div>';
+                    for (let idx=0; idx<evaluated.length; idx++) {
+                        const ev = evaluated[idx];
                         const col = ev.bestBS.digit==='L' ? '#4ade80' : '#fbbf24';
-                        const isNew = ev.group==='mới';
-                        htmlOut += '<div style="display:grid;grid-template-columns:1.1fr 0.6fr 0.5fr 0.7fr;gap:2px;padding:3px 4px;border-top:1px solid #1e293b;background:'+(isTop?'#1a2e1a': isNew?'#1a1a2e':'#0f172a')+';align-items:center">';
-                        htmlOut += '<span style="color:'+(isTop?'#4ade80': isNew?'#a78bfa':'#cfe8ff')+';font-size:10px">'+ev.name+ (isTop?' ★':'') +'</span>';
-                        htmlOut += '<span style="font-weight:bold;color:'+col+';font-size:11px">'+ev.bestBS.label+'</span>';
-                        htmlOut += '<span style="font-size:10px;color:#aaa">'+ev.bestBS.conf+'%</span>';
+                        const medal = idx===0?'🥇': idx===1?'🥈': idx===2?'🥉': (idx+1)+'.';
+                        htmlOut += '<div style=\"display:grid;grid-template-columns:0.3fr 1fr 0.6fr 0.5fr 0.7fr;gap:2px;padding:3px 4px;border-top:1px solid #1e293b;background:#0f2e1a;align-items:center\">';
+                        htmlOut += '<span style=\"color:#f9a825;font-weight:bold\">'+medal+'</span>';
+                        htmlOut += '<span style=\"color:#4ade80;font-size:10px;font-weight:bold\">'+ev.name+'</span>';
+                        htmlOut += '<span style=\"font-weight:bold;color:'+col+';font-size:11px\">'+ev.bestBS.label+'</span>';
+                        htmlOut += '<span style=\"font-size:10px;color:#aaa\">'+ev.bestBS.conf+'%</span>';
                         const accColor = ev.btBS.acc>=55 ? '#4ade80' : ev.btBS.acc>=50 ? '#fbbf24' : '#f87171';
-                        htmlOut += '<span style="font-size:10px;color:'+accColor+'">'+ev.btBS.acc.toFixed(1)+'% ('+ev.btBS.hits+'/'+ev.btBS.total+')</span>';
+                        htmlOut += '<span style=\"font-size:10px;color:'+accColor+';font-weight:bold\">'+ev.btBS.acc.toFixed(1)+'% ('+ev.btBS.hits+'/'+ev.btBS.total+')</span>';
                         htmlOut += '</div>';
                     }
                     htmlOut += '</div>';
 
-                    htmlOut += '<div style="margin-top:6px;padding:6px;background:#0f172a;border:1px solid #4c1d95;border-radius:6px;font-size:10px;color:#c4b5fd;line-height:1.4">';
-                    htmlOut += '🔬 <b>Phương pháp mới tỷ lệ cao hơn:</b><br>';
-                    htmlOut += '• L/N N-Gram 2-4: tìm trực tiếp mẫu L/N thay vì qua số 0-9 → chính xác hơn cho L/N<br>';
-                    htmlOut += '• L/N Markov: xác suất chuyển L→L, L→N, N→L, N→N<br>';
-                    htmlOut += '• Cân bằng 50: nếu 50 kỳ gần nhất L nhiều hơn N → dự đoán N để cân bằng (mean reversion)<br>';
-                    htmlOut += '• Đảo chuỗi 3: nếu 3 kỳ liên tiếp cùng L/N → dự đoán đảo chiều<br>';
-                    htmlOut += '• Bayesian + Decay: trọng số thời gian, ưu tiên gần nhất<br>';
-                    htmlOut += 'Ensemble mới ưu tiên pp mới ×1.25, trung bình mới <b>'+avgNew.toFixed(1)+'%</b> vs cũ <b>'+avgOld.toFixed(1)+'%</b> (backtest '+btN+' kỳ).';
+                    // bảng còn lại
+                    htmlOut += '<div style=\"margin-top:8px;border:1px solid #334155;border-radius:4px;overflow:hidden\">';
+                    htmlOut += '<div style=\"background:#1e293b;padding:3px 6px;font-size:10px;color:#64748b\">📉 Các phương pháp còn lại (không được chọn) - TB '+avgRest.toFixed(1)+'% · Cũ TB '+avgOldAll.toFixed(1)+'% vs Mới TB '+avgNewAll.toFixed(1)+'%</div>';
+                    htmlOut += '<div style=\"display:grid;grid-template-columns:0.3fr 1fr 0.6fr 0.5fr 0.7fr;gap:2px;background:#0f172a;padding:3px 4px;font-size:10px;color:#475569;font-weight:bold\"><span>#</span><span>Phương pháp</span><span>L/N</span><span>Conf</span><span>Backtest</span></div>';
+                    for (let idx=0; idx<evaluatedRest.length; idx++) {
+                        const ev = evaluatedRest[idx];
+                        const col = ev.bestBS.digit==='L' ? '#4ade80' : '#fbbf24';
+                        htmlOut += '<div style=\"display:grid;grid-template-columns:0.3fr 1fr 0.6fr 0.5fr 0.7fr;gap:2px;padding:3px 4px;border-top:1px solid #1e293b;background:#0f172a;align-items:center;opacity:0.7\">';
+                        htmlOut += '<span style=\"color:#475569\">'+(idx+TOP_K+1)+'</span>';
+                        htmlOut += '<span style=\"color:#94a3b8;font-size:10px\">'+ev.name+'</span>';
+                        htmlOut += '<span style=\"color:'+col+';font-size:10px\">'+ev.bestBS.label+'</span>';
+                        htmlOut += '<span style=\"font-size:10px;color:#666\">'+ev.bestBS.conf+'%</span>';
+                        const accColor = ev.btBS.acc>=55 ? '#4ade80' : ev.btBS.acc>=50 ? '#fbbf24' : '#f87171';
+                        htmlOut += '<span style=\"font-size:10px;color:'+accColor+'\">'+ev.btBS.acc.toFixed(1)+'%</span>';
+                        htmlOut += '</div>';
+                    }
+                    htmlOut += '</div>';
+
+                    htmlOut += '<div style=\"margin-top:6px;padding:6px;background:#0f172a;border:1px solid #4c1d95;border-radius:6px;font-size:10px;color:#c4b5fd;line-height:1.4\">';
+                    htmlOut += '🤖 <b>Auto chọn TOP 7:</b> Hệ thống backtest '+btN+' kỳ gần nhất cho '+evaluatedAll.length+' phương pháp, sắp xếp theo tỷ lệ trúng L/N, chỉ giữ 7 phương pháp cao nhất để ensemble. TB TOP 7 <b style=\"color:#4ade80\">'+avgTop.toFixed(1)+'%</b> vs TB loại <b>'+avgRest.toFixed(1)+'%</b> → cải thiện <b style=\"color:#f9a825\">+'+(avgTop-avgRest).toFixed(1)+'%</b>.';
                     htmlOut += '</div>';
 
                     panel.innerHTML = htmlOut;
@@ -3843,18 +3982,35 @@
                     const pctL = totalBS? Math.round(ensembleBS.L/totalBS*100):0;
                     const pctN = 100-pctL;
                     let bHtml = '';
-                    bHtml += '<div style="font-size:12px;color:#fbbf24;font-weight:bold">🎯 STT '+nextSttShort+' (sau '+lastSttShortDisp+') → <span style="color:#4ade80">'+ensembleBSLabel+'</span> · Top '+topMethodBS.name+' '+topMethodBS.btBS.acc.toFixed(1)+'%</div>';
-                    bHtml += '<div style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
-                    bHtml += '<span style="font-size:26px;font-weight:bold;color:'+(ensembleBSDigit==='L'?'#4ade80':'#fbbf24')+';background:'+(ensembleBSDigit==='L'?'#052e16':'#2a1a00')+';padding:4px 12px;border-radius:8px;border:2px solid '+(ensembleBSDigit==='L'?'#4ade80':'#fbbf24')+'">'+ensembleBSLabel+'</span>';
-                    bHtml += '<span style="font-size:11px;color:#cfe8ff">Lớn '+pctL+'% vs Nhỏ '+pctN+'%<br>Mới TB '+avgNew.toFixed(1)+'% vs Cũ TB '+avgOld.toFixed(1)+'%<br>Top mới: '+(topNew?topNew.name+' '+topNew.btBS.acc.toFixed(1)+'%':'')+'</span>';
+                    let lastSttShortDisp = lastSttForNext ? lastSttForNext.padStart(3,'0') : '???';
+                    let nextSttShort = '???';
+                    let nextFullId = '';
+                    try {
+                        if (lastSttForNext && lastFullForNext) {
+                            const n = parseInt(lastSttForNext,10);
+                            if (!isNaN(n)) {
+                                const nextN = n+1;
+                                nextSttShort = String(nextN).padStart(3,'0');
+                                if (lastFullForNext.length>=14) {
+                                    const datePart = lastFullForNext.substring(0,8);
+                                    const prefix = lastFullForNext.charAt(8);
+                                    nextFullId = datePart + prefix + nextSttShort;
+                                }
+                            }
+                        }
+                    } catch(e){}
+                    bHtml += '<div style=\"font-size:12px;color:#fbbf24;font-weight:bold\">🏆 TOP 7 STT '+nextSttShort+' (sau '+lastSttShortDisp+') → <span style=\"color:#4ade80\">'+ensembleBSLabel+'</span> · TB TOP 7 '+avgTop.toFixed(1)+'%</div>';
+                    bHtml += '<div style=\"margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap\">';
+                    bHtml += '<span style=\"font-size:26px;font-weight:bold;color:'+(ensembleBSDigit==='L'?'#4ade80':'#fbbf24')+';background:'+(ensembleBSDigit==='L'?'#052e16':'#2a1a00')+';padding:4px 12px;border-radius:8px;border:2px solid '+(ensembleBSDigit==='L'?'#4ade80':'#fbbf24')+'\">'+ensembleBSLabel+'</span>';
+                    bHtml += '<span style=\"font-size:11px;color:#cfe8ff\">Lớn '+pctL+'% vs Nhỏ '+pctN+'%<br>TOP 7 TB '+avgTop.toFixed(1)+'% · Top '+topMethodBS.name+' '+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?'🔄':'') + '<br>'+evaluated.map((e,i)=> (i<3? e.name+' '+e.effAcc.toFixed(1)+'%' + (e.isInverted?'🔄':'') :'')).filter(Boolean).join(' | ')+'</span>';
                     bHtml += '</div>';
-                    if (nextFullId) bHtml += '<div style="margin-top:4px;font-size:10px;color:#a78bfa">ID dự kiến: '+nextFullId+'</div>';
+                    if (nextFullId) bHtml += '<div style=\"margin-top:4px;font-size:10px;color:#a78bfa\">ID dự kiến: '+nextFullId+' · Chọn từ '+evaluatedAll.length+' pp</div>';
                     bestBox.innerHTML = bHtml;
                     try {
                         const mt = document.getElementById('mainTitle');
-                        if (mt) mt.textContent = '🔮 STT '+nextSttShort+' (sau '+lastSttShortDisp+') → '+ensembleBSLabel+' · Top '+topMethodBS.name+' '+topMethodBS.btBS.acc.toFixed(1)+'% · Mới TB '+avgNew.toFixed(1)+'%';
+                        if (mt) mt.textContent = '🏆 TOP7 STT '+nextSttShort+' (sau '+lastSttShortDisp+') → '+ensembleBSLabel+' · TB '+avgTop.toFixed(1)+'% · '+topMethodBS.name+' '+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?'🔄':'') + ' · '+winCount+'/7 thắng';
                         const ph = document.getElementById('predictHeaderTitle');
-                        if (ph) ph.textContent = '🔮 STT '+nextSttShort+' → '+ensembleBSLabel+' · Mới TB '+avgNew.toFixed(1)+'%';
+                        if (ph) ph.textContent = '🏆 TOP7 STT '+nextSttShort+' → '+ensembleBSLabel+' · TB '+avgTop.toFixed(1)+'% · '+winCount+'/7 thắng';
                     } catch(e){}
                 }
 
@@ -3873,6 +4029,23 @@
                     const pctL_forLog = totalBS_forLog ? Math.round(ensembleBS.L/totalBS_forLog*100) : 0;
                     const pctN_forLog = 100-pctL_forLog;
                     const conf_forLog = ensembleBSBest ? Math.round(ensembleBSBest.count / (ensembleBS.L+ensembleBS.N) *100) : 0;
+                    let lastSttShortDisp = lastSttForNext ? lastSttForNext.padStart(3,'0') : '???';
+                    let nextSttShort = '???';
+                    let nextFullId = '';
+                    try {
+                        if (lastSttForNext && lastFullForNext) {
+                            const n = parseInt(lastSttForNext,10);
+                            if (!isNaN(n)) {
+                                const nextN = n+1;
+                                nextSttShort = String(nextN).padStart(3,'0');
+                                if (lastFullForNext.length>=14) {
+                                    const datePart = lastFullForNext.substring(0,8);
+                                    const prefix = lastFullForNext.charAt(8);
+                                    nextFullId = datePart + prefix + nextSttShort;
+                                }
+                            }
+                        }
+                    } catch(e){}
                     upsertPredictLogPending({
                         forSTT: nextSttShort,
                         forFullId: nextFullId,
@@ -3884,11 +4057,11 @@
                         pctL: pctL_forLog,
                         pctN: pctN_forLog,
                         pattern: pattern.join(''),
-                        topMethod: topMethodBS ? topMethodBS.name : ''
+                        topMethod: topMethodBS ? topMethodBS.name+' ('+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?'🔄':'') + ')' : ''
                     });
                 } catch(e){ console.log('[PRED-LOG] lỗi', e); }
 
-                return {pattern, ensembleBS:ensembleBSDigit, ensemble:ensembleDigit, topMethodBS, evaluated, avgOld, avgNew, topNew};
+                return {pattern, ensembleBS:ensembleBSDigit, ensemble:ensembleDigit, topMethodBS, evaluated, evaluatedAll, avgTop, avgRest};
             }
 
             function backtestAllMethods() {
@@ -3901,8 +4074,8 @@
                 predictNext(true);
             }
 
-
-            // ================= 🤖 AUTO BET 28s + LỚN/NHỎ + GẤP THẾP DÃY TỰ NHẬP =================
+            // ================= 🤖 AUTO BET
+// ================= 🤖 AUTO BET 28s + LỚN/NHỎ + GẤP THẾP DÃY TỰ NHẬP =================
             const LS_AUTOBET = 'vn168_autobet_cfg_v1';
             const LS_MART = 'vn168_martingale_v1';
             let autoBetLastIssue = '';
@@ -4415,7 +4588,7 @@
                     const result = origPredict.apply(this, arguments);
                     try {
                         if (result && result.topMethodBS) {
-                            window.lastPredictConf = Math.round(result.topMethodBS.btBS?.acc||0);
+                            window.lastPredictConf = Math.round(result.topMethodBS.effAcc||result.topMethodBS.btBS?.acc||0);
                         }
                     } catch(e){}
                     return result;
@@ -5288,5 +5461,5 @@
                     autoStartBulkLoad('mở app');
                 });
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3af342d3d2bdd49',t:'MTc4OTM4NjkzOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    </body>
 </html>
