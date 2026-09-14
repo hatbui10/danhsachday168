@@ -511,10 +511,11 @@
                     style="width:58px;background:#0d0d0d;color:#fff;border:1px solid #a78bfa;border-radius:4px;padding:3px 5px;font-size:11px;box-sizing:border-box">
                 <span style="color:#aaa">hiện mục có L hoặc N bằng số này</span>
                 <button class="btn-mini" type="button" onclick="clearPredictPercentFilter()" style="padding:3px 6px">✕ Xoá lọc %</button>
+                <button id="clearPredictLogAllBtn" class="btn-mini" type="button" onclick="clearPredictLogAll()" style="padding:3px 6px;background:#7f1d1d;border-color:#f87171">🧹 Xoá lịch sử máy + Firebase</button>
             </div>
             <div id="predictHistoryStats" style="background:#0f0f23;border:1px solid #4c1d95;border-radius:6px;padding:6px 8px;margin-bottom:6px;font-size:11px;color:#e0e0e0;line-height:1.45">Chưa có dữ liệu dự đoán.</div>
             <div id="predictHistoryList" style="max-height:360px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;padding:2px 0;font-family:monospace;font-size:11px"></div>
-            <div style="font-size:9px;color:#666;margin-top:4px">Lưu local (vn168_predictLog_v1) + Firebase (predictLog). Reload 20s vẫn giữ. Mỗi STT chỉ ghi 1 lần để tránh spam. Hiển thị STT → LỚN/NHỎ L xx% / N yy% → TRÚNG/TRƯỢT.</div>
+            <div style="font-size:9px;color:#666;margin-top:4px">Lưu local (vn168_predictLog_v1) + Firebase (predictLog). Chỉ tạo dự đoán STT tiếp theo sau khi STT trước đã có TRÚNG/TRƯỢT.</div>
         </div>
 
 
@@ -833,6 +834,37 @@
                 renderPredictLog();
             }
 
+            async function clearPredictLogAll() {
+                const total = predictLog.length;
+                if (typeof confirm === 'function' && !confirm('Xoá toàn bộ lịch sử dự đoán ('+total+' mục) ở máy này và trên Firebase?')) return;
+                const btn = document.getElementById('clearPredictLogAllBtn');
+                if (btn) btn.disabled = true;
+                // Xoá ngay trên máy và cập nhật màn hình.
+                predictLog = [];
+                try { localStorage.removeItem(LS_PREDICT_LOG); } catch (e) {
+                    try { localStorage.setItem(LS_PREDICT_LOG, '[]'); } catch (e2) {}
+                }
+                renderPredictLog();
+                // Xoá đúng field predictLog trên Firebase, không đụng dữ liệu khác.
+                let fbDone = false;
+                try {
+                    if (typeof fbDB !== 'undefined' && fbDB) {
+                        await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
+                            predictLog: [],
+                            lastPredictLogAt: Date.now()
+                        }, {merge: true});
+                        fbDone = true;
+                    }
+                } catch (e) {
+                    console.warn('[PRED-LOG] Không xoá được Firebase:', e);
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+                if (typeof alert === 'function') {
+                    alert(fbDone ? 'Đã xoá lịch sử dự đoán trên máy và Firebase.' : 'Đã xoá trên máy. Firebase chưa kết nối hoặc xoá chưa thành công.');
+                }
+            }
+
             function predictLogDay(e) {
                 const sources = [e && e.forFullId, e && e.lastFullId, e && e.actualFullId];
                 for (const source of sources) {
@@ -847,8 +879,10 @@
                 return '';
             }
             function predictLogKey(e) {
-                const full = String(e && e.forFullId || '').trim();
-                if (full) return 'FULL:' + full;
+                // Một STT chỉ có một dự đoán trong cùng một ngày.
+                // Không dùng nguyên full ID làm khóa vì các phiên tải khác nhau có thể
+                // tạo ra full ID hơi khác nhau nhưng vẫn là cùng STT trong cùng ngày,
+                // dẫn tới các dòng 740/740, 744/744, 745/745 bị nhân đôi.
                 const stt = String(e && e.forSTT || '').padStart(3,'0').slice(-3);
                 return 'STT:' + stt + '@' + predictLogDay(e);
             }
@@ -859,6 +893,27 @@
                 const bResolved = b.actualDigit != null;
                 if (aResolved !== bResolved) return bResolved ? b : a;
                 return (b.resolvedAt || b.at || 0) > (a.resolvedAt || a.at || 0) ? b : a;
+            }
+
+            // Giữ đúng thứ tự: phải xử lý xong STT trước rồi mới tạo dự đoán STT sau.
+            // Một số phiên cũ đã sinh nhiều bản CHỜ liên tiếp; khi tải lại chỉ giữ
+            // bản CHỜ đầu tiên trong ngày, các bản sau sẽ được tạo lại sau khi có KQ.
+            function prunePendingPredictLogs() {
+                // Quy tắc mới: toàn bộ lịch sử chỉ được có 1 STT CHỜ.
+                // STT trước phải TRÚNG hoặc TRƯỢT rồi mới sinh dự đoán tiếp theo,
+                // kể cả khi full ID/ngày của các bản ghi cũ đang không giống nhau.
+                const pending = predictLog.filter(e => e && e.actualDigit == null);
+                if (pending.length <= 1) return 0;
+                pending.sort((a, b) => {
+                    const af = String(a.forFullId || '').trim();
+                    const bf = String(b.forFullId || '').trim();
+                    if (af && bf && af !== bf) return af < bf ? -1 : 1;
+                    return (a.at || 0) - (b.at || 0);
+                });
+                const remove = new Set(pending.slice(1));
+                predictLog = predictLog.filter(e => !remove.has(e));
+                try { localStorage.setItem(LS_PREDICT_LOG, JSON.stringify(predictLog.slice(0,1000))); } catch (e) {}
+                return remove.size;
             }
 
             function repairPredictLogFalseResolutions() {
@@ -944,6 +999,7 @@
                 }
                 if (changed) {
                     dedupePredictLog();
+                    prunePendingPredictLogs();
                     predictLog.sort((a,b)=> (b.at||0)-(a.at||0));
                     if (predictLog.length>1000) predictLog.length=1000;
                     try { localStorage.setItem(LS_PREDICT_LOG, JSON.stringify(predictLog)); } catch(e){}
@@ -977,27 +1033,14 @@
                 // Chỉ lấy bản ghi cùng full ID/ngày; không lấy STT trùng của ngày trước.
                 const existing = predictLog.find(e => predictLogKey(e) === key);
                 if (existing) {
-                    // nếu đang chờ KQ thì cho phép cập nhật dự đoán mới nhất (tránh spam nhưng vẫn cập nhật nếu đổi L/N)
-                    if (existing.actualDigit==null) {
-                        // chỉ cập nhật nếu pred khác, để tránh ghi đè liên tục làm mới at
-                        if (existing.pred !== info.pred) {
-                            existing.pred = info.pred;
-                            existing.predLabel = info.predLabel;
-                            existing.conf = info.conf;
-                            existing.pctL = info.pctL;
-                            existing.pctN = info.pctN;
-                            existing.pattern = info.pattern;
-                            existing.topMethod = info.topMethod;
-                            existing.lastSTT = info.lastSTT;
-                            existing.lastFullId = info.lastFullId;
-                            if (info.forFullId) existing.forFullId = info.forFullId;
-                            // không đổi at để giữ thời gian dự đoán đầu tiên
-                            savePredictLog();
-                            try { renderPredictLog(); } catch(e){}
-                        }
-                    }
+                    // Đã có bản ghi cùng STT: giữ nguyên, không dự đoán lại khi còn CHỜ.
                     return existing;
                 }
+                // Nếu còn một STT CHỜ khác, chưa được phép tạo STT mới.
+                const blocking = predictLog.find(e =>
+                    e && e.actualDigit == null && predictLogKey(e) !== key
+                );
+                if (blocking) return null;
                 // chưa có -> tạo mới
                 const entry = {
                     at: Date.now(),
@@ -1105,6 +1148,9 @@
                 return changed;
             }
             function renderPredictLog() {
+                try {
+                    if (prunePendingPredictLogs() > 0) savePredictLog();
+                } catch (e) {}
                 const listEl = document.getElementById('predictHistoryList');
                 const statsEl = document.getElementById('predictHistoryStats');
                 const countEl = document.getElementById('predictHistoryCount');
@@ -1178,6 +1224,7 @@
             try { loadPredictPercentFilter(); } catch(e){}
             try { loadPredictLog(); } catch(e){}
             try { repairPredictLogFalseResolutions(); } catch(e){}
+            try { prunePendingPredictLogs(); } catch(e){}
             try { dedupePredictLog(); } catch(e){}
             try { renderPredictLog(); } catch(e){} // <-- render ngay sau load để không biến mất
             // tự làm sạch vàng sai (trượt mà vẫn vàng) ngay khi khởi động
@@ -3537,7 +3584,30 @@
                 if (p) p.textContent = next;
             }
 
+            function getNextPredictionTarget() {
+                const stt = getNextPredictionStt();
+                const last = cells && cells.length ? cells[TOTAL - 1] : null;
+                const lastFullId = last && last.sttFull ? String(last.sttFull).trim() : '';
+                let fullId = '';
+                if (stt && lastFullId.length >= 14) {
+                    fullId = lastFullId.slice(0, 8) + lastFullId.charAt(8) + stt;
+                }
+                const candidate = {
+                    forSTT: stt,
+                    forFullId: fullId,
+                    lastFullId: lastFullId,
+                    at: Date.now()
+                };
+                return { stt: stt, fullId: fullId, day: predictLogDay(candidate), key: predictLogKey(candidate) };
+            }
+
             function predictNext(force) {
+                updateNextPredictionSttDisplay();
+                // Không tính/ghi dự đoán mới khi còn bất kỳ STT nào CHỜ.
+                // Khi resolvePredictLogForCell() chuyển bản ghi trước thành TRÚNG/TRƯỢT,
+                // lần render kế tiếp mới được tạo dự đoán cho STT tiếp theo.
+                const target = getNextPredictionTarget();
+                if (target.stt && predictLog.some(e => e && e.actualDigit == null)) return null;
                 updateNextPredictionSttDisplay();
                 const panel = document.getElementById('predictNextPanel');
                 const cntEl = document.getElementById('predictCount');
@@ -4581,5 +4651,5 @@
                     autoStartBulkLoad('mở app');
                 });
         </script>
-    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3ad9688bc5e781d',t:'MTc4OTM2OTk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b040cccf4bcabc',t:'MTc4OTM5Nzk0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b2eca9dcd4dd42',t:'MTc4OTQyNTk1Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3ad9688bc5e781d',t:'MTc4OTM2OTk5NQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b040cccf4bcabc',t:'MTc4OTM5Nzk0MQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3b305f4daa30507',t:'MTc4OTQyNjk4OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
