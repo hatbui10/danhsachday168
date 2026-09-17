@@ -496,15 +496,20 @@
                 <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px">Bảng hiện 10 hàng cuối (100 ô). Cuộn lên để xem thêm lịch sử 5000 hàng.<br><b style="color:#29b6f6">Ô xanh da trời = STT trong lịch sử dự đoán đã TRÚNG</b> <span id="hitCount" style="color:#29b6f6"></span></div>
 
                 <!-- DỰ ĐOÁN LỚN/NHỎ -->
-                <div id="predictPanel" class="cell-history-panel" style="background:#141e33;border-color:#4da3ff;width:380px;max-width:95%">
+                <div id="predictPanel" class="cell-history-panel" style="background:#141e33;border-color:#4da3ff;width:420px;max-width:98%">
                     <div class="ch-head" style="color:#4da3ff;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
-                        <span id="predictHeaderTitle">🔮 Dự đoán LỚN (≥5) / NHỎ (<5) - ô STT tiếp theo</span>
+                        <span id="predictHeaderTitle">🔮 Dự đoán LỚN / NHỎ — so 200 vs 500 kỳ</span>
                                 <span class="ch-count" id="predictCount">-</span>
                     </div>
+                    <div id="predictDualRow" style="display:flex;gap:8px;align-items:stretch;margin:6px 0 4px;flex-wrap:wrap">
+                        <div style="flex:1;min-width:150px;padding:10px 8px;background:#0f172a;border:1px dashed #334155;border-radius:8px;text-align:center;color:#64748b;font-size:11px">BT 200 kỳ<br><b>chưa chạy</b></div>
+                        <div style="flex:1;min-width:150px;padding:10px 8px;background:#0f172a;border:1px dashed #334155;border-radius:8px;text-align:center;color:#64748b;font-size:11px">BT 500 kỳ<br><b>chưa chạy</b></div>
+                    </div>
+                    <div id="predictAgreeBar" style="display:none;margin-bottom:6px;padding:6px 8px;border-radius:6px;font-size:12px;font-weight:bold;text-align:center"></div>
                     <div id="predictNextPanel" style="font-size:11px;color:#cfe8ff;line-height:1.45">Chưa đủ dữ liệu để dự đoán.</div>
                     <div class="hist-ctrl" style="margin-top:6px">
                         <button class="btn-mini" onclick="predictNext(true)" style="background:#1e40af;border-color:#60a5fa;color:#fff">🔮 Dự đoán lại</button>
-                        <button class="btn-mini" onclick="backtestAllMethods()" title="Chạy kiểm chứng 500 kỳ gần nhất">📊 Backtest 500 kỳ</button>
+                        <button class="btn-mini" onclick="backtestAllMethods()" title="Chạy lại dự đoán với cả backtest 200 và 500 kỳ">📊 Backtest 200 + 500</button>
                         <label style="font-size:10px;color:#aaa">Mẫu:
                             <select id="predictLen">
                                 <option value="2">2</option>
@@ -548,7 +553,7 @@
                 </div>
 
                 <!-- 🤖 TỰ ĐỘNG ĐẶT CƯỢC - 28s + LỚN/NHỎ + GẤP THẾP -->
-                <div id="autoBetPanel" class="cell-history-panel" style="background:#102a18;border-color:#4ade80;width:420px;max-width:98%">
+                <div id="autoBetPanel" class="cell-history-panel" style="display:none;background:#102a18;border-color:#4ade80;width:420px;max-width:98%">
                     <div class="ch-head" style="color:#4ade80;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
                         <span>🤖 Tự đặt LỚN / NHỎ - 28s + Gấp thếp</span>
                         <span class="ch-count" id="autoBetCount">TẮT</span>
@@ -3634,7 +3639,56 @@
                         return {acc: total? (hits/total*100):0, hits, total};
                     }
                     
-                    function predictNext(force) {
+
+                    function fillDualPredictBoxes(r200, r500) {
+                        const row = document.getElementById('predictDualRow');
+                        const bar = document.getElementById('predictAgreeBar');
+                        function card(r, title, sub) {
+                            if (!r) {
+                                return '<div style="flex:1;min-width:150px;padding:10px 8px;background:#0f172a;border:1px dashed #334155;border-radius:8px;text-align:center;color:#64748b;font-size:11px">'+title+'<br><b>lỗi</b></div>';
+                            }
+                            const enough = r.enough !== false && r.topMethodBS && isFinite(r.avgTop) && r.evaluated && r.evaluated.some(e=> (e.btBS&&e.btBS.total>0));
+                            const isLarge = r.ensembleBSDigit==='L';
+                            const col = isLarge?'#4ade80': (r.ensembleBSDigit==='N'?'#fbbf24':'#94a3b8');
+                            const bg = isLarge?'#052e16': (r.ensembleBSDigit==='N'?'#2a1a00':'#0f172a');
+                            const bd = isLarge?'#4ade80': (r.ensembleBSDigit==='N'?'#fbbf24':'#334155');
+                            const top = r.topMethodBS ? (r.topMethodBS.name+' '+(r.topMethodBS.effAcc||0).toFixed(1)+'%'+(r.topMethodBS.isInverted?'🔄':'')) : '-';
+                            const warn = enough ? '' : '<div style="font-size:9px;color:#f87171;margin-top:3px">⚠ Chưa đủ số (cần ~'+(r.btN+20)+')</div>';
+                            return '<div style="flex:1;min-width:150px;padding:10px 8px;background:'+bg+';border:2px solid '+bd+';border-radius:8px;text-align:center">'
+                                + '<div style="font-size:11px;color:#94a3b8;font-weight:bold">'+title+'</div>'
+                                + '<div style="font-size:10px;color:#64748b;margin-bottom:2px">'+sub+'</div>'
+                                + '<div style="font-size:30px;font-weight:bold;color:'+col+';line-height:1.1;margin:4px 0">'+ (r.ensembleBSLabel||'?') +'</div>'
+                                + '<div style="font-size:11px;color:#cfe8ff">Lớn '+(r.pctL||0)+'% · Nhỏ '+(r.pctN||0)+'%</div>'
+                                + '<div style="font-size:11px;color:#4ade80;margin-top:3px">TB TOP 7 <b>'+(isFinite(r.avgTop)?r.avgTop.toFixed(1):'0.0')+'%</b> · '+(r.winCount||0)+'/7 ≥50%</div>'
+                                + '<div style="font-size:9px;color:#94a3b8;margin-top:3px;line-height:1.3">Top: '+top+'</div>'
+                                + warn
+                                + '</div>';
+                        }
+                        if (row) row.innerHTML = card(r200, 'BT 200 kỳ', 'nhạy · trend ngắn') + card(r500, 'BT 500 kỳ', 'ổn định · đoạn dài');
+                        if (bar) {
+                            const a = r200 && r200.ensembleBSDigit;
+                            const b = r500 && r500.ensembleBSDigit;
+                            const agree = a && b && a===b && a!=='?';
+                            bar.style.display = 'block';
+                            if (agree) {
+                                const lab = (a==='L') ? 'LỚN' : 'NHỎ';
+                                const col = a==='L' ? '#4ade80' : '#fbbf24';
+                                bar.style.background = a==='L' ? '#052e16' : '#2a1a00';
+                                bar.style.border = '1px solid '+col;
+                                bar.style.color = col;
+                                bar.textContent = '✅ CẢ HAI CÙNG ' + lab + '  (200 = 500)';
+                            } else {
+                                bar.style.background = '#3b1d0a';
+                                bar.style.border = '1px solid #f59e0b';
+                                bar.style.color = '#fbbf24';
+                                const l200 = r200 ? (r200.ensembleBSLabel||'?') : '?';
+                                const l500 = r500 ? (r500.ensembleBSLabel||'?') : '?';
+                                bar.textContent = '⚠️ LỆCH NHỊP  ·  200: ' + l200 + '  ≠  500: ' + l500;
+                            }
+                        }
+                    }
+
+                                        function predictNext(force) {
                         const panel = document.getElementById('predictNextPanel');
                         const cntEl = document.getElementById('predictCount');
                         const lenEl = document.getElementById('predictLen');
@@ -3648,6 +3702,8 @@
                         if (allDigits.length < 20) {
                             if (panel) panel.innerHTML = 'Chưa đủ dữ liệu (cần ít nhất 20 số trên bảng). Hiện có '+allDigits.length+'.';
                             if (cntEl) cntEl.textContent = 'chưa đủ';
+                            const row0 = document.getElementById('predictDualRow');
+                            if (row0) row0.innerHTML = '<div style="flex:1;padding:10px;color:#64748b;font-size:11px;text-align:center">Chưa đủ dữ liệu để so 200 / 500</div>';
                             return null;
                         }
                         let pattern = allDigits.slice(-pLen);
@@ -3832,11 +3888,12 @@
                             {id:'decay_slow', name:'Decay Slow 0.01', res:res_decay_slow, group:'mới'},
                         ];
                     
+                        function rankAndEnsemble(btNLocal) {
                         const evaluatedAll = poolMethods.map(m=>{
                             const best = toBest(m.res);
                             const bestBS = toBestBS(m.res);
-                            const bt = backtest_Method(m.id, hist, pLen, btN);
-                            const btBS = backtest_Method_BS(m.id, hist, pLen, btN);
+                            const bt = backtest_Method(m.id, hist, pLen, btNLocal);
+                            const btBS = backtest_Method_BS(m.id, hist, pLen, btNLocal);
                             // nếu tỷ lệ <50% thì đảo ngược sẽ thắng nhiều hơn
                             const origAcc = btBS.acc;
                             const isInverted = origAcc < 50 && btBS.total >= 10; // chỉ đảo khi có đủ mẫu
@@ -3867,7 +3924,7 @@
                         const ensembleBS = {L:0,N:0};
                         for (const ev of evaluated) {
                             let w = 0.5 + (ev.effAcc/100)*5; // trọng số mạnh hơn theo effAcc
-                            if (ev.btBS.total > btN*0.8) w *= 1.15;
+                            if (ev.btBS.total > btNLocal*0.8) w *= 1.15;
                             // nếu đảo thì đã dùng bestBSEff
                             const useBS = ev.bestBSEff || ev.bestBS;
                             for (const [k,c] of Object.entries(useBS.freq)) {
@@ -3909,6 +3966,39 @@
                         const avgNewAll = evaluatedAll.filter(e=> e.group==='mới').reduce((s,e)=> s+e.effAcc,0)/ (evaluatedAll.filter(e=> e.group==='mới').length||1);
                         const winCount = evaluated.filter(e=> e.effAcc>=50).length;
                         const loseCount = evaluated.filter(e=> e.effAcc<50).length;
+                        const totalBS = (ensembleBS.L||0)+(ensembleBS.N||0);
+                        const pctL = totalBS? Math.round(ensembleBS.L/totalBS*100):0;
+                        const pctN = 100-pctL;
+                        const bsConf = ensembleBSBest && totalBS ? Math.round(ensembleBSBest.count/totalBS*100) : 0;
+                        const enough = hist.length >= (btNLocal + pLen + 10);
+                        return {btN: btNLocal, enough, evaluatedAll, evaluated, evaluatedRest, ensembleBS, ensembleBSBest, ensembleBSLabel, ensembleBSDigit, ensembleDigit, ensembleSorted, topMethodBS, avgTop, avgRest, avgOldAll, avgNewAll, winCount, loseCount, pctL, pctN, bsConf};
+                        }
+                        const r200 = rankAndEnsemble(200);
+                        const r500 = rankAndEnsemble(500);
+                        // bảng chi tiết / log dùng cửa sổ đang chọn (mặc định 500)
+                        const rMain = (btN===200) ? r200 : r500;
+                        const evaluatedAll = rMain.evaluatedAll;
+                        const evaluated = rMain.evaluated;
+                        const evaluatedRest = rMain.evaluatedRest;
+                        const ensembleBS = rMain.ensembleBS;
+                        const ensembleBSBest = rMain.ensembleBSBest;
+                        const ensembleBSLabel = rMain.ensembleBSLabel;
+                        const ensembleBSDigit = rMain.ensembleBSDigit;
+                        const ensembleDigit = rMain.ensembleDigit;
+                        const ensembleSorted = rMain.ensembleSorted;
+                        const topMethodBS = rMain.topMethodBS;
+                        const avgTop = rMain.avgTop;
+                        const avgRest = rMain.avgRest;
+                        const avgOldAll = rMain.avgOldAll;
+                        const avgNewAll = rMain.avgNewAll;
+                        const winCount = rMain.winCount;
+                        const loseCount = rMain.loseCount;
+                        try {
+                            window.lastPredictBS200 = r200.ensembleBSDigit;
+                            window.lastPredictBS500 = r500.ensembleBSDigit;
+                            window.lastPredictAgree = (r200.ensembleBSDigit===r500.ensembleBSDigit && r200.ensembleBSDigit!=='?');
+                        } catch(e){}
+                        try { fillDualPredictBoxes(r200, r500); } catch(e){ console.log('[DUAL]', e); }
                     
                     // === TÍNH STT TIẾP THEO ===
                         let lastCellForNext = null;
@@ -3949,19 +4039,10 @@
                             htmlOut += '📍 Ô cuối (100,10): <b style=\"color:#f9a825\">STT '+lastSttShortDisp+'</b> ' + (lastFullForNext ? '(ID '+lastFullForNext+')' : '') + '<br>';
                             htmlOut += '➡️ Ô DỰ ĐOÁN TIẾP THEO = STT <b style=\"color:#4ade80\">'+nextSttShort+'</b> (sau '+lastSttShortDisp+') ' + (nextFullId ? '<span style=\"color:#a78bfa\">ID '+nextFullId+'</span>' : '') + '</div>';
                     
-                            const bsConf = ensembleBSBest ? Math.round(ensembleBSBest.count/ (ensembleBS.L+ensembleBS.N) *100) : 0;
+                            const bsConf = rMain.bsConf;
                             const isLarge = ensembleBSDigit==='L';
-                            htmlOut += '<div style=\"margin-top:8px;padding:8px;background:'+(isLarge?'#1a3a1a':'#2a1a1a')+';border:2px solid '+(isLarge?'#4ade80':'#f87171')+';border-radius:8px;text-align:center\">';
-                            htmlOut += '<div style=\"font-size:11px;color:#94a3b8\">DỰ ĐOÁN Ô STT <b style=\"color:#4ade80;font-size:14px\">'+nextSttShort+'</b> SẼ RA (TOP 7 Ensemble)</div>';
-                            htmlOut += '<div style=\"font-size:32px;font-weight:bold;color:'+(isLarge?'#4ade80':'#fbbf24')+';margin:2px 0\">'+ensembleBSLabel+'</div>';
-                            htmlOut += '<div style=\"font-size:11px;color:#cfe8ff\">Ensemble TOP 7: <b>'+bsConf+'%</b> · TB TOP 7: <b style=\"color:#4ade80\">'+avgTop.toFixed(1)+'%</b> · TB còn lại: '+avgRest.toFixed(1)+'% · Top: '+topMethodBS.name+' '+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?' 🔄':'') + '</div>';
-                            htmlOut += '<div style=\"margin-top:4px;display:flex;gap:6px;justify-content:center;flex-wrap:wrap\">';
-                            const totalBS = ensembleBS.L+ensembleBS.N;
-                            const pctL = totalBS? Math.round(ensembleBS.L/totalBS*100):0;
-                            const pctN = 100-pctL;
-                            htmlOut += '<span style=\"background:'+(isLarge?'#4ade80':'#334155')+';color:'+(isLarge?'#000':'#94a3b8')+';padding:3px 8px;border-radius:12px;font-weight:bold\">LỚN ≥5: '+pctL+'%</span>';
-                            htmlOut += '<span style=\"background:'+(!isLarge?'#fbbf24':'#334155')+';color:'+(!isLarge?'#000':'#94a3b8')+';padding:3px 8px;border-radius:12px;font-weight:bold\">NHỎ <5: '+pctN+'%</span>';
-                            htmlOut += '</div></div>';
+                            const agreeLN = (r200.ensembleBSDigit===r500.ensembleBSDigit && r200.ensembleBSDigit!=='?');
+                            htmlOut += '<div style=\"margin-top:6px;font-size:11px;color:#94a3b8;text-align:center\">Chi tiết bảng TOP 7 bên dưới theo BT <b style=\"color:#60a5fa\">'+btN+'</b> kỳ'+(agreeLN?' · <span style=\"color:#4ade80\">200 & 500 cùng '+ensembleBSLabel+'</span>':' · <span style=\"color:#fbbf24\">200='+r200.ensembleBSLabel+' / 500='+r500.ensembleBSLabel+'</span>')+'</div>';
                     
                             // bảng TOP 7
                             htmlOut += '<div style=\"margin-top:8px;border:1px solid #4ade80;border-radius:6px;overflow:hidden\">';
@@ -3983,7 +4064,7 @@
                             htmlOut += '</div>';
                     
                             // bảng các phương pháp còn lại: ẨN hẳn theo yêu cầu
-                    
+
                             htmlOut += '<div style=\"margin-top:6px;padding:6px;background:#0f172a;border:1px solid #4c1d95;border-radius:6px;font-size:10px;color:#c4b5fd;line-height:1.4\">';
                             htmlOut += '🤖 <b>Auto chọn TOP 7:</b> Hệ thống backtest '+btN+' kỳ gần nhất cho '+evaluatedAll.length+' phương pháp, sắp xếp theo tỷ lệ trúng L/N, chỉ giữ 7 phương pháp cao nhất để ensemble. TB TOP 7 <b style=\"color:#4ade80\">'+avgTop.toFixed(1)+'%</b> vs TB loại <b>'+avgRest.toFixed(1)+'%</b> → cải thiện <b style=\"color:#f9a825\">+'+(avgTop-avgRest).toFixed(1)+'%</b>.';
                             htmlOut += '</div>';
@@ -4025,15 +4106,17 @@
                             bestBox.innerHTML = bHtml;
                             try {
                                 const mt = document.getElementById('mainTitle');
-                                if (mt) mt.textContent = '🏆 TOP7 STT '+nextSttShort+' (sau '+lastSttShortDisp+') → '+ensembleBSLabel+' · TB '+avgTop.toFixed(1)+'% · '+topMethodBS.name+' '+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?'🔄':'') + ' · '+winCount+'/7 thắng';
+                                if (mt) mt.textContent = 'STT '+nextSttShort+' · 200: '+(r200.ensembleBSLabel||'?')+' · 500: '+(r500.ensembleBSLabel||'?')+(window.lastPredictAgree?' · ✅ KHỚP':' · ⚠️ lệch');
                                 const ph = document.getElementById('predictHeaderTitle');
-                                if (ph) ph.textContent = '🏆 TOP7 STT '+nextSttShort+' → '+ensembleBSLabel+' · TB '+avgTop.toFixed(1)+'% · '+winCount+'/7 thắng';
+                                if (ph) ph.textContent = 'STT '+nextSttShort+' · 200 '+(r200.ensembleBSLabel||'?')+' / 500 '+(r500.ensembleBSLabel||'?');
                             } catch(e){}
                         }
                     
                         try {
                             window.lastPredictBS = ensembleBSDigit;
                             window.lastPredictLabel = ensembleBSLabel;
+                            window.lastPredictBS200 = r200.ensembleBSDigit;
+                            window.lastPredictBS500 = r500.ensembleBSDigit;
                             window.lastPredictAt = Date.now();
                             localStorage.setItem('vn168_lastPredictBS', ensembleBSDigit);
                             localStorage.setItem('vn168_lastPredictAt', String(Date.now()));
@@ -4074,7 +4157,7 @@
                                 pctL: pctL_forLog,
                                 pctN: pctN_forLog,
                                 pattern: pattern.join(''),
-                                topMethod: topMethodBS ? topMethodBS.name+' ('+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?'🔄':'') + ')' : ''
+                                topMethod: '200:'+(r200.ensembleBSLabel||'?')+' 500:'+(r500.ensembleBSLabel||'?')+' | '+(topMethodBS ? topMethodBS.name+' ('+topMethodBS.effAcc.toFixed(1)+'%' + (topMethodBS.isInverted?'🔄':'') + ')' : '')
                             });
                         } catch(e){ console.log('[PRED-LOG] lỗi', e); }
                     
@@ -5478,9 +5561,6 @@
                             autoStartBulkLoad('mở app');
                         });
                 </script>
-                <script>
-                    (function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3c8eea8b86284d2',t:'MTc4OTY1NjcyMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();
-                </script>
-    </body>
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3c903b3cd7de2f1',t:'MTc4OTY1NzU4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 
 </html>
