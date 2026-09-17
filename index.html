@@ -101,7 +101,7 @@
                 cursor: pointer;
             }
             .date-cell:hover { border-color: var(--accent); }
-            /* khoá tay -> tô vàng như ô trùng khớp trong bảng */
+            /* khoá tay -> tô xanh như ô trùng khớp trong bảng */
             .date-cell.locked { background-color: #f9a825 !important; border-color: #ffd54f !important; }
             .date-cell.locked .val-input { color: #1a1a1a; }
             .date-cell.locked .stt-label { color: #3e2723; }
@@ -181,14 +181,14 @@
             }
             .reference .val-input { color: var(--text) !important; }
             .reference .stt-label { color: #ffeb3b !important; }
-            /* Ô trúng dự đoán L/N: vàng đậm nổi bật nhất */
+            /* Ô trúng dự đoán L/N: xanh da trời — chỉ STT có trong lịch sử dự đoán và TRÚNG */
             .predict-hit {
-                background-color: #f9a825 !important;
-                border: 2px solid #ffd54f !important;
-                box-shadow: 0 0 10px #ffd54f !important;
+                background-color: #29b6f6 !important;
+                border: 2px solid #81d4fa !important;
+                box-shadow: 0 0 10px #4fc3f7 !important;
             }
-            .predict-hit .val-input { color: #1a1a1a !important; font-weight: bold; }
-            .predict-hit .stt-label { color: #3e2723 !important; }
+            .predict-hit .val-input { color: #0d47a1 !important; font-weight: bold; }
+            .predict-hit .stt-label { color: #01579b !important; }
             
             /* Viền xanh 4 ô ngay sau đoạn trùng khớp (ghép 1-1 với 4 ô dự đoán) */
             .after { border-color: var(--accent) !important; }
@@ -493,7 +493,7 @@
 
                 <!-- BẢNG 10 HÀNG CUỐI - ĐƯA LÊN TRÊN CÙNG NHƯ BAN ĐẦU -->
                 <div id="gridContainer" class="grid-table" style="max-height:360px"></div>
-                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px">Bảng hiện 10 hàng cuối (100 ô). Cuộn lên để xem thêm lịch sử 5000 hàng.<br><b style="color:#f9a825">Ô vàng đậm có glow = trúng dự đoán LỚN/NHỎ — lưu cả Firebase + local, mở lại vẫn vàng</b> <span id="hitCount" style="color:#f9a825"></span><br><button class="btn-mini" onclick="if(confirm('Xoá hết ô vàng trúng dự đoán đã lưu (cả Firebase)?')){localStorage.removeItem('vn168_predictHits_v1');predictHits=[];predictHitsSet=new Set();renderAll();document.getElementById('hitCount').textContent='';try{if(fbDB) fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({predictHits:[],lastPredictHitsAt:Date.now()},{merge:true});}catch(e){}}" style="font-size:9px;padding:2px 6px;margin-top:3px">🧹 Xoá vàng trúng (local+Firebase)</button></div>
+                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px">Bảng hiện 10 hàng cuối (100 ô). Cuộn lên để xem thêm lịch sử 5000 hàng.<br><b style="color:#29b6f6">Ô xanh da trời = STT trong lịch sử dự đoán đã TRÚNG</b> <span id="hitCount" style="color:#29b6f6"></span></div>
 
                 <!-- DỰ ĐOÁN LỚN/NHỎ -->
                 <div id="predictPanel" class="cell-history-panel" style="background:#141e33;border-color:#4da3ff;width:380px;max-width:95%">
@@ -521,7 +521,7 @@
                             </select>
                         </label>
                     </div>
-                    <div id="predictBestBox" style="margin-top:6px;padding:6px;background:#0f172a;border:1px solid #334155;border-radius:6px;display:none"></div>
+                    <div id="predictBestBox" style="display:none"></div>
                 </div>
 
                 <!-- 📜 LỊCH SỬ Ô DỰ ĐOÁN - KIỂM TRA ĐÚNG/SAI -->
@@ -534,7 +534,7 @@
                     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
                         <button class="btn-mini" onclick="renderPredictLog()" style="background:#4c1d95;border-color:#a78bfa">🔄 Làm mới</button>
                         <button class="btn-mini" onclick="tryResolveAllPendingPredictLogs();renderPredictLog()">🔍 Quét lại KQ từ kho</button>
-                        <button class="btn-mini" onclick="if(confirm('Xoá hết lịch sử dự đoán? (không xoá ô vàng)')){predictLog=[];savePredictLog();renderPredictLog();}" style="background:#7f1d1d;border-color:#f87171">🧹 Xoá lịch sử</button>
+                        <button class="btn-mini" onclick="if(confirm('Xoá hết lịch sử dự đoán? (không xoá ô xanh)')){predictLog=[];savePredictLog();renderPredictLog();}" style="background:#7f1d1d;border-color:#f87171">🧹 Xoá lịch sử</button>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:10px">
                         <label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="predictHistoryOnlyMiss" onchange="renderPredictLog()"> Chỉ hiện trượt ❌</label>
@@ -767,24 +767,28 @@
                             try { renderAll(); } catch(e){}
                         }
                     }
+                    let predictHitSttSet = new Set();
+                    let predictHitFullSet = new Set();
+                    function rebuildPredictHitIndex() {
+                        predictHitSttSet = new Set();
+                        predictHitFullSet = new Set();
+                        try {
+                            for (const e of predictLog) {
+                                if (e.hit !== true) continue;
+                                if (e.forSTT) predictHitSttSet.add(String(e.forSTT).padStart(3,'0').slice(-3));
+                                if (e.actualSTT) predictHitSttSet.add(String(e.actualSTT).padStart(3,'0').slice(-3));
+                                if (e.forFullId) predictHitFullSet.add(String(e.forFullId).trim());
+                                if (e.actualFullId) predictHitFullSet.add(String(e.actualFullId).trim());
+                            }
+                        } catch(e){}
+                    }
                     function isPredictHitCell(cell) {
                         if (!cell) return false;
+                        // Chỉ tô xanh da trời khi STT/ID nằm trong lịch sử dự đoán VÀ đã TRÚNG
                         const full = cell.sttFull ? String(cell.sttFull).trim() : '';
-                        const short = cell.stt ? String(cell.stt).trim() : '';
-                        const digit = cell.value ? String(cell.value).trim() : '';
-                        if (full && predictHitsSet.has(full)) return true;
-                        // nếu ô có full nhưng hit cũ chỉ lưu SHORT (thiếu ID) → vẫn coi là trúng nếu short+digit khớp
-                        if (short && digit) {
-                            const shortPrefix = 'SHORT:'+short+'|'+digit+'|';
-                            for (const k of predictHitsSet) if (k.startsWith(shortPrefix)) return true;
-                            // cũng check trong mảng predictHits trực tiếp (phòng khi Set chưa có SHORT)
-                            for (const e of predictHits) if (!e.f && e.s===short && e.d===digit) return true;
-                        }
-                        // fallback cho ô cũ không có full: so khớp short+digit
-                        if (!full && short) {
-                            const keyPrefix = 'SHORT:'+short+'|'+digit+'|';
-                            for (const k of predictHitsSet) if (k.startsWith(keyPrefix)) return true;
-                        }
+                        const short = cell.stt ? String(cell.stt).padStart(3,'0').slice(-3) : '';
+                        if (full && predictHitFullSet.has(full)) return true;
+                        if (short && predictHitSttSet.has(short)) return true;
                         return false;
                     }
                     function findFullIdForHit(short, digit) {
@@ -1056,6 +1060,12 @@
                             savePredictLog();
                             try { renderPredictLog(); } catch(e){}
                             try { updateHitCountDisplay(); } catch(e){}
+                            try { if (typeof cells!=='undefined' && cells.length) { for (let i=0;i<TOTAL;i++) {
+                                const box = cells[i].valEl && cells[i].valEl.parentElement;
+                                if (!box) continue;
+                                if (cells[i].value && isPredictHitCell(cells[i])) box.classList.add('predict-hit');
+                                else box.classList.remove('predict-hit');
+                            } } } catch(e){}
                         }
                         return changed;
                     }
@@ -1098,10 +1108,12 @@
                         if (changed>0) {
                             savePredictLog();
                             renderPredictLog();
+                            try { renderAll(); } catch(e){}
                         }
                         return changed;
                     }
                     function renderPredictLog() {
+                        try { rebuildPredictHitIndex(); } catch(e){}
                         const listEl = document.getElementById('predictHistoryList');
                         const statsEl = document.getElementById('predictHistoryStats');
                         const countEl = document.getElementById('predictHistoryCount');
@@ -1171,6 +1183,7 @@
                     
                     // nạp ngay khi định nghĩa để renderCell dùng được
                     try { loadPredictHits(); } catch(e){}
+                    try { rebuildPredictHitIndex(); } catch(e){}
                     
                     const CFG = {
                         arOrigin: "https://373vn.com",
@@ -1235,7 +1248,7 @@
                         cells.unshift.apply(cells, newCells);   // hàng mới ở đầu mảng (trên bảng) — ô đã có số vẫn ở cuối
                         boardRows = targetRows;
                         TOTAL = boardRows * COLS;
-                        // ĐÃ BỎ ô xanh cuối bảng - không tô gì cả, chỉ tô vàng khi trúng
+                        // ĐÃ BỎ ô xanh cuối bảng - không tô gì cả, chỉ tô xanh khi trúng
                         for (let i = 0; i < TOTAL; i++) {
                             const box = cells[i].valEl.parentElement;
                             if (box) box.classList.remove('reference');
@@ -1258,19 +1271,19 @@
                             const full = cells[i].sttFull || '';
                             const ymd = full ? issueYmd(full) : '';
                             let tip = full ? ('ID ' + full + (ymd ? ' · ngày ' + ymdPretty(ymd) + ' · STT ' + String(full).slice(-3) + ' · số ' + cells[i].value : '')) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value + ' · (thiếu ID đầy đủ → có thể trùng ngày)');
-                            let isPersistent = false;
-                            try { isPersistent = isPredictHitCell(cells[i]); } catch(e){ isPersistent=false; }
-                            // nếu là ô cuối cùng (100,10): kiểm tra trúng dự đoán L/N mới nhất
+                            // nếu là ô cuối cùng (100,10): đối chiếu với lịch sử dự đoán rồi mới tô
                             if (i === TOTAL-1) {
                                 try {
-                                    let pred = window.lastPredictBS || localStorage.getItem('vn168_lastPredictBS') || null;
-                                    let actual = /^[0-9]$/.test(cells[i].value) ? digitToBS(cells[i].value) : null;
-                                    if (pred && actual && pred===actual) {
-                                        addPredictHitFromCell(cells[i], pred);
-                                        try { resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value); } catch(e){}
-                                        isPersistent = true;
-                                        tip += ' · ✅ TRÚNG DỰ ĐOÁN '+bsLabel(pred)+' · đã lưu vàng vĩnh viễn';
-                                    }
+                                    resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value);
+                                } catch(e){}
+                            }
+                            let isPersistent = false;
+                            try { isPersistent = isPredictHitCell(cells[i]); } catch(e){ isPersistent=false; }
+                            if (isPersistent) {
+                                try {
+                                    const pred = window.lastPredictBS || '';
+                                    tip += ' · ✅ TRÚNG DỰ ĐOÁN'+(pred?(' '+bsLabel(pred)):'')+' · STT khớp lịch sử';
+                                    addPredictHitFromCell(cells[i], pred);
                                 } catch(e){}
                             }
                             box.title = tip + (isPersistent ? ' · ⭐ ĐÃ TỪNG TRÚNG DỰ ĐOÁN' : '');
@@ -1289,23 +1302,25 @@
                     function updateHitCountDisplay() {
                         const hc = document.getElementById('hitCount');
                         if (!hc) return;
+                        try { rebuildPredictHitIndex(); } catch(e){}
                         let visible = 0;
                         for (let i=0;i<TOTAL;i++) if (cells[i].value && isPredictHitCell(cells[i])) visible++;
-                        if (!predictHits.length) { hc.textContent=''; return; }
+                        const logHits = predictLog.filter(e=>e.hit===true).length;
+                        if (!logHits && !visible) { hc.textContent=''; return; }
                         const missing = predictHits.filter(e=>!e.f || String(e.f).trim()==='').length;
-                        hc.innerHTML = '('+visible+' vàng trên bảng / '+predictHits.length+' tổng lưu'+(missing?' · '+missing+' thiếu ID':'')+') '
-                            + '<button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô vàng</button> '
+                        hc.innerHTML = '('+visible+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(missing?' · '+missing+' thiếu ID':'')+') '
+                            + '<button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> '
                             + '<button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '
                             + (missing ? '<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay();alert(\'Đã vá ID, còn thiếu \'+predictHits.filter(e=>!e.f).length)" style="font-size:9px;padding:1px 4px;background:#7f1d1d">🔧 Vá ID</button> ' : '')
-                            + '<span style="font-size:9px;color:#888">Cuộn bảng lên để thấy hết '+visible+' ô vàng</span>';
+                            + '<span style="font-size:9px;color:#888">Cuộn bảng lên để thấy hết '+visible+' ô xanh</span>';
                     }
                     let lastHitScrollIdx = -1;
                     function scrollToNextHit() {
-                        if (!predictHits.length) { alert('Chưa có ô vàng nào'); return; }
+                        if (!predictHits.length) { alert('Chưa có ô xanh nào'); return; }
                         // tìm tất cả index vàng trên bảng
                         const hitIdxs = [];
                         for (let i=0;i<TOTAL;i++) if (cells[i].value && isPredictHitCell(cells[i])) hitIdxs.push(i);
-                        if (!hitIdxs.length) { alert('Không có ô vàng nào trên bảng hiện tại (có '+predictHits.length+' tổng lưu nhưng đã bị lọc hoặc nằm ngoài 51k ô gần nhất). Bấm 📋 Danh sách để xem.'); return; }
+                        if (!hitIdxs.length) { alert('Không có ô xanh nào trên bảng hiện tại (có '+predictHits.length+' tổng lưu nhưng đã bị lọc hoặc nằm ngoài 51k ô gần nhất). Bấm 📋 Danh sách để xem.'); return; }
                         // tìm hit tiếp theo sau lastHitScrollIdx
                         let nextIdx = hitIdxs.find(idx=> idx > lastHitScrollIdx);
                         if (nextIdx===undefined) nextIdx = hitIdxs[0]; // quay vòng
@@ -1318,19 +1333,19 @@
                         // nháy vàng
                         try {
                             const box = cells[nextIdx].valEl.parentElement;
-                            if (box) { box.style.transition='all 0.3s'; const oldShadow=box.style.boxShadow; box.style.boxShadow='0 0 20px #ffd54f, 0 0 30px #ffd54f'; setTimeout(()=>{ box.style.boxShadow=oldShadow; }, 1200); }
+                            if (box) { box.style.transition='all 0.3s'; const oldShadow=box.style.boxShadow; box.style.boxShadow='0 0 20px #4fc3f7, 0 0 30px #29b6f6'; setTimeout(()=>{ box.style.boxShadow=oldShadow; }, 1200); }
                         } catch(e){}
                     }
                     function showHitsList() {
-                        if (!predictHits.length) { alert('Chưa có ô vàng nào'); return; }
+                        if (!predictHits.length) { alert('Chưa có ô xanh nào'); return; }
                         const missing = predictHits.filter(e=>!e.f || String(e.f).trim()==='').length;
                         const recent = predictHits.slice(0,80);
                         let txt = 'Tổng '+predictHits.length+' ô trúng đã lưu (mới nhất 80):\n';
                         txt += 'Trong đó '+missing+' cái thiếu ID đầy đủ (chỉ có STT 3 số) do nhập tay hoặc lưu từ bản cũ.\n';
                         if (missing>0) txt += '→ Bấm OK rồi chạy fixPredictHitsMissingIds() trong console hoặc bấm nút 🔧 Vá ID bên dưới để tự tìm lại ID từ kho.\n\n';
                         txt += recent.map((e,i)=> (i+1)+'. ID '+(e.f||'(thiếu ID)')+' | STT '+(e.s||'?')+' | số '+e.d+' | dự đoán '+ (e.pred?bsLabel(e.pred):'?')+' | '+new Date(e.at||0).toLocaleString('vi-VN')).join('\n');
-                        txt += '\n\nTrên bảng hiện tại có '+ (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })() +' ô vàng.';
-                        txt += '\n\nNếu tổng 89 mà trên bảng chỉ 2-3 vàng: do bảng chỉ giữ 51k ô gần nhất và có thể đang lọc ngày. Các ô trúng cũ đã bị cuộn ra ngoài.';
+                        txt += '\n\nTrên bảng hiện tại có '+ (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })() +' ô xanh.';
+                        txt += '\n\nNếu tổng 89 mà trên bảng chỉ 2-3 xanh: do bảng chỉ giữ 51k ô gần nhất và có thể đang lọc ngày. Các ô trúng cũ đã bị cuộn ra ngoài.';
                         txt += '\n\nThiếu ID là do ô đó được thêm bằng tay (không có ID đầy đủ dạng 20260913...) hoặc từ bản lưu cũ. Đã fix để tự tìm lại ID từ kho gameArchive.';
                         alert(txt);
                         if (missing>0 && confirm('Có '+missing+' ô thiếu ID. Thử tự vá lại ID từ kho ngay bây giờ?')) {
@@ -3299,8 +3314,8 @@
                     }
                     
                     // ===== ĐÃ XOÁ LOGIC TÌM TRÙNG 4 Ô CUỐI theo yêu cầu user =====
-                    // Giờ chỉ giữ: bảng + dự đoán L/N + ô vàng trúng giữ vĩnh viễn
-                    // Không còn tô vàng trùng đoạn, không còn cuộn tới đoạn trùng, không còn 4 ô dự đoán sau trùng
+                    // Giờ chỉ giữ: bảng + dự đoán L/N + ô xanh trúng giữ vĩnh viễn
+                    // Không còn tô xanh trùng đoạn, không còn cuộn tới đoạn trùng, không còn 4 ô dự đoán sau trùng
                     function searchPattern() {
                         // chỉ cập nhật dự đoán L/N và luôn cuộn xuống cuối để xem 10 hàng mới nhất
                         try { if (document.getElementById('predictNextPanel')) predictNext(); } catch(e){}
@@ -3966,24 +3981,8 @@
                             }
                             htmlOut += '</div>';
                     
-                            // bảng còn lại
-                            htmlOut += '<div style=\"margin-top:8px;border:1px solid #334155;border-radius:4px;overflow:hidden\">';
-                            htmlOut += '<div style=\"background:#1e293b;padding:3px 6px;font-size:10px;color:#64748b\">📉 Các phương pháp còn lại (không được chọn) - TB '+avgRest.toFixed(1)+'% · Cũ TB '+avgOldAll.toFixed(1)+'% vs Mới TB '+avgNewAll.toFixed(1)+'%</div>';
-                            htmlOut += '<div style=\"display:grid;grid-template-columns:0.3fr 1fr 0.6fr 0.5fr 0.7fr;gap:2px;background:#0f172a;padding:3px 4px;font-size:10px;color:#475569;font-weight:bold\"><span>#</span><span>Phương pháp</span><span>L/N</span><span>Conf</span><span>Backtest</span></div>';
-                            for (let idx=0; idx<evaluatedRest.length; idx++) {
-                                const ev = evaluatedRest[idx];
-                                const col = ev.bestBS.digit==='L' ? '#4ade80' : '#fbbf24';
-                                htmlOut += '<div style=\"display:grid;grid-template-columns:0.3fr 1fr 0.6fr 0.5fr 0.7fr;gap:2px;padding:3px 4px;border-top:1px solid #1e293b;background:#0f172a;align-items:center;opacity:0.7\">';
-                                htmlOut += '<span style=\"color:#475569\">'+(idx+TOP_K+1)+'</span>';
-                                htmlOut += '<span style=\"color:#94a3b8;font-size:10px\">'+ev.name+'</span>';
-                                htmlOut += '<span style=\"color:'+col+';font-size:10px\">'+ev.bestBS.label+'</span>';
-                                htmlOut += '<span style=\"font-size:10px;color:#666\">'+ev.bestBS.conf+'%</span>';
-                                const accColor = ev.btBS.acc>=55 ? '#4ade80' : ev.btBS.acc>=50 ? '#fbbf24' : '#f87171';
-                                htmlOut += '<span style=\"font-size:10px;color:'+accColor+'\">'+ev.btBS.acc.toFixed(1)+'%</span>';
-                                htmlOut += '</div>';
-                            }
-                            htmlOut += '</div>';
-                    
+                            // bảng các phương pháp còn lại: ẨN hẳn theo yêu cầu
+
                             htmlOut += '<div style=\"margin-top:6px;padding:6px;background:#0f172a;border:1px solid #4c1d95;border-radius:6px;font-size:10px;color:#c4b5fd;line-height:1.4\">';
                             htmlOut += '🤖 <b>Auto chọn TOP 7:</b> Hệ thống backtest '+btN+' kỳ gần nhất cho '+evaluatedAll.length+' phương pháp, sắp xếp theo tỷ lệ trúng L/N, chỉ giữ 7 phương pháp cao nhất để ensemble. TB TOP 7 <b style=\"color:#4ade80\">'+avgTop.toFixed(1)+'%</b> vs TB loại <b>'+avgRest.toFixed(1)+'%</b> → cải thiện <b style=\"color:#f9a825\">+'+(avgTop-avgRest).toFixed(1)+'%</b>.';
                             htmlOut += '</div>';
@@ -3993,7 +3992,8 @@
                     
                         const bestBox = document.getElementById('predictBestBox');
                         if (bestBox) {
-                            bestBox.style.display = 'block';
+                            bestBox.style.display = 'none';
+                            bestBox.innerHTML = '';
                             const totalBS = ensembleBS.L+ensembleBS.N;
                             const pctL = totalBS? Math.round(ensembleBS.L/totalBS*100):0;
                             const pctN = 100-pctL;
@@ -5207,7 +5207,7 @@
                                 : ' · bấm 1 ô để lấy STT ô đó làm tâm.');
                         }
                     
-                        // cuộn khung để HÀNG GIỮA (ô vàng có STT) nằm đúng GIỮA khung kết quả
+                        // cuộn khung để HÀNG GIỮA (ô xanh có STT) nằm đúng GIỮA khung kết quả
                         try {
                             const hitEl = (typeof box.querySelector === 'function') ? box.querySelector('.hist-cell.hit, .hist-cell.near') : null;
                             if (hitEl) {
@@ -5437,7 +5437,7 @@
                     startRealtimeSync();
                     // tự vá ID thiếu cho 89 cái trúng
                     setTimeout(()=>{ try { const fixed=fixPredictHitsMissingIds(); if(fixed>0) console.log('[FIX] Đã vá '+fixed+' ID thiếu'); updateHitCountDisplay(); } catch(e){} }, 1500);
-                    try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' vàng trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô vàng</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
+                    try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
                     // refresh lịch sử dự đoán + ô cuối mỗi 3s
                     setInterval(()=>{ try { renderPredictLog(); } catch(e){} }, 5000);
                     // refresh ô cuối và đếm vàng mỗi 3s
@@ -5448,7 +5448,7 @@
                             updateHitCountDisplay();
                         } catch(e){}
                     }, 3000);
-                    // tự load lại trang mỗi 20s (tăng từ 10s để dễ xem vàng hơn, vẫn giữ vàng do lưu Firebase+local)
+                    // tự load lại trang mỗi 20s (tăng từ 10s để dễ xem ô xanh hơn, vẫn giữ màu do lưu Firebase+local)
                     setInterval(()=>{ 
                         try { saveBoardLocal(); savePredictHits(); } catch(e){}
                         location.reload(); 
