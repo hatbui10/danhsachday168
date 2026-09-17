@@ -780,7 +780,8 @@
                         predictHitFullSet = new Set();
                         try {
                             for (const e of predictLog) {
-                                if (e.hit !== true) continue;
+                                const ok = (e.hit===true) || (e.hit200===true) || (e.hit500===true);
+                                if (!ok) continue;
                                 if (e.forSTT) predictHitSttSet.add(String(e.forSTT).padStart(3,'0').slice(-3));
                                 if (e.actualSTT) predictHitSttSet.add(String(e.actualSTT).padStart(3,'0').slice(-3));
                                 if (e.forFullId) predictHitFullSet.add(String(e.forFullId).trim());
@@ -990,8 +991,10 @@
                             // nếu đang chờ KQ thì cho phép cập nhật dự đoán mới nhất (tránh spam nhưng vẫn cập nhật nếu đổi L/N)
                             if (existing.actualDigit==null) {
                                 // chỉ cập nhật nếu pred khác, để tránh ghi đè liên tục làm mới at
-                                if (existing.pred !== info.pred) {
+                                if (existing.pred !== info.pred || existing.pred200 !== info.pred200 || existing.pred500 !== info.pred500) {
                                     existing.pred = info.pred;
+                                    existing.pred200 = info.pred200 || existing.pred200;
+                                    existing.pred500 = info.pred500 || existing.pred500;
                                     existing.predLabel = info.predLabel;
                                     existing.conf = info.conf;
                                     existing.pctL = info.pctL;
@@ -1016,7 +1019,9 @@
                             lastSTT: info.lastSTT||'',
                             lastFullId: info.lastFullId||'',
                             pred: info.pred,
-                            predLabel: info.predLabel|| (info.pred==='L'?'LỚN':'NHỎ'),
+                            pred200: info.pred200||'',
+                            pred500: info.pred500||'',
+                            predLabel: info.predLabel|| predText(info.pred),
                             conf: info.conf||0,
                             pctL: info.pctL||0,
                             pctN: info.pctN||0,
@@ -1035,31 +1040,73 @@
                         try { renderPredictLog(); } catch(e){}
                         return entry;
                     }
+                    function normLN(p) {
+                        if (p==='L' || p==='N') return p;
+                        const s = String(p||'').trim().toUpperCase();
+                        if (s==='L' || s.indexOf('LỚN')>=0 || s.indexOf('LON')>=0 || s==='BIG') return 'L';
+                        if (s==='N' || s.indexOf('NHỎ')>=0 || s.indexOf('NHO')>=0 || s==='SMALL') return 'N';
+                        return '';
+                    }
+                    function predText(p) {
+                        const n = normLN(p);
+                        return n==='L' ? 'LỚN' : n==='N' ? 'NHỎ' : '?';
+                    }
+                    function applyActualToPredictEntry(e, dig, fId, sShort) {
+                        const actualBS = digitToBS(dig);
+                        e.actualDigit = String(dig);
+                        e.actualBS = actualBS;
+                        e.resolvedAt = Date.now();
+                        if (fId) e.actualFullId = String(fId);
+                        if (sShort) e.actualSTT = String(sShort).padStart(3,'0').slice(-3);
+                        const p200 = normLN(e.pred200);
+                        const p500 = normLN(e.pred500);
+                        const p = normLN(e.pred);
+                        e.hit200 = p200 ? (p200===actualBS) : null;
+                        e.hit500 = p500 ? (p500===actualBS) : null;
+                        // Nếu 200 & 500 cùng phía → lấy đó. Nếu lệch: KHÔNG gắn TRƯỢT cả dòng khi một bên đúng.
+                        if (p200 && p500) {
+                            if (p200===p500) e.hit = (p200===actualBS);
+                            else e.hit = (p200===actualBS || p500===actualBS); // lệch nhưng có bên đúng → không tính trượt oan
+                        } else if (p) e.hit = (p===actualBS);
+                        else e.hit = false;
+                        return e.hit;
+                    }
+                    function predictLogMatchesIssue(e, sttShort, fullId) {
+                        const sShort = sttShort ? String(sttShort).padStart(3,'0').slice(-3) : '';
+                        const fId = fullId ? String(fullId).trim() : '';
+                        if (!e) return false;
+                        if (fId && e.forFullId && String(e.forFullId).trim()===fId) return true;
+                        if (fId && e.forFullId && e.forFullId.length>=8 && fId.length>=8) {
+                            // cùng ngày + cùng STT 3 số
+                            if (String(e.forFullId).slice(0,8)===fId.slice(0,8) && String(e.forSTT).padStart(3,'0').slice(-3)===fId.slice(-3)) return true;
+                            // khác ngày dù cùng 3 số STT → KHÔNG khớp (tránh lấy kỳ 815 hôm trước)
+                            if (String(e.forSTT).padStart(3,'0').slice(-3)===fId.slice(-3) && String(e.forFullId).slice(0,8)!==fId.slice(0,8)) return false;
+                        }
+                        if (sShort && String(e.forSTT).padStart(3,'0').slice(-3)===sShort) {
+                            if (!e.forFullId || !fId) return true;
+                            return String(e.forFullId).slice(-3)===sShort;
+                        }
+                        return false;
+                    }
                     function resolvePredictLogForCell(sttShort, fullId, digit) {
                         if (!sttShort && !fullId) return false;
                         const sShort = sttShort ? String(sttShort).padStart(3,'0').slice(-3) : '';
                         const fId = fullId ? String(fullId).trim() : '';
                         const dig = digit ? String(digit).trim() : '';
                         if (!dig || !/^[0-9]$/.test(dig)) return false;
-                        const actualBS = digitToBS(dig);
                         let changed = false;
                         for (const e of predictLog) {
-                            if (e.actualDigit!=null) continue; // đã resolve
-                            let match = false;
-                            if (fId && e.forFullId && e.forFullId===fId) match = true;
-                            else if (sShort && e.forSTT===sShort) match = true;
-                            // cũng match nếu forFullId dự kiến trùng prefix + forSTT (trường hợp ID dự kiến)
-                            if (!match && fId && e.forSTT===sShort) {
-                                // nếu cùng STT thì coi là match (dù ID dự kiến có thể sai ngày nếu qua ngày mới, nhưng vẫn log)
-                                match = true;
+                            if (!predictLogMatchesIssue(e, sShort, fId)) continue;
+                            // Nếu đã resolve rồi: chỉ GHI ĐÈ khi ID mới hơn hoặc số khác với kỳ mới hơn/không có ID cũ
+                            if (e.actualDigit!=null) {
+                                const oldId = e.actualFullId ? String(e.actualFullId).trim() : '';
+                                if (oldId && fId) {
+                                    try { if (compareIssue(fId, oldId) < 0) continue; } catch(ex){}
+                                    if (oldId===fId && String(e.actualDigit)===dig) continue;
+                                } else if (!fId && String(e.actualDigit)===dig) continue;
+                                // số khác + ID mới hơn (hoặc kỳ trên bảng) → sửa oan (815 cũ ra 8, 815 mới ra 1)
                             }
-                            if (!match) continue;
-                            e.actualDigit = dig;
-                            e.actualBS = actualBS;
-                            e.hit = (e.pred===actualBS);
-                            e.resolvedAt = Date.now();
-                            e.actualFullId = fId;
-                            e.actualSTT = sShort;
+                            applyActualToPredictEntry(e, dig, fId, sShort);
                             changed = true;
                         }
                         if (changed) {
@@ -1075,50 +1122,65 @@
                         }
                         return changed;
                     }
-                    function tryResolveAllPendingPredictLogs() {
-                        let changed = 0;
-                        // quét từ kho gameArchive và bảng cells để tìm KQ cho các pending
-                        for (const e of predictLog) {
-                            if (e.actualDigit!=null) continue;
-                            // tìm trong gameArchive
-                            let found = null;
-                            if (e.forFullId) {
-                                found = gameArchive.find(x=> String(x.i)===String(e.forFullId));
-                            }
-                            if (!found && e.forSTT) {
-                                // tìm kỳ có đuôi STT trùng, ưu tiên mới nhất
-                                // nếu có forFullId thì phải cùng ngày? tạm lấy bất kỳ
-                                for (const x of gameArchive) {
-                                    if (String(x.i).slice(-3)===String(e.forSTT).padStart(3,'0').slice(-3)) { found = x; break; }
+                    function findNewestResultForSTT(stt, preferFullId) {
+                        const want = String(stt||'').padStart(3,'0').slice(-3);
+                        if (want==='000' && !stt) return null;
+                        const prefer = preferFullId ? String(preferFullId).trim() : '';
+                        // 1) Ưu tiên Ô TRÊN BẢNG — mới nhất (cuối bảng). Đây là sự thật user đang thấy.
+                        try {
+                            if (typeof cells!=='undefined' && cells.length) {
+                                if (prefer) {
+                                    for (let i=cells.length-1;i>=0;i--) {
+                                        const c = cells[i];
+                                        if (!c || !c.value || !/^[0-9]$/.test(c.value)) continue;
+                                        if (c.sttFull && String(c.sttFull).trim()===prefer) return {i:String(c.sttFull), d:String(c.value)};
+                                    }
                                 }
-                            }
-                            if (!found && e.forSTT) {
-                                // tìm trên bảng
                                 for (let i=cells.length-1;i>=0;i--) {
                                     const c = cells[i];
-                                    if (!c.value) continue;
-                                    if (c.sttFull && e.forFullId && c.sttFull===e.forFullId) { found = {i:c.sttFull, d:c.value}; break; }
-                                    if (String(c.stt).padStart(3,'0').slice(-3)===String(e.forSTT).padStart(3,'0').slice(-3)) { found = {i:c.sttFull||'', d:c.value}; break; }
+                                    if (!c || !c.value || !/^[0-9]$/.test(c.value)) continue;
+                                    const cs = String(c.stt==null?'':c.stt).padStart(3,'0').slice(-3);
+                                    if (cs===want) return {i: c.sttFull ? String(c.sttFull) : '', d:String(c.value)};
                                 }
                             }
-                            if (found) {
-                                e.actualDigit = String(found.d);
-                                e.actualBS = digitToBS(found.d);
-                                e.hit = (e.pred===e.actualBS);
-                                e.resolvedAt = Date.now();
-                                e.actualFullId = String(found.i||'');
-                                e.actualSTT = String(e.forSTT);
-                                changed++;
+                        } catch(e){}
+                        // 2) Kho: lấy kỳ CÓ ID LỚN NHẤT (mới nhất) cùng STT, ưu tiên cùng ngày với ID dự kiến
+                        try {
+                            const wantDay = prefer.length>=8 ? prefer.slice(0,8) : '';
+                            let best = null, bestI = '';
+                            for (const x of gameArchive) {
+                                if (!x || String(x.i).slice(-3)!==want) continue;
+                                if (prefer && String(x.i)===prefer) return {i:String(x.i), d:String(x.d)};
+                                if (wantDay && String(x.i).slice(0,8)!==wantDay) continue;
+                                if (!best || compareIssue(String(x.i), bestI) > 0) { best = x; bestI = String(x.i); }
                             }
+                            if (best) return {i:String(best.i), d:String(best.d)};
+                        } catch(e){}
+                        return null;
+                    }
+                    function refreshPredictLogResults() {
+                        let changed = 0;
+                        for (const e of predictLog) {
+                            if (!e || !e.forSTT) continue;
+                            const found = findNewestResultForSTT(e.forSTT, e.forFullId);
+                            if (!found || !found.d) continue;
+                            const sameDig = e.actualDigit!=null && String(e.actualDigit)===String(found.d);
+                            const sameId = !found.i || !e.actualFullId || String(e.actualFullId)===String(found.i);
+                            if (sameDig && sameId && e.hit!=null) continue;
+                            applyActualToPredictEntry(e, found.d, found.i||'', e.forSTT);
+                            changed++;
                         }
                         if (changed>0) {
                             savePredictLog();
-                            renderPredictLog();
+                            try { renderPredictLog(); } catch(e){}
                             try { renderAll(); } catch(e){}
                         }
                         return changed;
                     }
-                    function renderPredictLog() {
+                    function tryResolveAllPendingPredictLogs() {
+                        return refreshPredictLogResults();
+                    }
+                                        function renderPredictLog() {
                         try { rebuildPredictHitIndex(); } catch(e){}
                         const listEl = document.getElementById('predictHistoryList');
                         const statsEl = document.getElementById('predictHistoryStats');
@@ -1164,27 +1226,50 @@
                                 rowClass+='miss'; 
                                 badge='<span class="ph-badge-miss">❌ TRƯỢT</span>'; 
                             }
-                            const predCls = e.pred==='L' ? 'L' : 'N';
-                            const predLabel = e.pred==='L' ? 'LỚN' : 'NHỎ';
+                            const p200 = normLN(e.pred200);
+                            const p500 = normLN(e.pred500);
+                            const pMain = normLN(e.pred);
+                            const predCls = pMain==='L' ? 'L' : (pMain==='N' ? 'N' : '');
+                            const predLabel = predText(pMain);
                             const pctL = (e.pctL!=null) ? e.pctL : 0;
                             const pctN = (e.pctN!=null) ? e.pctN : 0;
-                            // in thêm tỷ lệ lớn nhỏ
+                            let extraPred = '';
+                            if (p200 || p500) {
+                                extraPred = ' <span style="font-size:9px;color:#94a3b8">200:'+predText(p200||'?')+(e.actualDigit!=null?(e.hit200?'✅':'❌'):'')+' · 500:'+predText(p500||'?')+(e.actualDigit!=null?(e.hit500?'✅':'❌'):'')+'</span>';
+                            }
+                            let actualTxt = '';
+                            if (e.actualDigit!=null) {
+                                actualTxt = ' <span style="font-size:10px;color:#cfe8ff">ra <b>'+e.actualDigit+'</b> ('+predText(e.actualBS)+')</span>';
+                            }
+                            // lệch 200/500: không gắn TRƯỢT nếu một bên đúng
+                            if (e.actualDigit!=null && p200 && p500 && p200!==p500) {
+                                if (e.hit200 || e.hit500) {
+                                    rowClass = 'ph-row pending';
+                                    badge = '<span class="ph-badge-pending">⚡ LỆCH · '+(e.hit200?'200 đúng':'')+(e.hit200&&e.hit500?' ':'')+(e.hit500?'500 đúng':'')+'</span>';
+                                } else {
+                                    rowClass = 'ph-row miss';
+                                    badge = '<span class="ph-badge-miss">❌ CẢ HAI TRƯỢT</span>';
+                                }
+                            }
                             htmlOut += '<div class="'+rowClass+'" style="justify-content:space-between">'
-                                + '<span><b style="color:#f9a825">STT '+e.forSTT+'</b> → <span class="ph-pred '+predCls+'">'+predLabel+'</span> <span style="font-size:10px;color:#aaa">L '+pctL+'% / N '+pctN+'%</span></span>'
+                                + '<span><b style="color:#f9a825">STT '+e.forSTT+'</b> → <span class="ph-pred '+(predCls||'N')+'">'+predLabel+'</span>'+extraPred+actualTxt+'</span>'
                                 + '<span>'+badge+'</span>'
                                 + '</div>';
                         }
                         listEl.innerHTML = htmlOut;
                     }
-                    // nạp ngay
                     try { loadPredictLog(); } catch(e){}
                     try { dedupePredictLog(); } catch(e){}
-                    // nạp ngay
-                    try { loadPredictLog(); } catch(e){}
-                    try { dedupePredictLog(); } catch(e){}
-                    // nạp ngay
-                    try { loadPredictLog(); } catch(e){}
-                    try { dedupePredictLog(); } catch(e){}
+                    try {
+                        let rec=0;
+                        for (const e of predictLog) {
+                            if (e.actualDigit==null) continue;
+                            applyActualToPredictEntry(e, e.actualDigit, e.actualFullId||'', e.actualSTT||e.forSTT);
+                            rec++;
+                        }
+                        if (rec) savePredictLog();
+                    } catch(e){}
+                    setTimeout(function(){ try { refreshPredictLogResults(); } catch(e){} }, 800);
                     
                     
                     // nạp ngay khi định nghĩa để renderCell dùng được
@@ -4025,10 +4110,9 @@
                                     if (!isNaN(n)) {
                                         const nextN = n+1;
                                         nextSttShort = String(nextN).padStart(3,'0');
-                                        if (lastFullForNext.length>=14) {
-                                            const datePart = lastFullForNext.substring(0,8);
-                                            const prefix = lastFullForNext.charAt(8);
-                                            nextFullId = datePart + prefix + nextSttShort;
+                                        if (lastFullForNext.length>=8) {
+                                            // ID thật dạng 20260917100000814 → chỉ thay 3 số cuối
+                                            nextFullId = lastFullForNext.slice(0, -3) + nextSttShort;
                                         }
                                     }
                                 }
@@ -4089,10 +4173,9 @@
                                     if (!isNaN(n)) {
                                         const nextN = n+1;
                                         nextSttShort = String(nextN).padStart(3,'0');
-                                        if (lastFullForNext.length>=14) {
-                                            const datePart = lastFullForNext.substring(0,8);
-                                            const prefix = lastFullForNext.charAt(8);
-                                            nextFullId = datePart + prefix + nextSttShort;
+                                        if (lastFullForNext.length>=8) {
+                                            // ID thật dạng 20260917100000814 → chỉ thay 3 số cuối
+                                            nextFullId = lastFullForNext.slice(0, -3) + nextSttShort;
                                         }
                                     }
                                 }
@@ -4138,10 +4221,9 @@
                                     if (!isNaN(n)) {
                                         const nextN = n+1;
                                         nextSttShort = String(nextN).padStart(3,'0');
-                                        if (lastFullForNext.length>=14) {
-                                            const datePart = lastFullForNext.substring(0,8);
-                                            const prefix = lastFullForNext.charAt(8);
-                                            nextFullId = datePart + prefix + nextSttShort;
+                                        if (lastFullForNext.length>=8) {
+                                            // ID thật dạng 20260917100000814 → chỉ thay 3 số cuối
+                                            nextFullId = lastFullForNext.slice(0, -3) + nextSttShort;
                                         }
                                     }
                                 }
@@ -4152,6 +4234,8 @@
                                 lastSTT: lastSttShortDisp,
                                 lastFullId: lastFullForNext,
                                 pred: ensembleBSDigit,
+                                pred200: r200.ensembleBSDigit,
+                                pred500: r500.ensembleBSDigit,
                                 predLabel: ensembleBSLabel,
                                 conf: conf_forLog,
                                 pctL: pctL_forLog,
@@ -5523,7 +5607,7 @@
                     setTimeout(()=>{ try { const fixed=fixPredictHitsMissingIds(); if(fixed>0) console.log('[FIX] Đã vá '+fixed+' ID thiếu'); updateHitCountDisplay(); } catch(e){} }, 1500);
                     try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
                     // refresh lịch sử dự đoán + ô cuối mỗi 3s
-                    setInterval(()=>{ try { renderPredictLog(); } catch(e){} }, 5000);
+                    setInterval(()=>{ try { refreshPredictLogResults(); renderPredictLog(); } catch(e){} }, 5000);
                     // refresh ô cuối và đếm vàng mỗi 3s
                     setInterval(()=>{
                         try {
@@ -5561,5 +5645,6 @@
                             autoStartBulkLoad('mở app');
                         });
                 </script>
-   
+    <script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3c9179fc99fe2ea',t:'MTc4OTY1ODM5OA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+
 </html>
