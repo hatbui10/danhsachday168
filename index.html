@@ -504,7 +504,7 @@
                     <div id="predictNextPanel" style="font-size:11px;color:#cfe8ff;line-height:1.45">Chưa đủ dữ liệu để dự đoán.</div>
                     <div class="hist-ctrl" style="margin-top:6px">
                         <button class="btn-mini" onclick="predictNext(true)" style="background:#1e40af;border-color:#60a5fa;color:#fff">🔮 Dự đoán lại</button>
-                        <button class="btn-mini" onclick="backtestAllMethods()" title="Chạy kiểm chứng 200 kỳ gần nhất">📊 Backtest 200 kỳ</button>
+                        <button class="btn-mini" onclick="backtestAllMethods()" title="Chạy kiểm chứng 500 kỳ gần nhất">📊 Backtest 500 kỳ</button>
                         <label style="font-size:10px;color:#aaa">Mẫu:
                             <select id="predictLen">
                                 <option value="2">2</option>
@@ -516,8 +516,9 @@
                         <label style="font-size:10px;color:#aaa">BT:
                             <select id="predictBacktestN">
                                 <option value="100">100</option>
-                                <option value="200" selected>200</option>
-                                <option value="500">500</option>
+                                <option value="200">200</option>
+                                <option value="500" selected>500</option>
+                                <option value="1000">1000</option>
                             </select>
                         </label>
                     </div>
@@ -3641,7 +3642,7 @@
                         let pLen = parseInt(lenEl && lenEl.value,10);
                         if (!(pLen>=2 && pLen<=5)) pLen = 3;
                         let btN = parseInt(btEl && btEl.value,10);
-                        if (!(btN>=50)) btN = 200;
+                        if (!(btN>=50)) btN = 500;
                     
                         const allDigits = getBoardDigits();
                         if (allDigits.length < 20) {
@@ -3982,7 +3983,7 @@
                             htmlOut += '</div>';
                     
                             // bảng các phương pháp còn lại: ẨN hẳn theo yêu cầu
-
+                    
                             htmlOut += '<div style=\"margin-top:6px;padding:6px;background:#0f172a;border:1px solid #4c1d95;border-radius:6px;font-size:10px;color:#c4b5fd;line-height:1.4\">';
                             htmlOut += '🤖 <b>Auto chọn TOP 7:</b> Hệ thống backtest '+btN+' kỳ gần nhất cho '+evaluatedAll.length+' phương pháp, sắp xếp theo tỷ lệ trúng L/N, chỉ giữ 7 phương pháp cao nhất để ensemble. TB TOP 7 <b style=\"color:#4ade80\">'+avgTop.toFixed(1)+'%</b> vs TB loại <b>'+avgRest.toFixed(1)+'%</b> → cải thiện <b style=\"color:#f9a825\">+'+(avgTop-avgRest).toFixed(1)+'%</b>.';
                             htmlOut += '</div>';
@@ -4084,7 +4085,7 @@
                         const lenEl = document.getElementById('predictLen');
                         const btEl = document.getElementById('predictBacktestN');
                         let pLen = parseInt(lenEl && lenEl.value,10); if (!(pLen>=2&&pLen<=5)) pLen=3;
-                        let btN = parseInt(btEl && btEl.value,10); if (!(btN>=50)) btN=200;
+                        let btN = parseInt(btEl && btEl.value,10); if (!(btN>=50)) btN=500;
                         const hist = getBoardDigits();
                         if (hist.length < btN+20) { alert('Cần ít nhất '+(btN+20)+' số, hiện có '+hist.length); return; }
                         predictNext(true);
@@ -5476,6 +5477,9 @@
                             // Chưa có token thì chưa nổ; dán token vào là tự chạy ngay (autoStartBulkLoad).
                             autoStartBulkLoad('mở app');
                         });
+                </script>
+                <script>
+                    (function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3c8eea8b86284d2',t:'MTc4OTY1NjcyMA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();
                 </script>
     </body>
 
