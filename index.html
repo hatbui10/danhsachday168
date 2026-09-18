@@ -538,23 +538,14 @@
                 <!-- 📜 LỊCH SỬ Ô DỰ ĐOÁN - KIỂM TRA ĐÚNG/SAI -->
                 <div id="predictHistoryPanel" class="cell-history-panel" style="background:#1a1a2e;border-color:#a78bfa;width:420px;max-width:98%">
                     <div class="ch-head" style="color:#a78bfa;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
-                        <span>📜 Lịch sử ô dự đoán - kiểm tra đúng/sai</span>
+                        <span>📜 Lịch sử dự đoán</span>
                         <span class="ch-count" id="predictHistoryCount">0 mục</span>
-                    </div>
-                    <div style="font-size:10px;color:#c4b5fd;margin-bottom:6px;line-height:1.4">Chỉ hiện <b>LỚN/NHỎ</b> và <b>TRÚNG/TRƯỢT</b> để kiểm tra.</div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
-                        <button class="btn-mini" onclick="renderPredictLog()" style="background:#4c1d95;border-color:#a78bfa">🔄 Làm mới</button>
-                        <button class="btn-mini" onclick="tryResolveAllPendingPredictLogs();renderPredictLog()">🔍 Quét lại KQ từ kho</button>
-                        <button class="btn-mini" onclick="if(confirm('Xoá hết lịch sử dự đoán? (không xoá ô xanh)')){predictLog=[];savePredictLog();renderPredictLog();}" style="background:#7f1d1d;border-color:#f87171">🧹 Xoá lịch sử</button>
-                    </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;font-size:10px">
-                        <label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="predictHistoryOnlyMiss" onchange="renderPredictLog()"> Chỉ hiện trượt ❌</label>
-                        <label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="predictHistoryOnlyHit" onchange="renderPredictLog()"> Chỉ hiện trúng ✅</label>
-                        <label style="display:flex;align-items:center;gap:3px"><input type="checkbox" id="predictHistoryOnlyPending" onchange="renderPredictLog()"> Chỉ hiện chờ ⏳</label>
                     </div>
                     <div id="predictHistoryStats" style="background:#0f0f23;border:1px solid #4c1d95;border-radius:6px;padding:6px 8px;margin-bottom:6px;font-size:11px;color:#e0e0e0;line-height:1.45">Chưa có dữ liệu dự đoán.</div>
                     <div id="predictHistoryList" style="max-height:360px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;padding:2px 0;font-family:monospace;font-size:11px"></div>
-                    <div style="font-size:9px;color:#666;margin-top:4px">Lưu local (vn168_predictLog_v1) + Firebase (predictLog). Reload 20s vẫn giữ. Mỗi STT chỉ ghi 1 lần để tránh spam.</div>
+                    <div style="text-align:right;margin-top:4px">
+                        <button class="btn-mini" onclick="if(confirm('Xoá hết lịch sử dự đoán?')){predictLog=[];savePredictLog();lastPredictLogFp='';renderPredictLog();}" style="background:#7f1d1d;border-color:#f87171">🧹 Xoá</button>
+                    </div>
                 </div>
 
                 <!-- 🤖 TỰ ĐỘNG ĐẶT CƯỢC - 28s + LỚN/NHỎ + GẤP THẾP -->
@@ -1110,11 +1101,7 @@
                             if (p200===p500) e.hit = (p200===actualBS);
                             else e.hit = (p200===actualBS || p500===actualBS); // lệch nhưng có bên đúng → không tính trượt oan
                         } else if (p) e.hit = (p===actualBS);
-                        else {
-                            // chưa có L/N → không gắn TRƯỢT cho "?"
-                            e.hit = null; e.actualDigit = null; e.actualBS = null; e.resolvedAt = null;
-                            return null;
-                        }
+                        else e.hit = null; // đã có số trên bảng → không để CHỜ
                         return e.hit;
                     }
                     function predictLogMatchesIssue(e, sttShort, fullId) {
@@ -1136,6 +1123,43 @@
                             return true;
                         }
                         return false;
+                    }
+                    function closeLogFromBoard(sttShort, fullId, digit) {
+                        const s = stt3n(sttShort);
+                        const dig = digit!=null ? String(digit).trim() : '';
+                        if (!s || !/^[0-9]$/.test(dig)) return false;
+                        let info = { lastStt:'', nextStt:'' };
+                        try { info = getNextPredictSttInfo(); } catch(e){}
+                        const lastS = info.lastStt && info.lastStt!=='???' ? stt3n(info.lastStt) : '';
+                        const nextS = info.nextStt && info.nextStt!=='???' ? stt3n(info.nextStt) : '';
+                        if (nextS && s===nextS && lastS!==s) return false; // kỳ đang đoán, chưa rơi
+                        let e = predictLog.find(x => x && stt3n(x.forSTT)===s && x.actualDigit==null && inLivePredictWindow(x, info));
+                        if (!e) e = predictLog.find(x => x && stt3n(x.forSTT)===s && inLivePredictWindow(x, info));
+                        if (!e) {
+                            const sides = (typeof gapPredSides==='function') ? gapPredSides() : {pred:'',p200:'',p500:''};
+                            const pr = (sides.pred==='L'||sides.pred==='N') ? sides.pred : '';
+                            e = upsertPredictLogPending({
+                                forSTT: s,
+                                forFullId: fullId||'',
+                                lastSTT: lastS,
+                                lastFullId: info.lastFull||'',
+                                pred: pr,
+                                pred200: sides.p200||pr,
+                                pred500: sides.p500||pr,
+                                predLabel: predText(pr),
+                                topMethod: 'board'
+                            });
+                        }
+                        if (!e) return false;
+                        applyActualToPredictEntry(e, dig, fullId||'', s);
+                        if (e.actualDigit==null) {
+                            e.actualDigit = dig;
+                            e.actualBS = digitToBS(dig);
+                            e.resolvedAt = Date.now();
+                            if (fullId) e.actualFullId = String(fullId);
+                            e.actualSTT = s;
+                        }
+                        return true;
                     }
                     function resolvePredictLogForCell(sttShort, fullId, digit) {
                         if (!sttShort && !fullId) return false;
@@ -1248,15 +1272,14 @@
                         }
                         if (changed>0) {
                             savePredictLog();
-                            try { renderPredictLog(); } catch(e){}
-                            try { renderAll(); } catch(e){}
                         }
                         return changed;
                     }
                                         function tryResolveAllPendingPredictLogs() {
                         return refreshPredictLogResults();
                     }
-                                        function renderPredictLog() {
+                                        let lastPredictLogFp = '';
+                    function renderPredictLog() {
                         try { sortPredictLogBoardOrder(); } catch(e){}
                         try { rebuildPredictHitIndex(); } catch(e){}
                         const listEl = document.getElementById('predictHistoryList');
@@ -1279,13 +1302,16 @@
                         const misses = resolved.filter(e=> e.hit===false).length;
                         const pending = total - resolved.length;
                         const hitRate = resolved.length ? (hits/resolved.length*100).toFixed(1) : '0.0';
-                    
+                        const fp = filtered.slice(0,80).map(e=>[e.forSTT,e.pred,e.pred200,e.pred500,e.actualDigit,e.hit,e.hit200,e.hit500].join(':')).join('|')+'#'+hits+'/'+misses+'/'+pending;
+                        if (fp===lastPredictLogFp && listEl.getAttribute('data-fp')===fp) return;
+                        lastPredictLogFp = fp;
+                        listEl.setAttribute('data-fp', fp);
+
                         if (countEl) countEl.textContent = hits+' trúng / '+misses+' trượt · '+hitRate+'%';
-                    
                         if (statsEl) {
                             statsEl.innerHTML = '<span style="color:#4ade80;font-weight:bold">✅ '+hits+' TRÚNG</span> · <span style="color:#f87171;font-weight:bold">❌ '+misses+' TRƯỢT</span> · <span style="color:#a78bfa">⏳ '+pending+' chờ</span> · Tỷ lệ <b style="color:'+(parseFloat(hitRate)>=50?'#4ade80':'#f87171')+'">'+hitRate+'%</b> / '+resolved.length+' kỳ';
                         }
-                    
+
                         if (!filtered.length) {
                             listEl.innerHTML = '<div style="padding:10px;text-align:center;color:#666">Chưa có dự đoán nào.</div>';
                             return;
@@ -1298,12 +1324,15 @@
                             if (e.actualDigit==null) { 
                                 rowClass+='pending'; 
                                 badge='<span class="ph-badge-pending">⏳ CHỜ</span>'; 
-                            } else if (e.hit) { 
+                            } else if (e.hit===true) { 
                                 rowClass+='hit'; 
                                 badge='<span class="ph-badge-hit">✅ TRÚNG</span>'; 
-                            } else { 
+                            } else if (e.hit===false) { 
                                 rowClass+='miss'; 
                                 badge='<span class="ph-badge-miss">❌ TRƯỢT</span>'; 
+                            } else {
+                                rowClass+='pending';
+                                badge='<span class="ph-badge-pending">ra '+e.actualDigit+'</span>';
                             }
                             const p200 = normLN(e.pred200);
                             const p500 = normLN(e.pred500);
@@ -1664,8 +1693,10 @@
                         try {
                             const lastC = (typeof cells!=='undefined' && cells[TOTAL-1]) ? cells[TOTAL-1] : null;
                             const fullForLog = (lastC && lastC.sttFull) ? String(lastC.sttFull) : '';
+                            try { closeLogFromBoard(N, fullForLog, digit); } catch(e2){}
                             resolvePredictLogForCell(N, fullForLog, digit);
                         } catch(e){}
+                        try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                         saveBoardLocal();
                         writeToFirebase();
                     }
@@ -1694,8 +1725,9 @@
                         renderAll();
                         searchPattern();
                         renderCellHistory();   // ô lịch sử 3 cột: cập nhật kỳ vừa rơi
+                        try { closeLogFromBoard(stt, sttFull||'', digit); } catch(e){}
                         try { resolvePredictLogForCell(stt, sttFull||'', digit); } catch(e){}
-                        try { syncPredictLogLive(); } catch(e){}
+                        try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                         saveBoardLocal();
                         writeToFirebase();
                     }
@@ -2167,7 +2199,7 @@
                                     }
                                     renderAll();
                                     searchPattern();
-                                    try { syncPredictLogLive(); } catch(e){}
+                                    try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                                 }
                             }
                         } finally {
@@ -2186,18 +2218,18 @@
                         } catch (e) {}
                     }
                     
-                    async function fetchAndFill() {
+                    async function fetchAndFill(silent) {
                         if (fetchInProgress) return;
                         fetchInProgress = true;
                         const epoch = resetEpoch;   // "chốt" thời điểm gọi để bỏ kết quả cũ nếu bấm Làm mới giữa chừng
                         const btn = document.getElementById('btnFetch');
-                        if (btn) btn.disabled = true;
+                        if (btn && !silent) btn.disabled = true;
                         try {
                             if (!getToken()) {
-                                setStatus('⚠️ Chưa có token — không lấy được số từ game.');
+                                if (!silent) setStatus('⚠️ Chưa có token — không lấy được số từ game.');
                                 return;
                             }
-                            setStatus('Đang lấy kết quả...');
+                            if (!silent) setStatus('Đang lấy kết quả...');
                             
                             const res = await apiPostRetry(CFG.apiResult, CFG.payload, 3, 800);
                             if (epoch !== resetEpoch) return;
@@ -2264,6 +2296,7 @@
                                 if (lastAutoScrollKey === null) scrollGridToBottom('auto');
                                 
                                 setStatus(`✓ Đã nạp ${batch.length} kỳ mới nhất (API trả về ${sorted.length} kỳ mỗi lần gọi).`);
+                                try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                                 return;
                             }
                             
@@ -2272,7 +2305,8 @@
                                 return i && issueGreater(i, String(lastInsertedIssue));
                             });
                             if (!toPush.length) {
-                                setStatus(`Chưa có kết quả mới.`);
+                                if (!silent) setStatus(`Chưa có kết quả mới.`);
+                                try { syncPredictLogLive(); } catch(e){}
                                 return;
                             }
                             
@@ -2300,7 +2334,9 @@
                             if (Number.isInteger(numStt)) { nextStt = numStt + 1; sttInput.value = String(nextStt); }
                             
                             searchPattern();
-                            setStatus(`✓ Đã đưa ${filled} kết quả mới.`);
+                            try { lastLiveSyncKey = ''; syncPredictLogLive(); renderCellHistory(); } catch(e){}
+                            if (!silent) setStatus(`✓ Đã đưa ${filled} kết quả mới.`);
+                            else if (filled) setStatus('STT ' + (cells[TOTAL-1] && cells[TOTAL-1].stt ? cells[TOTAL-1].stt : '') + ' = ' + (cells[TOTAL-1] && cells[TOTAL-1].value ? cells[TOTAL-1].value : ''));
                         } catch (err) {
                             setStatus('⚠️ Lỗi lấy dữ liệu: ' + err.message);
                         } finally {
@@ -3439,26 +3475,12 @@
                     
                     let lastLiveFetchDuringBulk = 0;
                     setInterval(() => {
-                        // Nếu đang fetch dở hoặc đang nạp sâu thì bỏ
-                        if (fetchInProgress || deepInProgress) return;
+                        if (fetchInProgress) return;
                         const cb = document.getElementById('autoRefresh');
-                        const shouldAuto = cb && cb.checked && getToken() && tokenAlive();
-                        if (!shouldAuto) return;
-                    
-                        // FIX cho câu hỏi "tại sao đang tải 5000 trang thì ko lấy số từ game nữa"
-                        // Trước đây: gameAutoRunning || bulkLoadMode → return luôn → không bắt kỳ mới
-                        // Giờ: vẫn cho bắt kỳ mới mỗi 60s ngay cả khi đang tải nền, để bảng không bị đứng ở 916
-                        if (gameAutoRunning || bulkLoadMode) {
-                            const now = Date.now();
-                            if (now - lastLiveFetchDuringBulk > 60000) { // 60s/lần khi đang tải nền
-                                lastLiveFetchDuringBulk = now;
-                                fetchAndFill(); // chỉ lấy trang 1 (10 kỳ mới nhất) → nhẹ, không làm Cloudflare chặn
-                            }
-                            return;
-                        }
-                        // Bình thường không tải nền → 15s/lần như cũ
-                        fetchAndFill();
-                    }, 15000);
+                        if (cb && cb.checked === false) return;
+                        if (!getToken() || !tokenAlive()) return;
+                        fetchAndFill(true); // im lặng; có số mới thì bảng + lịch sử dự đoán chốt ngay
+                    }, 1000);
                     
                     loadToken();
                     
@@ -3961,34 +3983,36 @@
                             return (b.at||0)-(a.at||0);
                         });
                     }
+                    let lastLiveSyncKey = '';
+                    function gapPredSides() {
+                        const s = livePredSides();
+                        if (s.pred==='L' || s.pred==='N') return s;
+                        try {
+                            for (const e of predictLog) {
+                                if (e && (e.pred==='L'||e.pred==='N')) return { pred:e.pred, p200:e.pred200||e.pred, p500:e.pred500||e.pred };
+                            }
+                        } catch(e){}
+                        return s;
+                    }
                     function syncPredictLogLive() {
                         const info = updatePredictNextSttBar();
                         const recent = recentBoardCells(80);
-                        const sides = livePredSides();
-                        // 1) chốt từng ô trong 80 kỳ mới nhất trên bảng — đủ để có 873, không lấy 889
+                        const sides = gapPredSides();
+                        const lastS = info.lastStt && info.lastStt!=='???' ? stt3n(info.lastStt) : '';
+                        const nextS = info.nextStt && info.nextStt!=='???' ? stt3n(info.nextStt) : '';
+                        const boardSet = new Set(recent.map(r=>r.s));
+                        const stuck = predictLog.some(e => e && e.actualDigit==null && boardSet.has(stt3n(e.forSTT)) && stt3n(e.forSTT)!==nextS);
+                        const key = [info.lastStt, info.lastDigit, info.lastFull, info.nextStt, sides.pred, sides.p200, sides.p500].join('|');
+                        if (key===lastLiveSyncKey && !stuck) return;
+                        lastLiveSyncKey = key;
+
                         try {
                             for (const r of recent) {
-                                if (info.nextStt && r.s===stt3n(info.nextStt) && stt3n(info.lastStt)!==r.s) continue;
-                                // nếu chưa có dòng kỳ này trong cửa sổ hiện tại → bù
-                                const exists = predictLog.some(e => e && stt3n(e.forSTT)===r.s && inLivePredictWindow(e, info));
-                                if (!exists && (sides.pred==='L'||sides.pred==='N')) {
-                                    upsertPredictLogPending({
-                                        forSTT: r.s,
-                                        forFullId: r.full||'',
-                                        lastSTT: r.s,
-                                        lastFullId: r.full||'',
-                                        pred: sides.pred,
-                                        pred200: sides.p200,
-                                        pred500: sides.p500,
-                                        predLabel: predText(sides.pred),
-                                        topMethod: 'bù từ bảng'
-                                    });
-                                }
-                                try { resolvePredictLogForCell(r.s, r.full||'', r.d); } catch(e){}
+                                if (nextS && r.s===nextS && lastS!==r.s) continue;
+                                try { closeLogFromBoard(r.s, r.full||'', r.d); } catch(e){}
                             }
                         } catch(e){}
                         try { refreshPredictLogResults(); } catch(e){}
-                        // 2) dòng STT đang đoán = last+1, luôn trên cùng, L/N = 2 ô 200/500
                         if (info.nextStt && info.nextStt!=='???') {
                             if (sides.pred==='L' || sides.pred==='N') {
                                 const e = upsertPredictLogPending({
@@ -6004,7 +6028,14 @@
                     setTimeout(()=>{ try { const fixed=fixPredictHitsMissingIds(); if(fixed>0) console.log('[FIX] Đã vá '+fixed+' ID thiếu'); updateHitCountDisplay(); } catch(e){} }, 1500);
                     try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
                     // refresh lịch sử dự đoán + ô cuối mỗi 3s
-                    setInterval(()=>{ try { syncPredictLogLive(); } catch(e){} }, 1000);
+                    setInterval(function(){
+                        try {
+                            const rec = recentBoardCells(10);
+                            for (const r of rec) closeLogFromBoard(r.s, r.full||'', r.d);
+                            updatePredictNextSttBar();
+                            renderPredictLog();
+                        } catch(e){}
+                    }, 1000);
                     // refresh ô cuối và đếm vàng mỗi 3s
                     setInterval(()=>{
                         try {
@@ -6015,9 +6046,8 @@
                         } catch(e){}
                     }, 3000);
                     // KHÔNG reload cả trang: làm lịch sử kẹt STT cũ (vd 816) trong khi bảng đã tới 846
-                    setInterval(()=>{ 
+                    setInterval(()=>{
                         try { saveBoardLocal(); savePredictHits(); savePredictLog(); } catch(e){}
-                        try { syncPredictLogLive(); } catch(e){}
                     }, 5000);
                     
                     // Mặc định: cuộn xuống CUỐI bảng (hiện 4 hàng mới nhất) — trừ khi đang có đoạn trùng
@@ -6043,5 +6073,5 @@
                             autoStartBulkLoad('mở app');
                         });
                 </script>
-  
+   
 </html>
