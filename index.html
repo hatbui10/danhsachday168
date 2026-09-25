@@ -117,7 +117,7 @@
                 border-radius: 8px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.5);
                 max-width: 100%;
-                max-height: 360px;   /* ≈ 10 hàng */
+                max-height: 190px;   /* ≈ 5 hàng */
                 overflow-y: auto;
                 overflow-x: hidden;
             }
@@ -166,32 +166,22 @@
             }
             .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
             
-            /* Ô trùng dãy mới nhất - tô VÀNG nổi bật */
-            .highlight {
+            /* ===== CHỈ CÒN 2 LOẠI TÔ MÀU TRÊN BẢNG =====
+               1) .match-cell  : ô có CÙNG giá trị với ô (10, hàng cuối)      -> VÀNG
+               2) .match-after : ô nằm NGAY SAU ô trùng đó                    -> XANH DA TRỜI */
+            .match-cell {
                 background-color: #f9a825 !important;
                 border: 2px solid #ffd54f !important;
             }
-            .highlight .val-input { color: #1a1a1a; font-weight: bold; }
-            .highlight .stt-label { color: #3e2723; }
-            
-            /* Ô tham chiếu cuối bảng: ĐÃ BỎ MÀU XANH theo yêu cầu - để giống ô thường, chỉ vàng khi trúng */
-            .reference {
-                background: var(--surface2) !important;
-                border-color: var(--border) !important;
-            }
-            .reference .val-input { color: var(--text) !important; }
-            .reference .stt-label { color: #ffeb3b !important; }
-            /* Ô trúng dự đoán L/N: xanh da trời — chỉ STT có trong lịch sử dự đoán và TRÚNG */
-            .predict-hit {
+            .match-cell .val-input { color: #1a1a1a !important; font-weight: bold; }
+            .match-cell .stt-label { color: #3e2723 !important; }
+            .match-after {
                 background-color: #29b6f6 !important;
                 border: 2px solid #81d4fa !important;
                 box-shadow: 0 0 10px #4fc3f7 !important;
             }
-            .predict-hit .val-input { color: #0d47a1 !important; font-weight: bold; }
-            .predict-hit .stt-label { color: #01579b !important; }
-            
-            /* Viền xanh 4 ô ngay sau đoạn trùng khớp (ghép 1-1 với 4 ô dự đoán) */
-            .after { border-color: var(--accent) !important; }
+            .match-after .val-input { color: #0d47a1 !important; font-weight: bold; }
+            .match-after .stt-label { color: #01579b !important; }
             
             /* Thanh trạng thái + nút lấy dữ liệu (thấy được ngay) */
             .fetch-row {
@@ -493,7 +483,7 @@
 
                 <!-- BẢNG 10 HÀNG CUỐI - ĐƯA LÊN TRÊN CÙNG NHƯ BAN ĐẦU -->
                 <div id="gridContainer" class="grid-table" style="max-height:360px"></div>
-                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px">Bảng hiện 10 hàng cuối (100 ô). Cuộn lên để xem thêm lịch sử 5000 hàng.<br><b style="color:#29b6f6">Ô xanh da trời = STT trong lịch sử dự đoán đã TRÚNG</b> <span id="hitCount" style="color:#29b6f6"></span></div>
+                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px">Bảng hiện 5 hàng cuối (50 ô). Cuộn lên để xem thêm lịch sử 5000 hàng.<br><b style="color:#f9a825">🟡 Ô vàng = trùng số với ô (10, hàng cuối)</b> · <b style="color:#29b6f6">🔵 Ô xanh = số ngay sau ô trùng</b></div>
 
                 <!-- 🔍 2 Ô: Ô CUỐI (10, hàng cuối) + Ô NGAY SAU Ô TRÙNG GIÁ TRỊ GẦN NHẤT -->
                 <div class="cell-history-panel" style="background:#0f1b2e;border-color:#38bdf8;width:420px;max-width:98%">
@@ -724,162 +714,13 @@
                     let localClearedAt = 0;
                     let resetEpoch = 0;
                     let lastAutoScrollKey = null;   // để chỉ tự cuộn khi đoạn trùng THAY ĐỔI
+                    let matchIdxCur = -1;       // ô trùng giá trị với ô (10, hàng cuối) — CHỈ để tô màu
+                    let matchAfterIdxCur = -1;  // ô nằm ngay sau ô trùng — CHỈ để tô màu
                     
                     // Lịch sử tất cả số đã đi qua ô (100,10)
                     const CELL_HIST_MAX = 5000;                   // giữ tối đa 5000 số mới nhất
                     const LS_CELL_HIST = 'vn168_cell_history_v1';
                     let cellHistory = [];                         // [{ s: STT kỳ, d: chữ số, t: thời gian }] – mới nhất ở đầu
-                    
-                    // Ô vàng trúng dự đoán L/N — giữ vĩnh viễn (kể cả reload) + Firebase
-                    const LS_PREDICT_HITS = 'vn168_predictHits_v1';
-                    let predictHits = []; // [{f: fullId, s: short, d: digit, pred: L/N, at: ts}]
-                    let predictHitsSet = new Set(); // fullId -> true (để tra nhanh)
-                    function loadPredictHits() {
-                        try {
-                            const raw = localStorage.getItem(LS_PREDICT_HITS);
-                            if (!raw) return;
-                            const arr = JSON.parse(raw);
-                            if (!Array.isArray(arr)) return;
-                            predictHits = arr.filter(e=>e && (e.f||e.s));
-                            predictHitsSet = new Set(predictHits.map(e=> String(e.f||'').trim() || ('SHORT:'+e.s+'|'+e.d+'|'+e.at) ));
-                        } catch(e) { predictHits=[]; predictHitsSet=new Set(); }
-                    }
-                    function savePredictHits() {
-                        try { localStorage.setItem(LS_PREDICT_HITS, JSON.stringify(predictHits.slice(0,2000))); } catch(e){}
-                        // lưu lên Firebase để mở trang khác vẫn hiện vàng
-                        try {
-                            if (typeof fbDB !== 'undefined' && fbDB) {
-                                fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
-                                    predictHits: predictHits.slice(0,2000),
-                                    lastPredictHitsAt: Date.now()
-                                }, {merge:true}).catch(()=>{});
-                            }
-                        } catch(e){}
-                    }
-                    function mergeRemotePredictHits(remoteArr) {
-                        if (!Array.isArray(remoteArr) || !remoteArr.length) return;
-                        let added = 0;
-                        for (const e of remoteArr) {
-                            if (!e) continue;
-                            const full = e.f ? String(e.f).trim() : '';
-                            const key = full || ('SHORT:'+e.s+'|'+e.d+'|'+e.at);
-                            if (predictHitsSet.has(full) && full) continue;
-                            if (predictHitsSet.has(key)) continue;
-                            // check trùng full
-                            if (full && predictHits.some(x=>x.f===full)) continue;
-                            predictHits.push(e);
-                            predictHitsSet.add(full || key);
-                            if (full) predictHitsSet.add(full);
-                            added++;
-                        }
-                        if (added>0) {
-                            // sắp xếp mới nhất trước, giới hạn 2000
-                            predictHits.sort((a,b)=>(b.at||0)-(a.at||0));
-                            if (predictHits.length>2000) predictHits.length=2000;
-                            try { localStorage.setItem(LS_PREDICT_HITS, JSON.stringify(predictHits)); } catch(e){}
-                            try { renderAll(); } catch(e){}
-                        }
-                    }
-                    let predictHitSttSet = new Set();
-                    let predictHitFullSet = new Set();
-                    function rebuildPredictHitIndex() {
-                        predictHitSttSet = new Set();
-                        predictHitFullSet = new Set();
-                        try {
-                            for (const e of predictLog) {
-                                const ok = (e.hit===true);
-                                if (!ok) continue;
-                                if (e.forSTT) predictHitSttSet.add(String(e.forSTT).padStart(3,'0').slice(-3));
-                                if (e.actualSTT) predictHitSttSet.add(String(e.actualSTT).padStart(3,'0').slice(-3));
-                                if (e.forFullId) predictHitFullSet.add(String(e.forFullId).trim());
-                                if (e.actualFullId) predictHitFullSet.add(String(e.actualFullId).trim());
-                            }
-                        } catch(e){}
-                    }
-                    function isPredictHitCell(cell) {
-                        if (!cell) return false;
-                        // Chỉ tô xanh da trời khi STT/ID nằm trong lịch sử dự đoán VÀ đã TRÚNG
-                        const full = cell.sttFull ? String(cell.sttFull).trim() : '';
-                        const short = cell.stt ? String(cell.stt).padStart(3,'0').slice(-3) : '';
-                        if (full && predictHitFullSet.has(full)) return true;
-                        if (full) return false; // có ID đầy đủ mà không nằm trong log trúng → không tô theo STT 3 số (tránh vòng cũ)
-                        if (short && predictHitSttSet.has(short)) return true;
-                        return false;
-                    }
-                    function findFullIdForHit(short, digit) {
-                        if (!short) return '';
-                        short = String(short).padStart(3,'0').slice(-3);
-                        // 1) tìm trong kho gameArchive (mới nhất trước)
-                        try {
-                            for (const e of gameArchive) {
-                                if (String(e.i).slice(-3)===short && String(e.d)===String(digit)) return String(e.i);
-                            }
-                        } catch(e){}
-                        // 2) tìm trong bảng hiện tại
-                        try {
-                            for (let i=cells.length-1;i>=0;i--) {
-                                const c = cells[i];
-                                if (!c.value) continue;
-                                if (String(c.stt).padStart(3,'0').slice(-3)===short && String(c.value)===String(digit) && c.sttFull) return String(c.sttFull);
-                            }
-                        } catch(e){}
-                        // 3) nếu short trùng với lastInsertedIssue
-                        try {
-                            if (lastInsertedIssue && String(lastInsertedIssue).slice(-3)===short) return String(lastInsertedIssue);
-                        } catch(e){}
-                        return '';
-                    }
-                    function fixPredictHitsMissingIds() {
-                        let fixed=0;
-                        for (const e of predictHits) {
-                            if (e.f && String(e.f).trim()!=='') continue;
-                            const full = findFullIdForHit(e.s, e.d);
-                            if (full) { e.f = full; fixed++; }
-                        }
-                        if (fixed>0) {
-                            // rebuild Set
-                            predictHitsSet = new Set();
-                            for (const e of predictHits) {
-                                const full = e.f ? String(e.f).trim() : '';
-                                const key = full || ('SHORT:'+e.s+'|'+e.d+'|'+e.at);
-                                predictHitsSet.add(key);
-                                if (full) predictHitsSet.add(full);
-                            }
-                            savePredictHits();
-                            try { renderAll(); updateHitCountDisplay(); } catch(e){}
-                        }
-                        return fixed;
-                    }
-                    function addPredictHitFromCell(cell, predBS) {
-                        if (!cell) return false;
-                        let full = cell.sttFull ? String(cell.sttFull).trim() : '';
-                        const short = cell.stt ? String(cell.stt).trim() : '';
-                        const digit = cell.value ? String(cell.value).trim() : '';
-                        if (!digit) return false;
-                        // nếu thiếu full thì thử tìm lại từ kho
-                        if (!full) full = findFullIdForHit(short, digit);
-                        if (full && predictHitsSet.has(full)) return false;
-                        // check trùng SHORT
-                        if (!full) {
-                            const shortPrefix = 'SHORT:'+short+'|'+digit+'|';
-                            for (const k of predictHitsSet) if (k.startsWith(shortPrefix)) {
-                                // nếu tìm được full mới thì cập nhật hit cũ thay vì tạo mới
-                                for (const e of predictHits) if (!e.f && e.s===short && e.d===digit) { 
-                                    const nf = findFullIdForHit(short, digit);
-                                    if (nf) { e.f=nf; savePredictHits(); }
-                                }
-                                return false;
-                            }
-                        }
-                        const entry = { f: full, s: short, d: digit, pred: predBS, at: Date.now() };
-                        const key = full || ('SHORT:'+short+'|'+digit+'|'+entry.at);
-                        predictHits.unshift(entry);
-                        if (predictHits.length>2000) predictHits.length=2000;
-                        predictHitsSet.add(key);
-                        if (full) predictHitsSet.add(full);
-                        savePredictHits();
-                        return true;
-                    }
                     
                     // ===== 📜 LỊCH SỬ Ô DỰ ĐOÁN - KIỂM TRA ĐÚNG/SAI =====
                     const LS_PREDICT_LOG = 'vn168_predictLog_v1';
@@ -1183,13 +1024,6 @@
                         if (changed) {
                             savePredictLog();
                             try { renderPredictLog(); } catch(e){}
-                            try { updateHitCountDisplay(); } catch(e){}
-                            try { if (typeof cells!=='undefined' && cells.length) { for (let i=0;i<TOTAL;i++) {
-                                const box = cells[i].valEl && cells[i].valEl.parentElement;
-                                if (!box) continue;
-                                if (cells[i].value && isPredictHitCell(cells[i])) box.classList.add('predict-hit');
-                                else box.classList.remove('predict-hit');
-                            } } } catch(e){}
                         }
                         return changed;
                     }
@@ -1279,7 +1113,6 @@
                                         let lastPredictLogFp = '';
                     function renderPredictLog() {
                         try { sortPredictLogBoardOrder(); } catch(e){}
-                        try { rebuildPredictHitIndex(); } catch(e){}
                         const listEl = document.getElementById('predictHistoryList');
                         const statsEl = document.getElementById('predictHistoryStats');
                         const countEl = document.getElementById('predictHistoryCount');
@@ -1362,9 +1195,7 @@
                     setTimeout(function(){ try { refreshPredictLogResults(); backfillPredictLogFromBoard(); } catch(e){} }, 800);
                     
                     
-                    // nạp ngay khi định nghĩa để renderCell dùng được
-                    try { loadPredictHits(); } catch(e){}
-                    try { rebuildPredictHitIndex(); } catch(e){}
+
                     
                     const CFG = {
                         arOrigin: "https://373vn.com",
@@ -1440,6 +1271,7 @@
                     
                     // Chỉ vẽ lại một khoảng ô (thay vì renderAll cả 51.000 ô) — dùng khi nạp hàng loạt
                     function renderCellsRange(a, b) {
+                        try { computeMatchIndices(); } catch(e){}
                         for (let i = Math.max(0, a); i <= Math.min(TOTAL - 1, b); i++) renderCell(i);
                         try { renderLastRow(); } catch(e){}
                         try { renderMatchBoxes(); } catch(e){}
@@ -1450,92 +1282,30 @@
                         cells[i].sttEl.textContent = cells[i].stt === null ? '' : cells[i].stt;
                         const box = cells[i].valEl.parentElement;
                         if (box) {
+                            // ===== CHỈ TÔ MÀU: ô trùng với ô (10, hàng cuối) + ô ngay sau ô trùng =====
+                            const isMatch = (i === matchIdxCur);
+                            const isAfter = (i === matchAfterIdxCur) && !isMatch;
+                            if (isMatch) box.classList.add('match-cell'); else box.classList.remove('match-cell');
+                            if (isAfter) box.classList.add('match-after'); else box.classList.remove('match-after');
                             const full = cells[i].sttFull || '';
                             const ymd = full ? issueYmd(full) : '';
                             let tip = full ? ('ID ' + full + (ymd ? ' · ngày ' + ymdPretty(ymd) + ' · STT ' + String(full).slice(-3) + ' · số ' + cells[i].value : '')) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value + ' · (thiếu ID đầy đủ → có thể trùng ngày)');
-                            // nếu là ô cuối cùng (100,10): đối chiếu với lịch sử dự đoán rồi mới tô
+                            if (isMatch) tip += ' · 🟡 TRÙNG với ô (10, hàng cuối)';
+                            if (isAfter) tip += ' · 🔵 Số ngay SAU ô trùng';
+                            // ô cuối (100,10): đối chiếu lịch sử dự đoán (KHÔNG tô màu)
                             if (i === TOTAL-1) {
                                 try {
                                     resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value);
                                 } catch(e){}
                             }
-                            let isPersistent = false;
-                            try { isPersistent = isPredictHitCell(cells[i]); } catch(e){ isPersistent=false; }
-                            if (isPersistent) {
-                                try {
-                                    const pred = window.lastPredictBS || '';
-                                    tip += ' · ✅ TRÚNG DỰ ĐOÁN'+(pred?(' '+bsLabel(pred)):'')+' · STT khớp lịch sử';
-                                    addPredictHitFromCell(cells[i], pred);
-                                } catch(e){}
-                            }
-                            box.title = tip + (isPersistent ? ' · ⭐ ĐÃ TỪNG TRÚNG DỰ ĐOÁN' : '');
-                            if (isPersistent) {
-                                box.classList.add('predict-hit');
-                            } else {
-                                box.classList.remove('predict-hit');
-                            }
+                            box.title = tip;
                         }
                     }
                     function renderAll() {
+                        try { computeMatchIndices(); } catch(e){}
                         for (let i = 0; i < TOTAL; i++) renderCell(i);
                         try { renderLastRow(); } catch(e){}
-                        try { updateHitCountDisplay(); } catch(e){}
                         try { renderMatchBoxes(); } catch(e){}
-                    }
-                    function updateHitCountDisplay() {
-                        const hc = document.getElementById('hitCount');
-                        if (!hc) return;
-                        try { rebuildPredictHitIndex(); } catch(e){}
-                        let visible = 0;
-                        for (let i=0;i<TOTAL;i++) if (cells[i].value && isPredictHitCell(cells[i])) visible++;
-                        const logHits = predictLog.filter(e=>e.hit===true).length;
-                        if (!logHits && !visible) { hc.textContent=''; return; }
-                        const missing = predictHits.filter(e=>!e.f || String(e.f).trim()==='').length;
-                        hc.innerHTML = '('+visible+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(missing?' · '+missing+' thiếu ID':'')+') '
-                            + '<button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> '
-                            + '<button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '
-                            + (missing ? '<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay();alert(\'Đã vá ID, còn thiếu \'+predictHits.filter(e=>!e.f).length)" style="font-size:9px;padding:1px 4px;background:#7f1d1d">🔧 Vá ID</button> ' : '')
-                            + '<span style="font-size:9px;color:#888">Cuộn bảng lên để thấy hết '+visible+' ô xanh</span>';
-                    }
-                    let lastHitScrollIdx = -1;
-                    function scrollToNextHit() {
-                        if (!predictHits.length) { alert('Chưa có ô xanh nào'); return; }
-                        // tìm tất cả index vàng trên bảng
-                        const hitIdxs = [];
-                        for (let i=0;i<TOTAL;i++) if (cells[i].value && isPredictHitCell(cells[i])) hitIdxs.push(i);
-                        if (!hitIdxs.length) { alert('Không có ô xanh nào trên bảng hiện tại (có '+predictHits.length+' tổng lưu nhưng đã bị lọc hoặc nằm ngoài 51k ô gần nhất). Bấm 📋 Danh sách để xem.'); return; }
-                        // tìm hit tiếp theo sau lastHitScrollIdx
-                        let nextIdx = hitIdxs.find(idx=> idx > lastHitScrollIdx);
-                        if (nextIdx===undefined) nextIdx = hitIdxs[0]; // quay vòng
-                        lastHitScrollIdx = nextIdx;
-                        try { scrollGridToCell(nextIdx, 'smooth'); } catch(e){ 
-                            const container = document.getElementById('gridContainer');
-                            const cellEl = cells[nextIdx]?.valEl?.parentElement;
-                            if (container && cellEl) container.scrollTop = cellEl.offsetTop - container.clientHeight/2;
-                        }
-                        // nháy vàng
-                        try {
-                            const box = cells[nextIdx].valEl.parentElement;
-                            if (box) { box.style.transition='all 0.3s'; const oldShadow=box.style.boxShadow; box.style.boxShadow='0 0 20px #4fc3f7, 0 0 30px #29b6f6'; setTimeout(()=>{ box.style.boxShadow=oldShadow; }, 1200); }
-                        } catch(e){}
-                    }
-                    function showHitsList() {
-                        if (!predictHits.length) { alert('Chưa có ô xanh nào'); return; }
-                        const missing = predictHits.filter(e=>!e.f || String(e.f).trim()==='').length;
-                        const recent = predictHits.slice(0,80);
-                        let txt = 'Tổng '+predictHits.length+' ô trúng đã lưu (mới nhất 80):\n';
-                        txt += 'Trong đó '+missing+' cái thiếu ID đầy đủ (chỉ có STT 3 số) do nhập tay hoặc lưu từ bản cũ.\n';
-                        if (missing>0) txt += '→ Bấm OK rồi chạy fixPredictHitsMissingIds() trong console hoặc bấm nút 🔧 Vá ID bên dưới để tự tìm lại ID từ kho.\n\n';
-                        txt += recent.map((e,i)=> (i+1)+'. ID '+(e.f||'(thiếu ID)')+' | STT '+(e.s||'?')+' | số '+e.d+' | dự đoán '+ (e.pred?bsLabel(e.pred):'?')+' | '+new Date(e.at||0).toLocaleString('vi-VN')).join('\n');
-                        txt += '\n\nTrên bảng hiện tại có '+ (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })() +' ô xanh.';
-                        txt += '\n\nNếu tổng 89 mà trên bảng chỉ 2-3 xanh: do bảng chỉ giữ 51k ô gần nhất và có thể đang lọc ngày. Các ô trúng cũ đã bị cuộn ra ngoài.';
-                        txt += '\n\nThiếu ID là do ô đó được thêm bằng tay (không có ID đầy đủ dạng 20260913...) hoặc từ bản lưu cũ. Đã fix để tự tìm lại ID từ kho gameArchive.';
-                        alert(txt);
-                        if (missing>0 && confirm('Có '+missing+' ô thiếu ID. Thử tự vá lại ID từ kho ngay bây giờ?')) {
-                            const fixed = fixPredictHitsMissingIds();
-                            alert('Đã vá được '+fixed+' ô. Còn thiếu '+(predictHits.filter(e=>!e.f).length)+' ô.\nNhững ô không vá được là do không tìm thấy trong kho 5000 trang (có thể đã bị lọc hoặc kho chưa tải đủ).');
-                            updateHitCountDisplay();
-                        }
                     }
                     function renderLastRow() {
                         const grid = document.getElementById('lastRowGrid');
@@ -1629,6 +1399,12 @@
                         return s ? s.slice(-3).padStart(3, '0') : '?';
                     }
                     function matchCellFull(c) { return (c && c.sttFull) ? String(c.sttFull) : ''; }
+                    function computeMatchIndices() {
+                        const r = findNearestSameValue();
+                        matchIdxCur = (r && r.matchIdx >= 0) ? r.matchIdx : -1;
+                        matchAfterIdxCur = (r && r.after && r.afterIdx >= 0 && r.afterIdx < TOTAL) ? r.afterIdx : -1;
+                        return r;
+                    }
                     function findNearestSameValue() {
                         try {
                             if (typeof cells === 'undefined' || !cells.length || !TOTAL) return null;
@@ -1663,7 +1439,8 @@
                         const note = document.getElementById('matchNote');
                         const cnt = document.getElementById('matchInfoCount');
                         if (!b1 || !b2) return;
-                        const r = findNearestSameValue();
+                        const prevM = matchIdxCur, prevA = matchAfterIdxCur;
+                        const r = computeMatchIndices();
                         if (!r) {
                             b1.innerHTML = matchBoxHtml(null, -1, 'Ô 1 · Ô (10, hàng cuối)', '#38bdf8', '#64748b');
                             b2.innerHTML = matchBoxHtml(null, -1, 'Ô 2 · Ngay sau ô trùng', '#a78bfa', '#64748b');
@@ -1691,6 +1468,11 @@
                             }
                         }
                         if (cnt) cnt.textContent = (r.matchIdx >= 0) ? ('trùng cách ' + (r.lastIdx - r.matchIdx) + ' ô') : 'không có trùng';
+                        // tô lại màu cho đúng các ô bị ảnh hưởng (ô cũ + ô mới)
+                        try {
+                            const list = [prevM, prevA, matchIdxCur, matchAfterIdxCur];
+                            for (const k of list) if (k >= 0 && k < TOTAL) renderCell(k);
+                        } catch(e){}
                     }
 
                     function snapshot() {
@@ -2182,7 +1964,6 @@
                                 },
                                 dayHistory: dayHistory.slice(0, HISTORY_MAX),
                                 cellHistory: cellHistory.slice(0, CELL_HIST_MAX),
-                                predictHits: predictHits.slice(0,2000),
                                 predictLog: predictLog.slice(0,500)
                             }, { merge: true });
                         } catch (e) {}
@@ -2213,7 +1994,6 @@
                             
                             if ('cellHistory' in d) mergeRemoteCellHistory(d.cellHistory);
                     
-                            if ('predictHits' in d) mergeRemotePredictHits(d.predictHits);
                             if ('predictLog' in d) mergeRemotePredictLog(d.predictLog);
                             
                             const rb = d.board;
@@ -3581,18 +3361,6 @@
                     function searchPattern() {
                         try { if (document.getElementById('predictNextPanel')) predictNextDebounced(); } catch(e){}
                         try { scrollGridToBottom('auto'); } catch(e){}
-                    }
-                    function clearHighlights() {
-                        // trước đây xóa highlight trùng đoạn và viền xanh after — giờ không cần nữa
-                        // chỉ xóa class highlight/after nếu còn sót, KHÔNG xóa predict-hit (vàng trúng)
-                        try {
-                            for (let i = 0; i < TOTAL; i++) {
-                                const box = cells[i] && cells[i].valEl ? cells[i].valEl.parentElement : null;
-                                if (!box) continue;
-                                box.classList.remove('highlight');
-                                box.classList.remove('after');
-                            }
-                        } catch(e){}
                     }
                     
                     // ===== 🔮 DỰ ĐOÁN LỚN/NHỎ (≥5 / <5) - TỶ LỆ TRÚNG CAO NHẤT =====
@@ -6025,8 +5793,6 @@
                     mainInput.focus();
                     startRealtimeSync();
                     // tự vá ID thiếu cho 89 cái trúng
-                    setTimeout(()=>{ try { const fixed=fixPredictHitsMissingIds(); if(fixed>0) console.log('[FIX] Đã vá '+fixed+' ID thiếu'); updateHitCountDisplay(); } catch(e){} }, 1500);
-                    try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
                     // refresh lịch sử dự đoán + ô cuối mỗi 3s
                     setInterval(function(){
                         try {
@@ -6043,12 +5809,12 @@
                             if (TOTAL>0) renderCell(TOTAL-1);
                             try { renderLastRow(); } catch(e){}
                             try { updatePredictNextSttBar(); } catch(e){}
-                            updateHitCountDisplay();
+                            renderMatchBoxes();
                         } catch(e){}
                     }, 3000);
                     // KHÔNG reload cả trang: làm lịch sử kẹt STT cũ (vd 816) trong khi bảng đã tới 846
                     setInterval(()=>{
-                        try { saveBoardLocal(); savePredictHits(); savePredictLog(); } catch(e){}
+                        try { saveBoardLocal(); savePredictLog(); } catch(e){}
                     }, 5000);
                     
                     // Mặc định: cuộn xuống CUỐI bảng (hiện 4 hàng mới nhất) — trừ khi đang có đoạn trùng
@@ -6075,4 +5841,4 @@
                         });
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40ab7dbdb8d4639',t:'MTc5MDM0NjUzNg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40ac5dd185fddfb',t:'MTc5MDM0NzEwOQ=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
