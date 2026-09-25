@@ -605,7 +605,7 @@
                             </div>
                             <div>
                                 <label style="color:#94a3b8;font-size:10px">Header Ar-Origin (hoặc domain game):</label>
-                                <input id="autoBetOrigin" type="text" value="https://373vn.com" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                <input id="autoBetOrigin" type="text" value="https://383vn.com" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
                             </div>
                         </div>
                     </details>
@@ -1344,7 +1344,7 @@
                     try { rebuildPredictHitIndex(); } catch(e){}
                     
                     const CFG = {
-                        arOrigin: "https://373vn.com",
+                        arOrigin: "https://383vn.com",
                         apiResult: "https://vn168api.com/api/webapi/GetNoaverageEmerdList",
                         apiIssue: "https://vn168api.com/api/webapi/GetGameIssue",
                         apiBet: "https://vn168api.com/api/webapi/GameBetting",
@@ -1750,12 +1750,13 @@
                         const tok = extractToken(getToken() || '');
                         let res;
                         try {
+                            const originDomain = (document.getElementById('autoBetOrigin')?.value?.trim()) || CFG.arOrigin || 'https://383vn.com';
                             const hdrs = {
                                 'Content-Type': 'application/json;charset=UTF-8',
                                 'Accept': 'application/json, text/plain, */*',
-                                'Authorization': 'Bearer ' + tok
+                                'Authorization': 'Bearer ' + tok,
+                                'Ar-Origin': originDomain
                             };
-                            if (CFG.arOrigin) hdrs['Ar-Origin'] = CFG.arOrigin;
                             res = await fetch(url, {
                                 method: 'POST',
                                 headers: hdrs,
@@ -4984,8 +4985,8 @@
                             const cfg = {
                                 amount: document.getElementById('autoBetAmount')?.value || '1000',
                                 minConf: document.getElementById('autoBetMinConf')?.value || '50',
-                                mapL: document.getElementById('autoBetMapL')?.value || 'L',
-                                mapN: document.getElementById('autoBetMapN')?.value || 'N',
+                                mapL: document.getElementById('autoBetMapL')?.value || '14',
+                                mapN: document.getElementById('autoBetMapN')?.value || '15',
                                 dry: document.getElementById('autoBetDry')?.checked ? '1':'0',
                                 enable: document.getElementById('autoBetEnable')?.checked ? '1':'0',
                                 interval: document.getElementById('autoBetInterval')?.value || '28',
@@ -5016,8 +5017,16 @@
                             const cfg = JSON.parse(raw);
                             if (cfg.amount) document.getElementById('autoBetAmount').value = cfg.amount;
                             if (cfg.minConf) document.getElementById('autoBetMinConf').value = cfg.minConf;
-                            if (cfg.mapL) document.getElementById('autoBetMapL').value = cfg.mapL;
-                            if (cfg.mapN) document.getElementById('autoBetMapN').value = cfg.mapN;
+                            if (cfg.mapL && cfg.mapL !== 'L') {
+                                document.getElementById('autoBetMapL').value = cfg.mapL;
+                            } else {
+                                document.getElementById('autoBetMapL').value = '14';
+                            }
+                            if (cfg.mapN && cfg.mapN !== 'N') {
+                                document.getElementById('autoBetMapN').value = cfg.mapN;
+                            } else {
+                                document.getElementById('autoBetMapN').value = '15';
+                            }
                             if (cfg.interval) document.getElementById('autoBetInterval').value = cfg.interval;
                             if (cfg.template) document.getElementById('autoBetTemplate').value = cfg.template;
                             if (cfg.botToken) document.getElementById('tgBotToken').value = cfg.botToken;
@@ -5104,10 +5113,12 @@
                         }
                     }
                     function buildBetPayload(issue, predBS, amount) {
-                        const mapL = document.getElementById('autoBetMapL')?.value?.trim() || '14';
-                        const mapN = document.getElementById('autoBetMapN')?.value?.trim() || '15';
+                        let mapL = document.getElementById('autoBetMapL')?.value?.trim();
+                        let mapN = document.getElementById('autoBetMapN')?.value?.trim();
+                        if (!mapL || mapL === 'L') mapL = '14';
+                        if (!mapN || mapN === 'N') mapN = '15';
                         let selectType = (predBS === 'L') ? mapL : mapN;
-                        if (!isNaN(Number(selectType))) selectType = Number(selectType);
+                        selectType = Number(selectType) || (predBS === 'L' ? 14 : 15);
 
                         const random = randHex32();
                         const ts = Math.floor(Date.now() / 1000);
@@ -5150,7 +5161,14 @@
                         const pred = window.lastPredictBS;
                         if (!pred) { autoBetLog('⚠️ Chưa có dự đoán LỚN/NHỎ'); return; }
                         const amount = getMartingaleAmount();
-                        let issue = currentGameIssue || await getCurrentIssue();
+                        let issue = await getCurrentIssue();
+                        if (!issue) {
+                            if (lastInsertedIssue) {
+                                const prefix = String(lastInsertedIssue).slice(0, -3);
+                                const num = parseInt(String(lastInsertedIssue).slice(-3), 10);
+                                if (!isNaN(num)) issue = prefix + String(num + 1).padStart(3, '0');
+                            }
+                        }
                         if (!issue) { autoBetLog('⚠️ Không có kỳ'); return; }
                         await doPlaceBet(issue, pred, amount, true);
                     }
@@ -6298,4 +6316,4 @@
                     })();
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b45a89dc7bd83',t:'MTc5MDM1MjM0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b517459d5e078',t:'MTc5MDM1MjgyNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
