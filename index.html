@@ -596,11 +596,11 @@
                             <div style="display:flex;gap:8px">
                                 <div style="flex:1">
                                     <label style="color:#94a3b8;font-size:10px">Mã cược LỚN (selectType):</label>
-                                    <input id="autoBetMapL" type="text" value="14" placeholder="Lớn = 14" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                    <input id="autoBetMapL" type="text" value="13" placeholder="Lớn = 13" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
                                 </div>
                                 <div style="flex:1">
                                     <label style="color:#94a3b8;font-size:10px">Mã cược NHỎ (selectType):</label>
-                                    <input id="autoBetMapN" type="text" value="15" placeholder="Nhỏ = 15" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                    <input id="autoBetMapN" type="text" value="14" placeholder="Nhỏ = 14" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
                                 </div>
                             </div>
                             <div>
@@ -4985,8 +4985,8 @@
                             const cfg = {
                                 amount: document.getElementById('autoBetAmount')?.value || '1000',
                                 minConf: document.getElementById('autoBetMinConf')?.value || '50',
-                                mapL: document.getElementById('autoBetMapL')?.value || '14',
-                                mapN: document.getElementById('autoBetMapN')?.value || '15',
+                                mapL: document.getElementById('autoBetMapL')?.value || '13',
+                                mapN: document.getElementById('autoBetMapN')?.value || '14',
                                 dry: document.getElementById('autoBetDry')?.checked ? '1':'0',
                                 enable: document.getElementById('autoBetEnable')?.checked ? '1':'0',
                                 interval: document.getElementById('autoBetInterval')?.value || '28',
@@ -5019,15 +5019,15 @@
                             const cfg = JSON.parse(raw);
                             if (cfg.amount) document.getElementById('autoBetAmount').value = cfg.amount;
                             if (cfg.minConf) document.getElementById('autoBetMinConf').value = cfg.minConf;
-                            if (cfg.mapL && cfg.mapL !== 'L') {
+                            if (cfg.mapL && cfg.mapL !== 'L' && cfg.mapL !== '14') {
                                 document.getElementById('autoBetMapL').value = cfg.mapL;
                             } else {
-                                document.getElementById('autoBetMapL').value = '14';
+                                document.getElementById('autoBetMapL').value = '13';
                             }
-                            if (cfg.mapN && cfg.mapN !== 'N') {
+                            if (cfg.mapN && cfg.mapN !== 'N' && cfg.mapN !== '15' && cfg.mapN !== '13') {
                                 document.getElementById('autoBetMapN').value = cfg.mapN;
                             } else {
-                                document.getElementById('autoBetMapN').value = '15';
+                                document.getElementById('autoBetMapN').value = '14';
                             }
                             if (cfg.interval) document.getElementById('autoBetInterval').value = cfg.interval;
                             if (cfg.template) document.getElementById('autoBetTemplate').value = cfg.template;
@@ -5119,10 +5119,10 @@
                     function buildBetPayload(issue, predBS, amount) {
                         let mapL = document.getElementById('autoBetMapL')?.value?.trim();
                         let mapN = document.getElementById('autoBetMapN')?.value?.trim();
-                        if (!mapL || mapL === 'L') mapL = '14';
-                        if (!mapN || mapN === 'N') mapN = '15';
+                        if (!mapL || mapL === 'L' || mapL === '14') mapL = '13';
+                        if (!mapN || mapN === 'N' || mapN === '15' || mapN === '13') mapN = '14';
                         let selectType = (predBS === 'L') ? mapL : mapN;
-                        selectType = Number(selectType) || (predBS === 'L' ? 14 : 15);
+                        selectType = Number(selectType) || (predBS === 'L' ? 13 : 14);
 
                         const random = randHex32();
                         const ts = Math.floor(Date.now() / 1000);
@@ -5249,7 +5249,7 @@
                                 statusBadge.style.color = '#f87171';
                             }
                             if (statusText) {
-                                statusText.innerHTML = '<span style="color:#f87171">Lỗi: ' + e.message + '</span><br><span style="color:#94a3b8;font-size:9px">Gửi kỳ: ' + issue + ' | Mã: ' + ((predBS==='L')?14:15) + ' | Tiền: ' + amount + '</span>';
+                                statusText.innerHTML = '<span style="color:#f87171">Lỗi: ' + e.message + '</span><br><span style="color:#94a3b8;font-size:9px">Gửi kỳ: ' + issue + ' | Mã: ' + ((predBS==='L')?13:14) + ' | Tiền: ' + amount + '</span>';
                             }
                             console.error('[BET-ERROR]', e);
                             showToast('❌ Lỗi đặt cược: ' + e.message, true);
