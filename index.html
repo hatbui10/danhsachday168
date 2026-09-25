@@ -193,13 +193,12 @@
             .reference .val-input { color: var(--text) !important; }
             .reference .stt-label { color: #ffeb3b !important; }
             /* Ô trúng dự đoán L/N: xanh da trời — chỉ STT có trong lịch sử dự đoán và TRÚNG */
+            /* .predict-hit cũ đã bị vô hiệu hóa */
             .predict-hit {
-                background-color: #29b6f6 !important;
-                border: 2px solid #81d4fa !important;
-                box-shadow: 0 0 10px #4fc3f7 !important;
+                background: var(--surface2) !important;
+                border-color: var(--border) !important;
+                box-shadow: none !important;
             }
-            .predict-hit .val-input { color: #0d47a1 !important; font-weight: bold; }
-            .predict-hit .stt-label { color: #01579b !important; }
             
             /* Viền xanh 4 ô ngay sau đoạn trùng khớp (ghép 1-1 với 4 ô dự đoán) */
             .after { border-color: var(--accent) !important; }
@@ -521,7 +520,7 @@
 
                 <!-- BẢNG 10 HÀNG CUỐI - ĐƯA LÊN TRÊN CÙNG NHƯ BAN ĐẦU -->
                 <div id="gridContainer" class="grid-table" style="max-height:180px"></div>
-                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px">Bảng hiện 10 hàng cuối (100 ô). Cuộn lên để xem thêm lịch sử 5000 hàng.<br><b style="color:#29b6f6">Ô xanh da trời = STT trong lịch sử dự đoán đã TRÚNG</b> <span id="hitCount" style="color:#29b6f6"></span></div>
+                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px"><b style="color:#ffd54f">Ô vàng</b> = ô trùng với ô 10 hàng 5 · <b style="color:#38bdf8">Ô xanh</b> = ô ngay sau ô trùng</div>
 
                 <!-- ĐỒNG HỒ & ĐẾM NGƯỢC 30S -->
                 <div style="width:420px;max-width:98%;display:flex;justify-content:space-between;align-items:center;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:6px 12px;margin-bottom:8px;box-sizing:border-box">
@@ -713,16 +712,7 @@
                             }
                         } catch(e){}
                     }
-                    function isPredictHitCell(cell) {
-                        if (!cell) return false;
-                        // Chỉ tô xanh da trời khi STT/ID nằm trong lịch sử dự đoán VÀ đã TRÚNG
-                        const full = cell.sttFull ? String(cell.sttFull).trim() : '';
-                        const short = cell.stt ? String(cell.stt).padStart(3,'0').slice(-3) : '';
-                        if (full && predictHitFullSet.has(full)) return true;
-                        if (full) return false; // có ID đầy đủ mà không nằm trong log trúng → không tô theo STT 3 số (tránh vòng cũ)
-                        if (short && predictHitSttSet.has(short)) return true;
-                        return false;
-                    }
+                    function isPredictHitCell(cell) { return false; }
                     function findFullIdForHit(short, digit) {
                         if (!short) return '';
                         short = String(short).padStart(3,'0').slice(-3);
@@ -1118,7 +1108,7 @@
                                 const box = cells[i].valEl && cells[i].valEl.parentElement;
                                 if (!box) continue;
                                 if (cells[i].value && isPredictHitCell(cells[i])) box.classList.add('predict-hit');
-                                else box.classList.remove('predict-hit');
+                                else box.classList.remove('predict-hit'); box.classList.remove('highlight'); box.classList.remove('after');
                             } } } catch(e){}
                         }
                         return changed;
@@ -1364,29 +1354,8 @@
                         const box = cells[i].valEl.parentElement;
                         if (box) {
                             const full = cells[i].sttFull || '';
-                            const ymd = full ? issueYmd(full) : '';
-                            let tip = full ? ('ID ' + full + (ymd ? ' · ngày ' + ymdPretty(ymd) + ' · STT ' + String(full).slice(-3) + ' · số ' + cells[i].value : '')) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value + ' · (thiếu ID đầy đủ → có thể trùng ngày)');
-                            // nếu là ô cuối cùng (100,10): đối chiếu với lịch sử dự đoán rồi mới tô
-                            if (i === TOTAL-1) {
-                                try {
-                                    resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value);
-                                } catch(e){}
-                            }
-                            let isPersistent = false;
-                            try { isPersistent = isPredictHitCell(cells[i]); } catch(e){ isPersistent=false; }
-                            if (isPersistent) {
-                                try {
-                                    const pred = window.lastPredictBS || '';
-                                    tip += ' · ✅ TRÚNG DỰ ĐOÁN'+(pred?(' '+bsLabel(pred)):'')+' · STT khớp lịch sử';
-                                    addPredictHitFromCell(cells[i], pred);
-                                } catch(e){}
-                            }
-                            box.title = tip + (isPersistent ? ' · ⭐ ĐÃ TỪNG TRÚNG DỰ ĐOÁN' : '');
-                            if (isPersistent) {
-                                box.classList.add('predict-hit');
-                            } else {
-                                box.classList.remove('predict-hit');
-                            }
+                            box.title = full ? ('ID ' + full + ' · STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value);
+                            box.classList.remove('predict-hit'); box.classList.remove('highlight'); box.classList.remove('after');
                         }
                     }
                     function renderAll() {
@@ -6254,4 +6223,4 @@
                     })();
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b13d99f0ff9ad',t:'MTc5MDM1MDMwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b171c9a85f9ad',t:'MTc5MDM1MDQzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
