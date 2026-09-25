@@ -516,7 +516,15 @@
     </head>
 
     <body>
+        <div id="toastMsg"></div>
         <h2 id="mainTitle">🔮 Dự đoán LỚN (≥5) / NHỎ (<5) - ô STT tiếp theo sau ô cuối (100,10)</h2>
+
+        <!-- KHUNG NHẬP TOKEN BEARER ĐƯA LÊN TRÊN ĐẦU -->
+        <div style="width:420px;max-width:98%;display:flex;gap:8px;align-items:center;background:#1e293b;border:1px solid #3b82f6;border-radius:8px;padding:8px 10px;margin-bottom:10px;box-sizing:border-box">
+            <span style="font-size:16px">🔑</span>
+            <input id="tokenInput" type="text" placeholder="Dán Token Bearer vào đây..." style="flex:1;background:#0f172a;color:#4ade80;border:1px solid #475569;border-radius:6px;padding:7px 10px;font-size:11px;font-family:monospace;outline:none">
+            <button class="btn-mini" onclick="saveAndFetchToken()" style="background:#2563eb;border:1px solid #60a5fa;color:#fff;padding:7px 14px;border-radius:6px;font-weight:bold;font-size:12px;cursor:pointer;white-space:nowrap">🔄 Lấy số</button>
+        </div>
 
                 <!-- BẢNG 10 HÀNG CUỐI - ĐƯA LÊN TRÊN CÙNG NHƯ BAN ĐẦU -->
                 <div id="gridContainer" class="grid-table" style="max-height:180px"></div>
@@ -3397,6 +3405,9 @@
                         try { scrollGridToBottom('auto'); } catch(e){}
                     }
 
+                    let currentMatchIdx = -1;
+                    let currentAfterIdx = -1;
+
                     function updateTwoBoxesAndPredict() {
                         const boxMatchStt = document.getElementById('boxMatchStt');
                         const boxMatchVal = document.getElementById('boxMatchVal');
@@ -3408,17 +3419,7 @@
                         const boxPredictVal = document.getElementById('boxPredictVal');
                         const boxPredictSub = document.getElementById('boxPredictSub');
 
-                        // 1. Xóa toàn bộ highlight và after cũ trên bảng
-                        for (let i = 0; i < TOTAL; i++) {
-                            const b = cells[i] && cells[i].valEl ? cells[i].valEl.parentElement : null;
-                            if (b) {
-                                b.classList.remove('highlight');
-                                b.classList.remove('after');
-                                b.classList.remove('predict-hit');
-                            }
-                        }
-
-                        // 2. Tìm ô cuối cùng có số trên bảng (ô 10 hàng 5)
+                        // 1. Tìm ô cuối cùng có số trên bảng (ô 10 hàng 5)
                         let lastIdx = -1;
                         for (let i = TOTAL - 1; i >= 0; i--) {
                             if (cells[i] && /^[0-9]$/.test(String(cells[i].value))) {
@@ -3443,7 +3444,7 @@
                         const sttLast = cellLast.stt != null ? String(cellLast.stt) : '?';
                         const fullLast = cellLast.sttFull ? String(cellLast.sttFull) : '';
 
-                        // 3. Đối chiếu kết quả kỳ vừa ra với các mục đang chờ trong lịch sử dự đoán
+                        // 2. Đối chiếu kết quả kỳ vừa ra với các mục đang chờ trong lịch sử
                         try {
                             const sLast3 = stt3n(sttLast);
                             let logUpdated = false;
@@ -3464,7 +3465,7 @@
                             }
                         } catch(e){}
 
-                        // 4. Tìm Ô TRÙNG VỚI Ô 10 HÀNG 5 (quét ngược từ lastIdx - 1 về trước)
+                        // 3. Tìm Ô TRÙNG VỚI Ô 10 HÀNG 5 (quét ngược từ lastIdx - 1 về trước)
                         let matchIdx = -1;
                         for (let i = lastIdx - 1; i >= 0; i--) {
                             if (cells[i] && String(cells[i].value) === x) {
@@ -3500,13 +3501,29 @@
                         if (boxMatchVal) boxMatchVal.textContent = x;
                         if (boxMatchSub) boxMatchSub.textContent = 'Trùng ô 10 hàng 5';
 
-                        // Tô màu VÀNG cho Ô TRÙNG trên bảng
-                        const bMatch = cellMatch.valEl ? cellMatch.valEl.parentElement : null;
-                        if (bMatch) bMatch.classList.add('highlight');
-
                         // Ô 2: Ô NGAY PHÍA SAU Ô TRÙNG (matchIdx + 1)
                         const afterIdx = matchIdx + 1;
                         const cellAfter = (afterIdx < TOTAL) ? cells[afterIdx] : null;
+
+                        // Chỉ cập nhật class highlight & after khi vị trí thay đổi (ĐỨNG YÊN HOÀN TOÀN, KHÔNG BỊ NHẤP NHÁY)
+                        if (currentMatchIdx !== matchIdx || currentAfterIdx !== afterIdx) {
+                            for (let i = 0; i < TOTAL; i++) {
+                                const b = cells[i] && cells[i].valEl ? cells[i].valEl.parentElement : null;
+                                if (b) {
+                                    b.classList.remove('highlight');
+                                    b.classList.remove('after');
+                                    b.classList.remove('predict-hit');
+                                }
+                            }
+                            if (cellMatch && cellMatch.valEl) {
+                                cellMatch.valEl.parentElement.classList.add('highlight');
+                            }
+                            if (cellAfter && cellAfter.valEl) {
+                                cellAfter.valEl.parentElement.classList.add('after');
+                            }
+                            currentMatchIdx = matchIdx;
+                            currentAfterIdx = afterIdx;
+                        }
 
                         if (!cellAfter || !/^[0-9]$/.test(String(cellAfter.value))) {
                             if (boxAfterStt) boxAfterStt.textContent = 'STT ---';
@@ -3516,10 +3533,6 @@
                             window.lastPredictBS = null;
                             return;
                         }
-
-                        // Tô màu XANH DA TRỜI cho Ô NGAY SAU Ô TRÙNG trên bảng
-                        const bAfter = cellAfter.valEl ? cellAfter.valEl.parentElement : null;
-                        if (bAfter) bAfter.classList.add('after');
 
                         const afterVal = String(cellAfter.value);
                         const afterStt = cellAfter.stt != null ? String(cellAfter.stt) : '?';
@@ -3532,8 +3545,6 @@
                         }
 
                         // Ô 3: DỰ ĐOÁN NGƯỢC LẠI HOÀN TOÀN VỚI Ô SAU Ô TRÙNG:
-                        // Nếu ô sau ô trùng là LỚN (>=5) ➜ DỰ ĐOÁN NHỎ (N)
-                        // Nếu ô sau ô trùng là NHỎ (<5) ➜ DỰ ĐOÁN LỚN (L)
                         const predBS = (afterBS === 'L') ? 'N' : 'L';
                         const predLabel = (predBS === 'L') ? 'LỚN' : 'NHỎ';
                         const predColor = (predBS === 'L') ? '#4ade80' : '#fbbf24';
@@ -3550,10 +3561,9 @@
                             boxPredictSub.innerHTML = 'Đảo ' + (afterBS === 'L' ? 'LỚN' : 'NHỎ') + ' ➜ <b style="color:' + predColor + '">' + predLabel + '</b>';
                         }
 
-                        // Ghi nhận dự đoán kỳ tiếp theo vào predictLog (TUYỆT ĐỐI KHÔNG TRÙNG LẶP)
+                        // Ghi nhận dự đoán vào predictLog (khử trùng lặp)
                         try {
                             if (nextSttNum && nextSttNum !== '???') {
-                                // Kiểm tra xem STT này đã từng có trong log chưa (kể cả đã có hay chưa có kết quả)
                                 const alreadyInLog = predictLog.some(e => e && stt3n(e.forSTT) === nextSttNum);
                                 if (!alreadyInLog) {
                                     predictLog.unshift({
@@ -6246,4 +6256,4 @@
                     })();
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b22d55e5dddc5',t:'MTc5MDM1MDkxNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b2fa3fea81fcd',t:'MTc5MDM1MTQ0Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
