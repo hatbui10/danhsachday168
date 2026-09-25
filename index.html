@@ -577,6 +577,14 @@
                         </label>
                     </div>
                     <div id="martingaleStatusShort" style="margin-top:6px;font-size:11px;color:#cbd5e1;text-align:center">Cược lần tới: <b id="nextBetAmtDisplay" style="color:#4ade80">1.000</b> (bước 1)</div>
+                    <!-- THANH HIỂN THỊ TRẠNG THÁI ĐẶT CƯỢC THỰC TẾ -->
+                    <div id="liveBetStatusBox" style="margin-top:6px;background:#0a120b;border:1px solid #166534;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.4">
+                        <div style="display:flex;justify-content:space-between;align-items:center">
+                            <span style="color:#94a3b8">Trạng thái:</span>
+                            <span id="betStatusBadge" style="color:#64748b;font-weight:bold">⏸️ ĐANG TẮT</span>
+                        </div>
+                        <div id="betLastResultText" style="color:#cbd5e1;font-size:10px;margin-top:3px;font-family:monospace">Chưa có lệnh cược nào</div>
+                    </div>
                 </div>
 
                 <!-- LỊCH SỬ KẾT QUẢ GẦN NHẤT -->
@@ -1577,22 +1585,27 @@
                     
                     function pushValueRaw(digit, stt, ts, sttFull) {
                         boardCleared = false;
-                        undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
+                        // 1. DỊCH TRÁI TỪNG Ô (không render lại DOM toàn bộ, không nháy)
                         for (let i = 0; i < TOTAL - 1; i++) {
                             cells[i].value = cells[i + 1].value;
                             cells[i].stt = cells[i + 1].stt;
                             cells[i].sttFull = cells[i + 1].sttFull;
+                            // Cập nhật text trực tiếp, không xóa DOM
+                            if (cells[i].valEl) cells[i].valEl.textContent = cells[i].value;
+                            if (cells[i].sttEl) cells[i].sttEl.textContent = cells[i].stt || '';
                         }
-                        cells[TOTAL - 1].value = String(digit);
-                        cells[TOTAL - 1].stt = stt;
-                        cells[TOTAL - 1].sttFull = (sttFull !== undefined && sttFull !== null && String(sttFull) !== '') ? String(sttFull) : null;
+                        // 2. Ô cuối cùng nhận kết quả mới
+                        const last = TOTAL - 1;
+                        cells[last].value = String(digit);
+                        cells[last].stt = stt;
+                        cells[last].sttFull = (sttFull !== undefined && sttFull !== null && String(sttFull) !== '') ? String(sttFull) : null;
+                        if (cells[last].valEl) cells[last].valEl.textContent = cells[last].value;
+                        if (cells[last].sttEl) cells[last].sttEl.textContent = cells[last].stt || '';
+                        
                         boardCount = Math.min(TOTAL, boardCount + 1);
-                        renderAll();
+                        
+                        // 3. Cập nhật 3 ô soi số & đối chiếu lịch sử
                         searchPattern();
-                        renderCellHistory();   // ô lịch sử 3 cột: cập nhật kỳ vừa rơi
-                        try { closeLogFromBoard(stt, sttFull||'', digit); } catch(e){}
-                        try { resolvePredictLogForCell(stt, sttFull||'', digit); } catch(e){}
-                        try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                         saveBoardLocal();
                         writeToFirebase();
                     }
@@ -3328,8 +3341,8 @@
                         const cb = document.getElementById('autoRefresh');
                         if (cb && cb.checked === false) return;
                         if (!getToken() || !tokenAlive()) return;
-                        fetchAndFill(true); // im lặng; có số mới thì bảng + lịch sử dự đoán chốt ngay
-                    }, 1000);
+                        fetchAndFill(true);
+                    }, 4000);
                     
                     loadToken();
                     
@@ -3537,11 +3550,12 @@
                             boxPredictSub.innerHTML = 'Đảo ' + (afterBS === 'L' ? 'LỚN' : 'NHỎ') + ' ➜ <b style="color:' + predColor + '">' + predLabel + '</b>';
                         }
 
-                        // Ghi nhận dự đoán vào predictLog để chờ so sánh với kết quả game
+                        // Ghi nhận dự đoán kỳ tiếp theo vào predictLog (TUYỆT ĐỐI KHÔNG TRÙNG LẶP)
                         try {
                             if (nextSttNum && nextSttNum !== '???') {
-                                const exists = predictLog.some(e => e && stt3n(e.forSTT) === nextSttNum && e.actualDigit == null);
-                                if (!exists) {
+                                // Kiểm tra xem STT này đã từng có trong log chưa (kể cả đã có hay chưa có kết quả)
+                                const alreadyInLog = predictLog.some(e => e && stt3n(e.forSTT) === nextSttNum);
+                                if (!alreadyInLog) {
                                     predictLog.unshift({
                                         at: Date.now(),
                                         forSTT: nextSttNum,
@@ -3550,7 +3564,7 @@
                                         actualBS: null,
                                         hit: null
                                     });
-                                    if (predictLog.length > 500) predictLog.length = 500;
+                                    if (predictLog.length > 100) predictLog.length = 100;
                                     savePredictLog();
                                     renderSimplePredictLog();
                                 }
@@ -4993,9 +5007,15 @@
                     }
                     function updateAutoBetStatus() {
                         const en = document.getElementById('autoBetEnable')?.checked;
-                        const el = document.getElementById('autoBetCount');
-                        if (el) el.textContent = en ? 'BẬT - 28s' : 'TẮT';
-                        if (el) el.style.color = en ? '#4ade80' : '#999';
+                        const statusBadge = document.getElementById('betStatusBadge');
+                        const statusText = document.getElementById('betLastResultText');
+                        if (statusBadge) {
+                            statusBadge.textContent = en ? '🟢 ĐANG BẬT (TỰ ĐẶT MỖI KỲ)' : '⏸️ ĐANG TẮT';
+                            statusBadge.style.color = en ? '#4ade80' : '#64748b';
+                        }
+                        if (statusText && en) {
+                            statusText.textContent = 'Hệ thống sẽ tự gửi lệnh cược mỗi khi đồng hồ chuyển sang kỳ mới...';
+                        }
                         updateAutoBetAmountDisplay();
                         restartAutoBetTimer();
                     }
@@ -5089,54 +5109,59 @@
                         await doPlaceBet(issue, pred, amount, true);
                     }
                     async function doPlaceBet(issue, predBS, amount, manual) {
-                        if (!getToken()) { autoBetLog('⚠️ Chưa có token'); return; }
-                        const dry = document.getElementById('autoBetDry')?.checked;
-                        const mapL = document.getElementById('autoBetMapL')?.value || 'L';
-                        const mapN = document.getElementById('autoBetMapN')?.value || 'N';
-                        const betType = predBS==='L' ? mapL : mapN;
-                        const label = bsLabel(predBS); // LỚN / NHỎ
-                        // tránh trùng kỳ nếu không phải test tay
-                        if (!dry && !manual) {
-                            if (autoBetLastIssue===issue) { autoBetLog('⏭️ Kỳ '+issue+' đã đặt rồi, chờ kỳ mới (28s sau)'); return; }
+                        const statusBadge = document.getElementById('betStatusBadge');
+                        const statusText = document.getElementById('betLastResultText');
+                        
+                        if (!getToken()) {
+                            if (statusBadge) { statusBadge.textContent = '❌ CHƯA CÓ TOKEN'; statusBadge.style.color = '#f87171'; }
+                            if (statusText) statusText.textContent = 'Vui lòng dán Bearer Token vào ô trên bảng để đặt cược!';
+                            showToast('⚠️ Chưa có Token API game!', true);
+                            return;
                         }
-                        // nếu gấp thếp bật thì amount = tiền gấp thếp
+                        
+                        const label = bsLabel(predBS);
                         if (!manual && martingaleState.enabled) {
                             amount = getMartingaleAmount();
                         }
-                        const payload = buildBetPayload(issue, predBS, amount);
-                        const modeTxt = dry ? '[DRY]' : '[THẬT]';
-                        const srcTxt = manual ? 'TAY' : '28s AUTO';
-                        const martTxt = martingaleState.enabled ? ('[Gấp thếp bước '+martingaleState.currentStep+']') : '';
-                        autoBetLog(modeTxt+' '+srcTxt+' '+martTxt+' '+label+' ('+betType+') kỳ '+issue+' 💰='+formatMoney(amount)+' ('+amount+')');
-                        updateAutoBetLastBox(issue, predBS, amount, dry ? '🧪 DRY - chưa gửi thật' : '⏳ Đang gửi...');
-                        if (dry) {
-                            await sendTelegram('🧪 [DRY] <b>'+label+'</b> '+martTxt+'\nKỳ: <code>'+issue+'</code>\n💰 Tiền: <b>'+formatMoney(amount)+' ('+amount+')</b>\n⏱️ Mỗi 28s');
-                            updateAutoBetLastBox(issue, predBS, amount, '🧪 DRY OK');
-                            // vẫn lưu pending để test gấp thếp
-                            if (martingaleState.enabled) {
-                                martingaleState.pendingIssue = issue;
-                                martingaleState.pendingPred = predBS;
-                                martingaleState.pendingAmount = amount;
-                                martingaleState.pendingStep = martingaleState.currentStep;
-                                saveMartingale();
-                                updateMartingaleStatus();
-                            }
-                            autoBetLastIssue = issue;
-                            autoBetLastPred = predBS;
-                            autoBetLastBetTime = Date.now();
-                            try { localStorage.setItem('vn168_lastBetIssue', issue); localStorage.setItem('vn168_lastBetTime', String(Date.now())); } catch(e){}
-                            autoBetCountdown = Number(document.getElementById('autoBetInterval')?.value||28);
-                            return;
+                        
+                        if (statusBadge) {
+                            statusBadge.textContent = '⏳ ĐANG GỬI LỆNH CƯỢC...';
+                            statusBadge.style.color = '#fbbf24';
                         }
+                        if (statusText) {
+                            statusText.textContent = 'Đang gửi: Kỳ ' + issue + ' · ' + label + ' · ' + formatMoney(amount) + 'đ';
+                        }
+                        
+                        const payload = buildBetPayload(issue, predBS, amount);
                         try {
                             const res = await apiPost(CFG.apiBet, payload);
-                            autoBetLog('✅ THÀNH CÔNG '+label+' kỳ '+issue+' 💰='+formatMoney(amount)+' → '+JSON.stringify(res).slice(0,400));
-                            await sendTelegram('✅ Đã đặt <b>'+label+'</b> '+martTxt+'\nKỳ: <code>'+issue+'</code>\n💰 <b>'+formatMoney(amount)+' ('+amount+')</b>\n'+JSON.stringify(res).slice(0,200));
+                            const resStr = JSON.stringify(res || {});
+                            const isSuccess = res && (res.code === 0 || res.status === true || res.success === true || (resStr.indexOf('"data"') !== -1 && resStr.indexOf('"code":0') !== -1));
+                            
+                            if (isSuccess || !res.code || res.code === 200 || res.code === 0) {
+                                if (statusBadge) {
+                                    statusBadge.textContent = '✅ ĐÃ ĐẶT THÀNH CÔNG!';
+                                    statusBadge.style.color = '#4ade80';
+                                }
+                                if (statusText) {
+                                    statusText.innerHTML = 'Kỳ <b>' + issue + '</b> · <b>' + label + '</b> · Tiền: <b style="color:#4ade80">' + formatMoney(amount) + 'đ</b> · Máy chủ: <i>Thành công</i>';
+                                }
+                                showToast('✅ Đã đặt cược thành công: ' + label + ' ' + formatMoney(amount) + 'đ (Kỳ ' + issue + ')');
+                            } else {
+                                const errMsg = res.msg || res.message || resStr;
+                                if (statusBadge) {
+                                    statusBadge.textContent = '⚠️ MÁY CHỦ PHẢN HỒI';
+                                    statusBadge.style.color = '#fbbf24';
+                                }
+                                if (statusText) {
+                                    statusText.innerHTML = 'Kỳ ' + issue + ' · ' + label + ' · Phản hồi: ' + errMsg;
+                                }
+                                showToast('⚠️ Máy chủ phản hồi: ' + errMsg, true);
+                            }
+                            
                             autoBetLastIssue = issue;
                             autoBetLastPred = predBS;
                             autoBetLastBetTime = Date.now();
-                            try { localStorage.setItem('vn168_lastBetIssue', issue); localStorage.setItem('vn168_lastBetPred', predBS); localStorage.setItem('vn168_lastBetAmount', String(amount)); localStorage.setItem('vn168_lastBetTime', String(Date.now())); } catch(e){}
-                            updateAutoBetLastBox(issue, predBS, amount, '✅ THÀNH CÔNG');
                             if (martingaleState.enabled) {
                                 martingaleState.pendingIssue = issue;
                                 martingaleState.pendingPred = predBS;
@@ -5145,11 +5170,15 @@
                                 saveMartingale();
                                 updateMartingaleStatus();
                             }
-                            autoBetCountdown = Number(document.getElementById('autoBetInterval')?.value||28);
-                        } catch(e){
-                            autoBetLog('❌ Lỗi đặt '+label+' kỳ '+issue+' 💰='+formatMoney(amount)+': '+e.message);
-                            await sendTelegram('❌ Lỗi <b>'+label+'</b> kỳ '+issue+' 💰='+formatMoney(amount)+': '+e.message);
-                            updateAutoBetLastBox(issue, predBS, amount, '❌ LỖI: '+e.message);
+                        } catch(e) {
+                            if (statusBadge) {
+                                statusBadge.textContent = '❌ LỖI GỬI CƯỢC';
+                                statusBadge.style.color = '#f87171';
+                            }
+                            if (statusText) {
+                                statusText.textContent = 'Lỗi kết nối API: ' + e.message;
+                            }
+                            showToast('❌ Lỗi đặt cược: ' + e.message, true);
                         }
                     }
                     // Timer 28s
@@ -5940,7 +5969,24 @@
                         const statsEl = document.getElementById('predLogStatsShort');
                         if (!listEl) return;
                         
-                        const resolved = predictLog.filter(e => e && e.actualDigit != null);
+                        // 1. Khử trùng lặp tuyệt đối theo forSTT (chỉ giữ 1 mục duy nhất cho mỗi STT)
+                        const seenStt = new Set();
+                        const uniqueLogs = [];
+                        for (let e of predictLog) {
+                            if (!e || !e.forSTT) continue;
+                            const s = stt3n(e.forSTT);
+                            if (seenStt.has(s)) continue;
+                            seenStt.add(s);
+                            uniqueLogs.push(e);
+                        }
+                        
+                        // Cập nhật lại predictLog sạch không trùng
+                        predictLog = uniqueLogs;
+                        
+                        // 2. Sắp xếp mới nhất trên cùng
+                        predictLog.sort((a, b) => (b.at || 0) - (a.at || 0));
+                        
+                        const resolved = predictLog.filter(e => e.actualDigit != null);
                         const hits = resolved.filter(e => e.hit === true).length;
                         const misses = resolved.filter(e => e.hit === false).length;
                         const rate = resolved.length ? Math.round(hits * 100 / resolved.length) : 0;
@@ -5955,22 +6001,22 @@
                         }
                         
                         let html = '';
-                        for (let e of predictLog.slice(0, 50)) {
-                            if (!e) continue;
+                        for (let e of predictLog.slice(0, 20)) {
                             const stt = stt3n(e.forSTT) || '---';
                             const predTxt = e.pred === 'L' ? '<b style="color:#4ade80">LỚN</b>' : '<b style="color:#fbbf24">NHỎ</b>';
+                            
                             if (e.actualDigit == null) {
-                                html += '<div style="display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px solid #1e293b;color:#94a3b8">'
-                                      + '<span>STT ' + stt + ': Đoán ' + predTxt + '</span>'
-                                      + '<span style="color:#a78bfa;font-weight:bold">⏳ Đang chờ...</span>'
+                                html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #1e293b;color:#94a3b8">'
+                                      + '<span>Kỳ <b>' + stt + '</b>: Đoán ' + predTxt + '</span>'
+                                      + '<span style="color:#fbbf24;font-weight:bold;font-size:10px">⏳ Đang chờ xổ...</span>'
                                       + '</div>';
                             } else {
                                 const actBS = e.actualBS || digitToBS(e.actualDigit);
                                 const actTxt = e.actualDigit + ' (' + (actBS === 'L' ? 'LỚN' : 'NHỎ') + ')';
                                 const isHit = e.hit === true;
-                                const statusBadge = isHit ? '<span style="color:#4ade80;font-weight:bold">✅ TRÚNG</span>' : '<span style="color:#f87171;font-weight:bold">❌ TRƯỢT</span>';
-                                html += '<div style="display:flex;justify-content:space-between;padding:3px 6px;border-bottom:1px solid #1e293b;' + (isHit ? 'background:rgba(74,222,128,0.08)' : 'background:rgba(248,113,113,0.08)') + '">'
-                                      + '<span>STT ' + stt + ': Đoán ' + predTxt + ' → Ra ' + actTxt + '</span>'
+                                const statusBadge = isHit ? '<span style="color:#4ade80;font-weight:bold;font-size:11px">✅ TRÚNG</span>' : '<span style="color:#f87171;font-weight:bold;font-size:11px">❌ TRƯỢT</span>';
+                                html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #1e293b;' + (isHit ? 'background:rgba(74,222,128,0.08)' : 'background:rgba(248,113,113,0.08)') + '">'
+                                      + '<span>Kỳ <b>' + stt + '</b>: Đoán ' + predTxt + ' → Ra <b>' + actTxt + '</b></span>'
                                       + statusBadge
                                       + '</div>';
                             }
@@ -6177,33 +6223,10 @@
                     // tự vá ID thiếu cho 89 cái trúng
                     setTimeout(()=>{ try { const fixed=fixPredictHitsMissingIds(); if(fixed>0) console.log('[FIX] Đã vá '+fixed+' ID thiếu'); updateHitCountDisplay(); } catch(e){} }, 1500);
                     try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
-                    // refresh lịch sử dự đoán + ô cuối mỗi 3s
+                    // Cập nhật 3 ô soi số định kỳ 1s (chỉ tính toán, không vẽ lại DOM)
                     setInterval(function(){
-                        try {
-                            const rec = recentBoardCells(10);
-                            for (const r of rec) closeLogFromBoard(r.s, r.full||'', r.d);
-                            updatePredictNextSttBar();
-                            renderPredictLog();
-                        } catch(e){}
+                        try { updateTwoBoxesAndPredict(); } catch(e){}
                     }, 1000);
-                    // refresh ô cuối và đếm vàng mỗi 3s
-                    setInterval(()=>{
-                        try {
-                            if (TOTAL>0) renderCell(TOTAL-1);
-                            try { renderLastRow(); } catch(e){}
-                            try { updatePredictNextSttBar(); } catch(e){}
-                            updateHitCountDisplay();
-                        } catch(e){}
-                    }, 3000);
-                    // KHÔNG reload cả trang: làm lịch sử kẹt STT cũ (vd 816) trong khi bảng đã tới 846
-                    setInterval(()=>{
-                        try { saveBoardLocal(); savePredictHits(); savePredictLog(); } catch(e){}
-                    }, 5000);
-                    
-                    // Mặc định: cuộn xuống CUỐI bảng (hiện 4 hàng mới nhất) — trừ khi đang có đoạn trùng
-                    requestAnimationFrame(() => {
-                        if (lastAutoScrollKey === null) scrollGridToBottom('auto');
-                    });
                     
                     // Lấy số từ game NGAY khi mở (không phải chờ 15s),
                     // rồi TỰ ĐỘNG TẢI NỀN 5000 trang lịch sử (bảng tự mở rộng tới 51.000 ô).
@@ -6223,4 +6246,4 @@
                     })();
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b171c9a85f9ad',t:'MTc5MDM1MDQzNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b22d55e5dddc5',t:'MTc5MDM1MDkxNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
