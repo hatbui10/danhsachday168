@@ -585,6 +585,31 @@
                         </label>
                     </div>
                     <div id="martingaleStatusShort" style="margin-top:6px;font-size:11px;color:#cbd5e1;text-align:center">Cược lần tới: <b id="nextBetAmtDisplay" style="color:#4ade80">1.000</b> (bước 1)</div>
+                    <!-- CẤU HÌNH API ĐẶT CƯỢC -->
+                    <details style="margin-top:6px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:11px">
+                        <summary style="cursor:pointer;color:#38bdf8;font-weight:bold;outline:none">⚙️ Cài đặt API Cược (Link API & Mã cược)</summary>
+                        <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+                            <div>
+                                <label style="color:#94a3b8;font-size:10px">Link API Đặt cược:</label>
+                                <input id="autoBetApiUrl" type="text" value="https://vn168api.com/api/webapi/GameBetting" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#38bdf8;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                            </div>
+                            <div style="display:flex;gap:8px">
+                                <div style="flex:1">
+                                    <label style="color:#94a3b8;font-size:10px">Mã cược LỚN (selectType):</label>
+                                    <input id="autoBetMapL" type="text" value="14" placeholder="Lớn = 14" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                </div>
+                                <div style="flex:1">
+                                    <label style="color:#94a3b8;font-size:10px">Mã cược NHỎ (selectType):</label>
+                                    <input id="autoBetMapN" type="text" value="15" placeholder="Nhỏ = 15" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                </div>
+                            </div>
+                            <div>
+                                <label style="color:#94a3b8;font-size:10px">Header Ar-Origin (hoặc domain game):</label>
+                                <input id="autoBetOrigin" type="text" value="https://373vn.com" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                            </div>
+                        </div>
+                    </details>
+                    
                     <!-- THANH HIỂN THỊ TRẠNG THÁI ĐẶT CƯỢC THỰC TẾ -->
                     <div id="liveBetStatusBox" style="margin-top:6px;background:#0a120b;border:1px solid #166534;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.4">
                         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1725,14 +1750,15 @@
                         const tok = extractToken(getToken() || '');
                         let res;
                         try {
+                            const hdrs = {
+                                'Content-Type': 'application/json;charset=UTF-8',
+                                'Accept': 'application/json, text/plain, */*',
+                                'Authorization': 'Bearer ' + tok
+                            };
+                            if (CFG.arOrigin) hdrs['Ar-Origin'] = CFG.arOrigin;
                             res = await fetch(url, {
                                 method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json;charset=UTF-8',
-                                    'Accept': 'application/json, text/plain, */*',
-                                    'Authorization': 'Bearer ' + tok,
-                                    'Ar-Origin': CFG.arOrigin
-                                },
+                                headers: hdrs,
                                 body: JSON.stringify(body)
                             });
                         } catch (err) {
@@ -5078,40 +5104,47 @@
                         }
                     }
                     function buildBetPayload(issue, predBS, amount) {
-                        const mapL = document.getElementById('autoBetMapL')?.value || 'L';
-                        const mapN = document.getElementById('autoBetMapN')?.value || 'N';
-                        const betType = predBS==='L' ? mapL : mapN;
-                        const tmplEl = document.getElementById('autoBetTemplate');
-                        let tmpl = tmplEl && tmplEl.value ? tmplEl.value.trim() : '';
-                        if (!tmpl) tmpl = '{"typeId":30,"issueNumber":"{ISSUE}","betType":"{BET_TYPE}","amount":{AMOUNT},"language":2,"random":"{RANDOM}","signature":"{SIGNATURE}","timestamp":{TIMESTAMP}}';
+                        const mapL = document.getElementById('autoBetMapL')?.value?.trim() || '14';
+                        const mapN = document.getElementById('autoBetMapN')?.value?.trim() || '15';
+                        let selectType = (predBS === 'L') ? mapL : mapN;
+                        if (!isNaN(Number(selectType))) selectType = Number(selectType);
+
                         const random = randHex32();
-                        const ts = Math.floor(Date.now()/1000);
-                        let toSign = { typeId: 30, issueNumber: issue, betType: betType, amount: Number(amount), language: 2, random: random };
-                        try {
-                            const parsed = JSON.parse(tmpl.replace(/{ISSUE}/g, issue).replace(/{BET_TYPE}/g, betType).replace(/{AMOUNT}/g, String(amount)).replace(/{TYPE_ID}/g, '30').replace(/{RANDOM}/g, random).replace(/{TIMESTAMP}/g, String(ts)).replace(/{SIGNATURE}/g, ''));
-                            if (parsed.betData) toSign = { typeId: 30, language: 2, random: random };
-                        } catch(e){}
-                        const sorted = {}; Object.keys(toSign).sort().forEach(k=>sorted[k]=toSign[k]);
+                        const ts = Math.floor(Date.now() / 1000);
+                        const numAmount = Number(amount) || 1000;
+                        const betCount = 1; // 1 vé cược
+
+                        // Cấu trúc toSign CHÍNH XÁC 100% THEO GAMEBETTING THẬT
+                        // Key sắp xếp A-Z: amount, betCount, gameType, issuenumber, language, random, selectType, typeId
+                        const toSign = {
+                            amount: numAmount,
+                            betCount: 1,
+                            gameType: 2,
+                            issuenumber: String(issue),
+                            language: 2,
+                            random: random,
+                            selectType: selectType,
+                            typeId: CFG.payload.typeId || 30
+                        };
+
+                        const sorted = {};
+                        Object.keys(toSign).sort().forEach(k => { sorted[k] = toSign[k]; });
+                        
+                        // Ký bằng JSON.stringify compact (không khoảng trắng)
                         const signature = md5hex(JSON.stringify(sorted)).toUpperCase();
-                        let payloadStr = tmpl.replace(/{ISSUE}/g, issue).replace(/{BET_TYPE}/g, betType).replace(/{AMOUNT}/g, String(amount)).replace(/{TYPE_ID}/g, '30').replace(/{RANDOM}/g, random).replace(/{SIGNATURE}/g, signature).replace(/{TIMESTAMP}/g, String(ts));
-                        try { return JSON.parse(payloadStr); } catch(e){ return payloadStr; }
-                    }
-                    async function sendTelegram(msg) {
-                        try {
-                            const botToken = document.getElementById('tgBotToken')?.value || '6235887765:AAGcOHjay_qbixFwxOvJ4z_jxF6YAPIwAbI';
-                            const chatId = document.getElementById('tgChatId')?.value || '5452089308';
-                            const en = document.getElementById('tgEnable')?.checked;
-                            if (!en) return;
-                            if (!botToken || !chatId) return;
-                            const url = 'https://api.telegram.org/bot'+botToken+'/sendMessage';
-                            await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({chat_id: chatId, text: msg, parse_mode:'HTML'}) });
-                        } catch(e){}
-                    }
-                    function testTelegram() {
-                        const pred = window.lastPredictBS || 'L';
-                        const label = bsLabel(pred);
-                        sendTelegram('🧪 Test từ VN168\nDự đoán: <b>'+label+'</b>\nKỳ: '+(currentGameIssue||lastInsertedIssue||'-')+'\nTiền: '+formatMoney(getMartingaleAmount())+'\nGấp thếp: '+(martingaleState.enabled ? 'BẬT bước '+martingaleState.currentStep : 'TẮT'));
-                        autoBetLog('📨 Đã gửi test Telegram');
+
+                        return {
+                            amount: toSign.amount,
+                            betCount: toSign.betCount,
+                            gameType: toSign.gameType,
+                            issuenumber: toSign.issuenumber,
+                            language: toSign.language,
+                            random: toSign.random,
+                            selectType: toSign.selectType,
+                            signature: signature,
+                            timestamp: ts,
+                            typeId: toSign.typeId
+                        };
                     }
                     async function placeBetNow() {
                         const pred = window.lastPredictBS;
@@ -5147,7 +5180,11 @@
                         
                         const payload = buildBetPayload(issue, predBS, amount);
                         try {
-                            const res = await apiPost(CFG.apiBet, payload);
+                            const apiUrlInput = document.getElementById('autoBetApiUrl')?.value?.trim();
+                        const originInput = document.getElementById('autoBetOrigin')?.value?.trim();
+                        if (apiUrlInput) CFG.apiBet = apiUrlInput;
+                        if (originInput) CFG.arOrigin = originInput;
+                        const res = await apiPost(CFG.apiBet, payload);
                             const resStr = JSON.stringify(res || {});
                             const isSuccess = res && (res.code === 0 || res.status === true || res.success === true || (resStr.indexOf('"data"') !== -1 && resStr.indexOf('"code":0') !== -1));
                             
@@ -6261,4 +6298,4 @@
                     })();
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b3a559bac704b',t:'MTc5MDM1MTg4MA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b45a89dc7bd83',t:'MTc5MDM1MjM0NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
