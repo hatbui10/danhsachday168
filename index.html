@@ -596,11 +596,11 @@
                             <div style="display:flex;gap:8px">
                                 <div style="flex:1">
                                     <label style="color:#94a3b8;font-size:10px">Mã cược LỚN (selectType):</label>
-                                    <input id="autoBetMapL" type="text" value="13" placeholder="Lớn = 13" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                    <input id="autoBetMapL" type="text" value="14" placeholder="Lớn = 14" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
                                 </div>
                                 <div style="flex:1">
                                     <label style="color:#94a3b8;font-size:10px">Mã cược NHỎ (selectType):</label>
-                                    <input id="autoBetMapN" type="text" value="14" placeholder="Nhỏ = 14" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
+                                    <input id="autoBetMapN" type="text" value="13" placeholder="Nhỏ = 13" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
                                 </div>
                             </div>
                             <div>
@@ -1755,7 +1755,9 @@
                                 'Content-Type': 'application/json;charset=UTF-8',
                                 'Accept': 'application/json, text/plain, */*',
                                 'Authorization': 'Bearer ' + tok,
-                                'Ar-Origin': originDomain
+                                'Ar-Origin': originDomain,
+                                'Origin': originDomain,
+                                'Referer': originDomain + '/'
                             };
                             res = await fetch(url, {
                                 method: 'POST',
@@ -4985,8 +4987,8 @@
                             const cfg = {
                                 amount: document.getElementById('autoBetAmount')?.value || '1000',
                                 minConf: document.getElementById('autoBetMinConf')?.value || '50',
-                                mapL: document.getElementById('autoBetMapL')?.value || '13',
-                                mapN: document.getElementById('autoBetMapN')?.value || '14',
+                                mapL: document.getElementById('autoBetMapL')?.value || '14',
+                                mapN: document.getElementById('autoBetMapN')?.value || '13',
                                 dry: document.getElementById('autoBetDry')?.checked ? '1':'0',
                                 enable: document.getElementById('autoBetEnable')?.checked ? '1':'0',
                                 interval: document.getElementById('autoBetInterval')?.value || '28',
@@ -5019,15 +5021,15 @@
                             const cfg = JSON.parse(raw);
                             if (cfg.amount) document.getElementById('autoBetAmount').value = cfg.amount;
                             if (cfg.minConf) document.getElementById('autoBetMinConf').value = cfg.minConf;
-                            if (cfg.mapL && cfg.mapL !== 'L' && cfg.mapL !== '14') {
+                            if (cfg.mapL && cfg.mapL !== 'L' && cfg.mapL !== '13') {
                                 document.getElementById('autoBetMapL').value = cfg.mapL;
                             } else {
-                                document.getElementById('autoBetMapL').value = '13';
+                                document.getElementById('autoBetMapL').value = '14';
                             }
-                            if (cfg.mapN && cfg.mapN !== 'N' && cfg.mapN !== '15' && cfg.mapN !== '13') {
+                            if (cfg.mapN && cfg.mapN !== 'N' && cfg.mapN !== '15' && cfg.mapN !== '14') {
                                 document.getElementById('autoBetMapN').value = cfg.mapN;
                             } else {
-                                document.getElementById('autoBetMapN').value = '14';
+                                document.getElementById('autoBetMapN').value = '13';
                             }
                             if (cfg.interval) document.getElementById('autoBetInterval').value = cfg.interval;
                             if (cfg.template) document.getElementById('autoBetTemplate').value = cfg.template;
@@ -5119,15 +5121,16 @@
                     function buildBetPayload(issue, predBS, amount) {
                         let mapL = document.getElementById('autoBetMapL')?.value?.trim();
                         let mapN = document.getElementById('autoBetMapN')?.value?.trim();
-                        if (!mapL || mapL === 'L' || mapL === '14') mapL = '13';
-                        if (!mapN || mapN === 'N' || mapN === '15' || mapN === '13') mapN = '14';
+                        // Quy chuẩn: LỚN = 14, NHỎ = 13
+                        if (!mapL || mapL === 'L' || mapL === '13') mapL = '14';
+                        if (!mapN || mapN === 'N' || mapN === '15' || mapN === '14') mapN = '13';
                         let selectType = (predBS === 'L') ? mapL : mapN;
-                        selectType = Number(selectType) || (predBS === 'L' ? 13 : 14);
+                        selectType = Number(selectType) || (predBS === 'L' ? 14 : 13);
 
                         const random = randHex32();
                         const ts = Math.floor(Date.now() / 1000);
                         const numAmount = Number(amount) || 1000;
-                        const betCount = 1; // 1 vé cược
+                        const betCount = 1; // betCount là 1 theo yêu cầu chuẩn
 
                         // Cấu trúc toSign CHÍNH XÁC 100% THEO GAMEBETTING THẬT
                         // Key sắp xếp A-Z: amount, betCount, gameType, issuenumber, language, random, selectType, typeId
@@ -5249,7 +5252,7 @@
                                 statusBadge.style.color = '#f87171';
                             }
                             if (statusText) {
-                                statusText.innerHTML = '<span style="color:#f87171">Lỗi: ' + e.message + '</span><br><span style="color:#94a3b8;font-size:9px">Gửi kỳ: ' + issue + ' | Mã: ' + ((predBS==='L')?13:14) + ' | Tiền: ' + amount + '</span>';
+                                statusText.innerHTML = '<span style="color:#f87171">Lỗi: ' + e.message + '</span><br><span style="color:#94a3b8;font-size:9px">Gửi kỳ: ' + issue + ' | Mã: ' + ((predBS==='L')?14:13) + ' | Tiền: ' + amount + '</span>';
                             }
                             console.error('[BET-ERROR]', e);
                             showToast('❌ Lỗi đặt cược: ' + e.message, true);
@@ -6324,4 +6327,4 @@
                     })();
                 </script>
    
-</html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b6e32a948714f',t:'MTc5MDM1NDAwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
