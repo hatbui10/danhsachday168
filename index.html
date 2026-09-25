@@ -4997,6 +4997,8 @@
                                 martEnable: document.getElementById('martingaleEnable')?.checked ? '1':'0',
                                 martSeq: document.getElementById('martingaleSequence')?.value || '1000,2000,5000,12000,30000',
                                 martKx: document.getElementById('martingaleKx1000')?.checked ? '1':'0',
+                                apiUrl: document.getElementById('autoBetApiUrl')?.value || 'https://vn168api.com/api/webapi/GameBetting',
+                                origin: document.getElementById('autoBetOrigin')?.value || 'https://383vn.com',
                             };
                             localStorage.setItem(LS_AUTOBET, JSON.stringify(cfg));
                             martingaleState.enabled = cfg.martEnable==='1';
@@ -5037,6 +5039,8 @@
                             if (cfg.martEnable!==undefined) document.getElementById('martingaleEnable').checked = cfg.martEnable==='1';
                             if (cfg.martSeq) document.getElementById('martingaleSequence').value = cfg.martSeq;
                             if (cfg.martKx!==undefined) document.getElementById('martingaleKx1000').checked = cfg.martKx==='1';
+                            if (cfg.apiUrl && document.getElementById('autoBetApiUrl')) document.getElementById('autoBetApiUrl').value = cfg.apiUrl;
+                            if (cfg.origin && document.getElementById('autoBetOrigin')) document.getElementById('autoBetOrigin').value = cfg.origin;
                             // legacy
                             if (cfg.martBase && !cfg.martSeq) {
                                 const base = Number(cfg.martBase)||1000;
@@ -5197,6 +5201,7 @@
                         }
                         
                         const payload = buildBetPayload(issue, predBS, amount);
+                        console.log('[BET-PAYLOAD-SENT]', JSON.stringify(payload));
                         try {
                             const apiUrlInput = document.getElementById('autoBetApiUrl')?.value?.trim();
                         const originInput = document.getElementById('autoBetOrigin')?.value?.trim();
@@ -5244,8 +5249,9 @@
                                 statusBadge.style.color = '#f87171';
                             }
                             if (statusText) {
-                                statusText.textContent = 'Lỗi kết nối API: ' + e.message;
+                                statusText.innerHTML = '<span style="color:#f87171">Lỗi: ' + e.message + '</span><br><span style="color:#94a3b8;font-size:9px">Gửi kỳ: ' + issue + ' | Mã: ' + ((predBS==='L')?14:15) + ' | Tiền: ' + amount + '</span>';
                             }
+                            console.error('[BET-ERROR]', e);
                             showToast('❌ Lỗi đặt cược: ' + e.message, true);
                         }
                     }
@@ -5327,6 +5333,8 @@
                             document.getElementById('autoBetMinConf')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('autoBetMapL')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('autoBetMapN')?.addEventListener('change', saveAutoBetConfig);
+                            document.getElementById('autoBetApiUrl')?.addEventListener('change', saveAutoBetConfig);
+                            document.getElementById('autoBetOrigin')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('autoBetDry')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('tgBotToken')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('tgChatId')?.addEventListener('change', saveAutoBetConfig);
@@ -6316,4 +6324,4 @@
                     })();
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b517459d5e078',t:'MTc5MDM1MjgyNw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+</html>
