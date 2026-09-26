@@ -117,7 +117,7 @@
                 border-radius: 8px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.5);
                 max-width: 100%;
-                max-height: 180px;   /* 5 hàng */
+                max-height: 360px;   /* ≈ 10 hàng */
                 overflow-y: auto;
                 overflow-x: hidden;
             }
@@ -155,35 +155,30 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: bold;
                 border: none;
                 outline: none;
                 background: transparent;
-                color: #ffffff !important;
+                color: var(--text);
                 pointer-events: none;
                 user-select: none;
             }
-            .grid-cell .stt-label {
-                font-size: 8px;
-                color: #ffeb3b !important;
-                height: 11px;
-                line-height: 11px;
-                width: 100%;
-                text-align: center;
-                user-select: none;
-                overflow: hidden;
-                font-weight: bold;
-            }
             .grid-cell:focus-within { border-color: var(--accent-strong); background-color: #243447; }
             
-            /* Ô trùng dãy mới nhất - tô VÀNG nổi bật */
-            .highlight {
+            /* CHỈ TÔ 2 LOẠI: ô trùng giá trị ô (5,10) = VÀNG · ô ngay sau ô trùng = XANH */
+            .match-cell {
                 background-color: #f9a825 !important;
                 border: 2px solid #ffd54f !important;
             }
-            .highlight .val-input { color: #1a1a1a; font-weight: bold; }
-            .highlight .stt-label { color: #3e2723; }
+            .match-cell .val-input { color: #1a1a1a !important; font-weight: bold; }
+            .match-cell .stt-label { color: #3e2723 !important; }
+            .match-after {
+                background-color: #29b6f6 !important;
+                border: 2px solid #81d4fa !important;
+            }
+            .match-after .val-input { color: #0d47a1 !important; font-weight: bold; }
+            .match-after .stt-label { color: #01579b !important; }
             
             /* Ô tham chiếu cuối bảng: ĐÃ BỎ MÀU XANH theo yêu cầu - để giống ô thường, chỉ vàng khi trúng */
             .reference {
@@ -192,16 +187,7 @@
             }
             .reference .val-input { color: var(--text) !important; }
             .reference .stt-label { color: #ffeb3b !important; }
-            /* Ô trúng dự đoán L/N: xanh da trời — chỉ STT có trong lịch sử dự đoán và TRÚNG */
-            /* .predict-hit cũ đã bị vô hiệu hóa */
-            .predict-hit {
-                background: var(--surface2) !important;
-                border-color: var(--border) !important;
-                box-shadow: none !important;
-            }
-            
-            /* Viền xanh 4 ô ngay sau đoạn trùng khớp (ghép 1-1 với 4 ô dự đoán) */
-            .after { border-color: var(--accent) !important; }
+ border-color: var(--accent) !important; }
             
             /* Thanh trạng thái + nút lấy dữ liệu (thấy được ngay) */
             .fetch-row {
@@ -469,6 +455,32 @@
             .gp-n { width: 44px; color: #ffd54a; font-weight: bold; }
             .gp-d { width: 44px; color: #4ade80; font-weight: bold; }
             .gp-t { color: var(--text-dim); }
+            
+            /* 📋 Bảng dữ liệu game (dưới cùng) */
+            .dt-head-row { display:flex; gap:10px; padding:3px 6px; background:#16163a; color:#a78bfa;
+                           font-weight:bold; font-size:10px; position:sticky; top:0; z-index:2; }
+            .dt-row { display:flex; gap:10px; padding:2px 6px; border-bottom:1px solid rgba(255,255,255,0.04); align-items:center; flex-wrap:wrap; }
+            .dt-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
+            .dt-i { width:112px; color:#c4b5fd; }
+            .dt-n { letter-spacing:0; font-weight:bold; }
+            .dt-t { color:#64748b; margin-left:auto; padding-left:8px; white-space:nowrap; }
+            .dt-hit { color:#f0abfc; }
+            .dt-rest { color:#4ade80; }
+            .dt-sum { background:#0b1220; border:1px solid #4c1d95; border-radius:6px; padding:5px 7px;
+                      margin-bottom:5px; font-size:11px; color:#e0e0e0; line-height:1.5; }
+            .seg-in { width:44px; text-align:center; font-size:18px; font-weight:bold; background:#0d0d0d;
+                      color:#f0abfc; border:2px solid #d946ef; border-radius:6px; padding:4px; }
+            
+            /* CHỈ HIỆN BẢNG DỮ LIỆU KHO — các khung khác ẩn đi (vẫn chạy ngầm) */
+            .hide-me { display: none !important; }
+            
+            /* kết quả: 5 ô số liền nhau */
+            .dt-boxes { display:flex; gap:4px; }
+            .dt-box { display:inline-flex; align-items:center; justify-content:center;
+                      width:27px; height:27px; border-radius:5px; font-weight:bold; font-size:15px;
+                      border:1px solid #334155; background:#0f172a; color:#94a3b8; }
+            .dt-box.hit  { background:#4a1942; color:#f0abfc; border-color:#d946ef; }
+            .dt-box.rest { background:#052e16; color:#4ade80; border-color:#22c55e; }
             .gp-actions { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
             .gp-actions input {
                 width: 52px; background: #0d0d0d; color: var(--text);
@@ -495,146 +507,176 @@
             .ph-badge-miss { background:#f87171;color:#000;padding:1px 5px;border-radius:8px;font-size:10px;font-weight:bold; }
             .ph-badge-pending { background:#a78bfa;color:#000;padding:1px 5px;border-radius:8px;font-size:10px;font-weight:bold; }
             
-        
-            #toastMsg {
-                position: fixed;
-                top: 15px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: #15803d;
-                color: #fff;
-                padding: 8px 18px;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 13px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.6);
-                z-index: 99999;
-                display: none;
-            }
-
         </style>
     </head>
 
     <body>
-        <div id="toastMsg"></div>
-        <h2 id="mainTitle">🔮 Dự đoán LỚN (≥5) / NHỎ (<5) - ô STT tiếp theo sau ô cuối (100,10)</h2>
-
-        <!-- KHUNG NHẬP TOKEN BEARER ĐƯA LÊN TRÊN ĐẦU -->
-        <div style="width:420px;max-width:98%;display:flex;gap:8px;align-items:center;background:#1e293b;border:1px solid #3b82f6;border-radius:8px;padding:8px 10px;margin-bottom:10px;box-sizing:border-box">
-            <span style="font-size:16px">🔑</span>
-            <input id="tokenInput" type="text" placeholder="Dán Token Bearer vào đây..." style="flex:1;background:#0f172a;color:#4ade80;border:1px solid #475569;border-radius:6px;padding:7px 10px;font-size:11px;font-family:monospace;outline:none">
-            <button class="btn-mini" onclick="saveAndFetchToken()" style="background:#2563eb;border:1px solid #60a5fa;color:#fff;padding:7px 14px;border-radius:6px;font-weight:bold;font-size:12px;cursor:pointer;white-space:nowrap">🔄 Lấy số</button>
-        </div>
-
-                <!-- BẢNG 10 HÀNG CUỐI - ĐƯA LÊN TRÊN CÙNG NHƯ BAN ĐẦU -->
-                <div id="gridContainer" class="grid-table" style="max-height:180px"></div>
-                <div style="font-size:10px;color:#888;margin-bottom:8px;text-align:center;max-width:380px"><b style="color:#ffd54f">Ô vàng</b> = ô trùng với ô 10 hàng 5 · <b style="color:#38bdf8">Ô xanh</b> = ô ngay sau ô trùng</div>
-
-                <!-- ĐỒNG HỒ & ĐẾM NGƯỢC 30S -->
-                <div style="width:420px;max-width:98%;display:flex;justify-content:space-between;align-items:center;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:6px 12px;margin-bottom:8px;box-sizing:border-box">
-                    <div style="display:flex;align-items:center;gap:6px">
-                        <span style="font-size:15px">🕒</span>
-                        <span id="liveClock" style="font-size:13px;font-family:monospace;font-weight:bold;color:#38bdf8">--:--:--</span>
-                    </div>
-                    <div style="display:flex;align-items:center;gap:6px">
-                        <span style="font-size:11px;color:#94a3b8">Đếm ngược kỳ:</span>
-                        <span id="gameCountdown" style="font-size:18px;font-family:monospace;font-weight:bold;color:#fbbf24">--s</span>
-                    </div>
-                </div>
-
-                <!-- 3 Ô SOI SỐ & DỰ ĐOÁN ĐẢO -->
-                <div id="twoBoxesPanel" class="cell-history-panel" style="background:#141e33;border-color:#4da3ff;width:420px;max-width:98%;margin-bottom:10px;padding:8px 8px">
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;align-items:stretch">
-                        <!-- Ô 1: Ô TRÙNG (VỚI Ô 10 HÀNG 5) -->
-                        <div style="background:#1e293b;border:2px solid #ffd54f;border-radius:6px;padding:6px 2px;text-align:center;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center">
-                            <div style="font-size:9px;color:#fde047;font-weight:bold">Ô TRÙNG</div>
-                            <div id="boxMatchStt" style="font-size:10px;color:#ffeb3b;font-weight:bold;margin:1px 0">STT ---</div>
-                            <div id="boxMatchVal" style="font-size:30px;font-weight:bold;color:#f9a825;line-height:32px">-</div>
-                            <div id="boxMatchSub" style="font-size:8px;color:#cbd5e1;margin-top:2px">Ô 10 hàng 5</div>
-                        </div>
-
-                        <!-- Ô 2: Ô NGAY SAU Ô TRÙNG -->
-                        <div style="background:#1e293b;border:2px solid #38bdf8;border-radius:6px;padding:6px 2px;text-align:center;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center">
-                            <div style="font-size:9px;color:#7dd3fc;font-weight:bold">Ô SAU TRÙNG</div>
-                            <div id="boxAfterStt" style="font-size:10px;color:#ffeb3b;font-weight:bold;margin:1px 0">STT ---</div>
-                            <div id="boxAfterVal" style="font-size:30px;font-weight:bold;color:#38bdf8;line-height:32px">-</div>
-                            <div id="boxAfterSub" style="font-size:8px;color:#a78bfa;margin-top:2px">-</div>
-                        </div>
-
-                        <!-- Ô 3: Ô DỰ ĐOÁN (ĐẢO NGƯỢC SO VỚI Ô SAU TRÙNG) -->
-                        <div style="background:#0b1220;border:2px solid #4ade80;border-radius:6px;padding:6px 2px;text-align:center;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center">
-                            <div style="font-size:9px;color:#86efac;font-weight:bold">Ô DỰ ĐOÁN</div>
-                            <div id="boxPredictStt" style="font-size:10px;color:#fbbf24;font-weight:bold;margin:1px 0">STT ---</div>
-                            <div id="boxPredictVal" style="font-size:24px;font-weight:bold;color:#4ade80;line-height:32px">---</div>
-                            <div id="boxPredictSub" style="font-size:8px;color:#86efac;margin-top:2px">Đảo với ô sau</div>
+        <h2 id="mainTitle" class="hide-me">🔮 Dự đoán LỚN (≥5) / NHỎ (<5) - ô STT tiếp theo sau ô cuối (5,10)</h2>
+                <!-- ⏱ ĐỒNG HỒ GAME: đếm ngược tới kỳ mới, chu kỳ lấy từ chính dữ liệu game -->
+                <div id="gameClockBar" class="cell-history-panel hide-me" style="background:#0b1220;border-color:#fbbf24;width:420px;max-width:98%;padding:6px 10px">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <div id="gameClockTime" style="font-size:32px;font-weight:bold;color:#fbbf24;font-family:monospace;letter-spacing:2px;min-width:96px;text-align:center">--:--</div>
+                        <div style="font-size:11px;color:#cfe8ff;line-height:1.5;flex:1;min-width:150px">
+                            Kỳ: <b id="gameClockIssue" style="color:#ffd54a">-</b> · chu kỳ <b id="gameClockCycle">--</b>s<br>
+                            <span id="gameClockState" style="color:#94a3b8">đang đồng bộ đồng hồ game…</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- PHẦN ĐẶT CƯỢC GẤP THẾP GỌN GÀNG -->
-                <div id="autoBetPanel" class="cell-history-panel" style="display:block;background:#102a18;border-color:#4ade80;width:420px;max-width:98%;margin-bottom:10px;padding:8px 10px">
-                    <div style="font-size:11px;color:#86efac;font-weight:bold;margin-bottom:4px">🔁 DÃY GẤP THẾP:</div>
-                    <textarea id="martingaleSequence" style="width:100%;height:38px;background:#0d0d0d;color:#f0abfc;border:1px solid #d946ef;border-radius:4px;padding:4px 6px;font-family:monospace;font-size:12px;box-sizing:border-box" placeholder="1000,2000,5000,12000,30000">1000,2000,5000,12000,30000</textarea>
-                    
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-                        <button class="btn-mini" onclick="onSaveMartingaleBtn()" style="background:#7e22ce;border-color:#a855f7;color:#fff;padding:6px 12px;font-weight:bold;font-size:11px">💾 Lưu dãy</button>
-                        
-                        <label style="display:flex;align-items:center;gap:6px;background:#052e16;padding:5px 12px;border-radius:6px;border:2px solid #4ade80;cursor:pointer">
-                            <input type="checkbox" id="autoBetEnable">
-                            <b style="color:#4ade80;font-size:12px">▶️ TỰ ĐỘNG ĐẶT CƯỢC</b>
+                <!-- BẢNG 5 HÀNG CUỐI = 50 Ô -->
+                <div id="gridContainer" class="grid-table hide-me" style="max-height:200px"></div>
+                <div class="hide-me" style="font-size:10px;color:#888;margin-bottom:6px;text-align:center;max-width:380px">🟡 vàng = trùng số ô (5,10) · 🔵 xanh = số ngay sau ô trùng</div>
+
+                <!-- 🔍 2 Ô: Ô CUỐI (5,10) + Ô NGAY SAU Ô TRÙNG GIÁ TRỊ GẦN NHẤT -->
+                <div id="matchPanel" class="cell-history-panel hide-me" style="background:#0f1b2e;border-color:#38bdf8;width:420px;max-width:98%">
+                    <div class="ch-head" style="color:#38bdf8;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+                        <span>🔍 Tra số trùng gần nhất</span>
+                        <span class="ch-count" id="matchInfoCount">—</span>
+                    </div>
+                    <div style="display:flex;gap:10px;align-items:stretch;margin:6px 0 4px;flex-wrap:wrap">
+                        <div id="matchBox1" style="flex:1;min-width:150px;padding:10px 8px;background:#0b1220;border:2px solid #38bdf8;border-radius:8px;text-align:center"></div>
+                        <div id="matchBox2" style="flex:1;min-width:150px;padding:10px 8px;background:#0b1220;border:2px dashed #a78bfa;border-radius:8px;text-align:center"></div>
+                    </div>
+                    <div id="matchNote" style="font-size:10px;color:#94a3b8;line-height:1.45"></div>
+                </div>
+
+                <!-- DỰ ĐOÁN LỚN/NHỎ -->
+                <div id="predictPanel" class="cell-history-panel hide-me" style="background:#141e33;border-color:#4da3ff;width:420px;max-width:98%">
+                    <div class="ch-head" style="color:#4da3ff;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+                        <span id="predictHeaderTitle">🔮 Dự đoán LỚN / NHỎ</span>
+                                <span class="ch-count" id="predictCount">-</span>
+                    </div>
+                    <div id="predictNextSttBar" style="margin:6px 0 4px;padding:8px 10px;background:#0b1220;border:1px solid #4da3ff;border-radius:8px;text-align:center;line-height:1.35">
+                        <div style="font-size:11px;color:#94a3b8">Ô cuối hàng cuối (cột 10) · dự đoán STT</div>
+                        <div id="predictNextSttNum" style="font-size:28px;font-weight:bold;color:#4ade80;letter-spacing:1px">STT ---</div>
+                        <div id="predictNextSttSub" style="font-size:10px;color:#64748b">chưa có ô cuối</div>
+                    </div>
+                    <div id="predictLastResolve" style="margin:4px 0 2px;padding:6px 8px;background:#0b1220;border:1px solid #334155;border-radius:8px;text-align:center;font-size:11px;color:#94a3b8;line-height:1.4">Chưa chốt kỳ nào.</div>
+                    <div id="predictDualRow" style="display:flex;gap:8px;align-items:stretch;margin:6px 0 4px;flex-wrap:wrap">
+                        <div style="flex:1;min-width:150px;padding:10px 8px;background:#0f172a;border:1px dashed #334155;border-radius:8px;text-align:center;color:#64748b;font-size:11px">DỰ ĐOÁN<br><b>chưa chạy</b></div>
+                    </div>
+                    <div id="predictAgreeBar" style="display:none;margin-bottom:6px;padding:6px 8px;border-radius:6px;font-size:12px;font-weight:bold;text-align:center"></div>
+                    <div id="predictNextPanel" style="font-size:11px;color:#cfe8ff;line-height:1.45">Chưa đủ dữ liệu để dự đoán.</div>
+                    <div class="hist-ctrl" style="margin-top:6px">
+                        <button class="btn-mini" onclick="predictNext(true)" style="background:#1e40af;border-color:#60a5fa;color:#fff">🔮 Dự đoán lại</button>
+                        <label style="font-size:10px;color:#aaa">Mẫu:
+                            <select id="predictLen">
+                                <option value="2">2</option>
+                                <option value="3" selected>3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </label>
+                        <label style="font-size:10px;color:#aaa">BT:
+                            <select id="predictBacktestN">
+                                <option value="100">100</option>
+                                <option value="200">200</option>
+                                <option value="500" selected>500</option>
+                                <option value="1000">1000</option>
+                            </select>
                         </label>
                     </div>
-                    <div id="martingaleStatusShort" style="margin-top:6px;font-size:11px;color:#cbd5e1;text-align:center">Cược lần tới: <b id="nextBetAmtDisplay" style="color:#4ade80">1.000</b> (bước 1)</div>
-                    <!-- CẤU HÌNH API ĐẶT CƯỢC -->
-                    <details style="margin-top:6px;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:4px 8px;font-size:11px">
-                        <summary style="cursor:pointer;color:#38bdf8;font-weight:bold;outline:none">⚙️ Cài đặt API Cược (Link API & Mã cược)</summary>
-                        <div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
-                            <div>
-                                <label style="color:#94a3b8;font-size:10px">Link API Đặt cược:</label>
-                                <input id="autoBetApiUrl" type="text" value="https://vn168api.com/api/webapi/GameBetting" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#38bdf8;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
-                            </div>
-                            <div style="display:flex;gap:8px">
-                                <div style="flex:1">
-                                    <label style="color:#94a3b8;font-size:10px">Mã cược LỚN (selectType):</label>
-                                    <input id="autoBetMapL" type="text" value="14" placeholder="Lớn = 14" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#4ade80;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
-                                </div>
-                                <div style="flex:1">
-                                    <label style="color:#94a3b8;font-size:10px">Mã cược NHỎ (selectType):</label>
-                                    <input id="autoBetMapN" type="text" value="13" placeholder="Nhỏ = 13" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#fbbf24;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
-                                </div>
-                            </div>
-                            <div>
-                                <label style="color:#94a3b8;font-size:10px">Header Ar-Origin (hoặc domain game):</label>
-                                <input id="autoBetOrigin" type="text" value="https://383vn.com" style="width:100%;box-sizing:border-box;background:#0d0d0d;color:#cbd5e1;border:1px solid #334155;border-radius:4px;padding:4px 6px;font-size:10px;font-family:monospace">
-                            </div>
-                        </div>
-                    </details>
-                    
-                    <!-- THANH HIỂN THỊ TRẠNG THÁI ĐẶT CƯỢC THỰC TẾ -->
-                    <div id="liveBetStatusBox" style="margin-top:6px;background:#0a120b;border:1px solid #166534;border-radius:6px;padding:6px 8px;font-size:11px;line-height:1.4">
-                        <div style="display:flex;justify-content:space-between;align-items:center">
-                            <span style="color:#94a3b8">Trạng thái:</span>
-                            <span id="betStatusBadge" style="color:#64748b;font-weight:bold">⏸️ ĐANG TẮT</span>
-                        </div>
-                        <div id="betLastResultText" style="color:#cbd5e1;font-size:10px;margin-top:3px;font-family:monospace">Chưa có lệnh cược nào</div>
+                    <div id="predictBestBox" style="display:none"></div>
+                </div>
+
+                <!-- 📜 LỊCH SỬ Ô DỰ ĐOÁN - KIỂM TRA ĐÚNG/SAI -->
+                <div id="predictHistoryPanel" class="cell-history-panel hide-me" style="background:#1a1a2e;border-color:#a78bfa;width:420px;max-width:98%">
+                    <div class="ch-head" style="color:#a78bfa;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+                        <span>📜 Lịch sử dự đoán</span>
+                        <span class="ch-count" id="predictHistoryCount">0 mục</span>
+                    </div>
+                    <div id="predictHistoryStats" style="background:#0f0f23;border:1px solid #4c1d95;border-radius:6px;padding:6px 8px;margin-bottom:6px;font-size:11px;color:#e0e0e0;line-height:1.45">Chưa có dữ liệu dự đoán.</div>
+                    <div id="predictHistoryList" style="max-height:360px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;padding:2px 0;font-family:monospace;font-size:11px"></div>
+                    <div style="text-align:right;margin-top:4px">
+                        <button class="btn-mini" onclick="if(confirm('Xoá hết lịch sử dự đoán?')){predictLog=[];savePredictLog();lastPredictLogFp='';renderPredictLog();}" style="background:#7f1d1d;border-color:#f87171">🧹 Xoá</button>
                     </div>
                 </div>
 
-                <!-- LỊCH SỬ KẾT QUẢ GẦN NHẤT -->
-                <div class="cell-history-panel" style="background:#1a1a2e;border-color:#a78bfa;width:420px;max-width:98%;margin-bottom:10px;padding:8px 10px">
-                    <div class="ch-head" style="color:#a78bfa;margin-bottom:4px">
-                        <span>📜 Lịch sử kết quả gần nhất</span>
-                        <span class="ch-count" id="predLogStatsShort" style="color:#e0e0e0;font-size:11px">0 mục</span>
+                <!-- 🤖 TỰ ĐỘNG ĐẶT CƯỢC - 28s + LỚN/NHỎ + GẤP THẾP -->
+                <!-- 🤖 TỰ ĐỘNG ĐẶT CƯỢC: nhập dãy gấp thếp -> thông báo -> bấm tự động đặt -->
+                <div id="autoBetPanel" class="cell-history-panel hide-me" style="background:#102a18;border-color:#4ade80;width:420px;max-width:98%">
+                    <div class="ch-head" style="color:#4ade80;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+                        <span>🤖 Tự động đặt LỚN / NHỎ</span>
+                        <span class="ch-count" id="autoBetCount">TẮT</span>
                     </div>
-                    <div id="simpleHistoryList" style="max-height:160px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;padding:4px 6px;font-family:monospace;font-size:11px">
-                        <div style="color:#64748b;text-align:center;padding:4px">Chưa có kết quả</div>
+
+                    <!-- 🔁 NHẬP DÃY GẤP THẾP -->
+                    <div style="background:#1a0a1a;border:2px solid #d946ef;border-radius:8px;padding:8px 10px;margin-bottom:8px">
+                        <div style="font-size:11px;color:#f0abfc;font-weight:bold;margin-bottom:4px">🔁 DÃY GẤP THẾP (cách nhau bằng <b>-</b> <b>,</b> <b>;</b> hoặc xuống dòng · <b>k</b> = nghìn)</div>
+                        <textarea id="martingaleSequence" oninput="onMartingaleInput()" style="width:100%;height:46px;background:#0d0d0d;color:#f0abfc;border:1px solid #d946ef;border-radius:4px;padding:4px 6px;font-family:monospace;font-size:13px;box-sizing:border-box" placeholder="VD: 1k-2k-5k-12k-30k">1000,2000,5000,12000,30000</textarea>
+                        <div id="martingaleSeqPreview" style="font-size:10px;color:#fbbf24;margin-top:3px"></div>
+                        <div id="martingaleStatus" style="margin-top:5px;background:#0d0d0d;border:1px solid #4a194a;border-radius:4px;padding:5px 6px;font-size:11px;line-height:1.4;color:#e9d5ff">Chưa chạy gấp thếp</div>
                     </div>
+
+                    <!-- 🔔 THÔNG BÁO TRÊN MÀN HÌNH -->
+                    <div id="betNotify" style="margin-bottom:8px;padding:8px 10px;background:#0b1220;border:1px solid #4da3ff;border-radius:8px;font-size:12px;color:#cfe8ff;line-height:1.5">Nhập dãy gấp thếp để bắt đầu.</div>
+
+                    <!-- ▶️ NÚT TỰ ĐỘNG ĐẶT -->
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                        <label style="display:flex;align-items:center;gap:5px;background:#052e16;padding:8px 14px;border-radius:8px;border:2px solid #4ade80;cursor:pointer"><input type="checkbox" id="autoBetEnable"> <b style="color:#4ade80;font-size:13px">▶️ TỰ ĐỘNG ĐẶT CƯỢC</b></label>
+                        <span id="autoBetIssue" style="font-size:11px;color:#ffd54a;font-weight:bold">-</span>
+                        <span style="font-size:10px;color:#64748b">đặt theo đồng hồ game · <span id="autoBetCountdown" style="color:#fbbf24;font-weight:bold">--</span>s</span>
+                    </div>
+                    <div id="autoBetLog" style="margin-top:6px;background:#0d0d0d;border:1px solid #1a4a2a;border-radius:4px;padding:4px 6px;max-height:96px;overflow-y:auto;font-family:monospace;font-size:10px;white-space:pre-wrap;word-break:break-all">Chưa đặt.</div>
+                </div>
+
+                <!-- FIREBASE - GIỮ LẠI -->
+                <div id="firebasePanel" class="cell-history-panel hide-me" style="background:#0f172a;border-color:#334155;width:380px;max-width:95%">
+                    <div class="ch-head" style="color:#9fd0ff">☁️ Kho & Firebase <span class="ch-count" id="gpArchiveInfo">Kho: 0 mục</span></div>
+                    <div class="fb-row">
+                        <span id="fbArchStatus" style="font-size:11px;color:#9fd0ff;flex:1">☁️ Firebase: chưa kiểm tra</span>
+                    </div>
+                    <div class="fb-row">
+                        <button class="btn-undo" onclick="gameLoad100Pages()" style="background:#1d4ed8;border-color:#60a5fa;font-weight:bold">⬇️ Tải 100 trang</button>
+                        <button class="btn-undo" onclick="fbArchiveSave(true)">☁️ Lưu kho lên Firebase</button>
+                        <button class="btn-undo" onclick="fbArchiveLoad()">⬇️ Tải kho từ Firebase</button>
+                        <button class="btn-mini" onclick="gameClearArchive()" style="background:#7f1d1d;border-color:#f87171">🧹 Xoá kho</button>
+                    </div>
+                    <div class="gp-status" id="gpStatus" style="margin-top:6px;font-size:11px;color:#64748b;white-space:pre-wrap">Chưa tải.</div>
+                    <div style="margin-top:4px;font-size:10px;color:#475569">Kho tự lưu Firebase · dán token là tự tải 5000 trang</div>
+                </div>
+
+                <!-- 📋 BẢNG DỮ LIỆU GAME + TRA ĐOẠN 5 SỐ -->
+                <div id="dataTablePanel" class="cell-history-panel" style="background:#10131f;border-color:#a78bfa;width:560px;max-width:98%">
+                    <div class="ch-head" style="color:#a78bfa;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+                        <span>📋 Tra đoạn 5 số trong kho</span>
+                        <span class="ch-count" id="dataTableCount">0 kỳ</span>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0">
+                        <button class="btn-mini" onclick="gameLoad100Pages()" style="background:#1e40af;border-color:#60a5fa;font-weight:bold">⬇️ Tải 100 trang</button>
+                        <button class="btn-mini" onclick="clearSegInput()">🔄 Vẽ lại</button>
+                        <button class="btn-mini" onclick="exportDataTable()">📤 Xuất bảng</button>
+                    </div>
+
+                    <!-- 🔎 Ô NHẬP (2-6 ô) + 3 số cuối để tra -->
+                    <div style="background:#0b1220;border:1px solid #4c1d95;border-radius:8px;padding:6px 8px;margin-bottom:6px">
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">
+                            <label style="font-size:11px;color:#e9d5ff;font-weight:bold">Số ô nhập:</label>
+                            <select id="segLen" onchange="onSegLenChange()" style="background:#0d0d0d;color:#f0abfc;border:2px solid #d946ef;border-radius:6px;padding:4px 6px;font-weight:bold;font-size:13px">
+                                <option value="2" selected>2 ô</option>
+                                <option value="3">3 ô</option>
+                                <option value="4">4 ô</option>
+                                <option value="5">5 ô</option>
+                                <option value="6">6 ô</option>
+                            </select>
+                            <span id="segLenInfo" style="font-size:10px;color:#94a3b8">→ đoạn 5 số (2 số đầu nhập + 3 số cuối tra)</span>
+                        </div>
+                        <div style="font-size:11px;color:#e9d5ff;font-weight:bold;margin-bottom:4px">🔎 Nhập các số đầu:</div>
+                        <div id="segInputs" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></div>
+                        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px">
+                            <button class="btn-mini" onclick="findSegmentsFromInput()" style="background:#4a1942;border-color:#d946ef;font-weight:bold">🔎 Tìm đoạn</button>
+                            <button class="btn-mini" onclick="clearSegInput()">✖ Xoá</button>
+                        </div>
+                        <div id="segInfo" style="font-size:10px;color:#94a3b8;margin-top:4px">Nhập các số (0-9) — nhập xong ô cuối là hiện kết quả.</div>
+                    </div>
+
+                    <div id="dataTableBody" style="max-height:340px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;font-family:monospace;font-size:11px"></div>
                 </div>
 
                 <!-- Các phần tử ẩn cần cho logic JS (không hiện UI) -->
                 <div style="display:none">
                     <div id="dateBoxes"></div>
-                    <input id="sttInput"><input id="mainInput"><!-- tokenInput moved above --><input id="rememberToken" type="checkbox" checked>
+                    <input id="sttInput"><input id="mainInput"><input id="tokenInput"><input id="rememberToken" type="checkbox" checked>
                     <span id="apiStatus"></span><span id="apiStatusVisible"></span>
                     <div id="rawLog"></div>
                     <select id="refCountSelect">
@@ -651,12 +693,25 @@
                     <div id="gpTable"></div>
                     <input id="gpN" value="100"><button id="btnGameAuto"></button><button id="btnGameStop"></button><button id="btnApiTest"></button>
                     <input id="filterDate" value="2026-09-13"><input id="filterStt" value="916">
+                    <!-- control đặt cược: giữ nguyên ID để logic chạy, không hiện trên giao diện -->
+                    <input id="autoBetAmount" type="number" min="1" value="1000"><span id="autoBetAmountDisplay">1.000</span>
+                    <input id="autoBetInterval" type="number" min="5" max="300" value="28">
+                    <input type="checkbox" id="martingaleEnable"><input type="checkbox" id="martingaleKx1000" checked>
+                    <input id="martingaleBase" value="1000"><input id="martingaleMult" value="2"><input id="martingaleMax" value="5">
+                    <input id="autoBetMinConf" type="number" min="0" max="100" value="0">
+                    <input id="autoBetMapL" value="L"><input id="autoBetMapN" value="N">
+                    <input type="checkbox" id="autoBetDry">
+                    <input id="autoBetLastIssueShort" value="-">
+                    <div id="autoBetLastBox" style="display:none"><div id="autoBetLastDetail"></div></div>
+                    <textarea id="autoBetTemplate">{"typeId":30,"issueNumber":"{ISSUE}","betType":"{BET_TYPE}","amount":{AMOUNT},"language":2,"random":"{RANDOM}","signature":"{SIGNATURE}","timestamp":{TIMESTAMP}}</textarea>
+                    <input id="tgBotToken"><input id="tgChatId"><input type="checkbox" id="tgEnable" checked>
+                    <button id="btnPlaceBetNow" onclick="placeBetNow()"></button><button id="btnResetMart" onclick="resetMartingale()"></button>
                 </div>
 
                 <script>
-                    const ROWS = 5;               // Đúng 5 hàng x 10 cột = 50 ô (hiện đầy đủ không bị ẩn)
+                    const ROWS = 5;               // BẢNG CHỈ 5 HÀNG = 50 Ô (không mở rộng thêm)
                     const COLS = 10;
-                    const MAX_BOARD_ROWS = 5;     // Cố định đúng 5 hàng
+                    const MAX_BOARD_ROWS = 5;     // KHÔNG cho bảng tự mở rộng — luôn giữ đúng 5 hàng
                     let boardRows = ROWS;
                     let TOTAL = ROWS * COLS;      // ĐỘNG: bảng tự mở rộng dần khi nạp lịch sử (tối đa MAX_BOARD_ROWS hàng)
                     const AUTO_LOAD_PAGES = 5000; // mỗi khi mở app: tự tải nền 2→5000 trang (tắt: LS vn168_autoLoad='0')
@@ -681,154 +736,15 @@
                     let localClearedAt = 0;
                     let resetEpoch = 0;
                     let lastAutoScrollKey = null;   // để chỉ tự cuộn khi đoạn trùng THAY ĐỔI
+                    let matchIdxCur = -1;       // ô trùng giá trị với ô (5,10) — CHỈ để tô màu
+                    let matchAfterIdxCur = -1;  // ô nằm ngay sau ô trùng — CHỈ để tô màu
                     
-                    // Lịch sử tất cả số đã đi qua ô (100,10)
+                    // Lịch sử tất cả số đã đi qua ô (5,10)
                     const CELL_HIST_MAX = 5000;                   // giữ tối đa 5000 số mới nhất
                     const LS_CELL_HIST = 'vn168_cell_history_v1';
                     let cellHistory = [];                         // [{ s: STT kỳ, d: chữ số, t: thời gian }] – mới nhất ở đầu
                     
                     // Ô vàng trúng dự đoán L/N — giữ vĩnh viễn (kể cả reload) + Firebase
-                    const LS_PREDICT_HITS = 'vn168_predictHits_v1';
-                    let predictHits = []; // [{f: fullId, s: short, d: digit, pred: L/N, at: ts}]
-                    let predictHitsSet = new Set(); // fullId -> true (để tra nhanh)
-                    function loadPredictHits() {
-                        try {
-                            const raw = localStorage.getItem(LS_PREDICT_HITS);
-                            if (!raw) return;
-                            const arr = JSON.parse(raw);
-                            if (!Array.isArray(arr)) return;
-                            predictHits = arr.filter(e=>e && (e.f||e.s));
-                            predictHitsSet = new Set(predictHits.map(e=> String(e.f||'').trim() || ('SHORT:'+e.s+'|'+e.d+'|'+e.at) ));
-                        } catch(e) { predictHits=[]; predictHitsSet=new Set(); }
-                    }
-                    function savePredictHits() {
-                        try { localStorage.setItem(LS_PREDICT_HITS, JSON.stringify(predictHits.slice(0,2000))); } catch(e){}
-                        // lưu lên Firebase để mở trang khác vẫn hiện vàng
-                        try {
-                            if (typeof fbDB !== 'undefined' && fbDB) {
-                                fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
-                                    predictHits: predictHits.slice(0,2000),
-                                    lastPredictHitsAt: Date.now()
-                                }, {merge:true}).catch(()=>{});
-                            }
-                        } catch(e){}
-                    }
-                    function mergeRemotePredictHits(remoteArr) {
-                        if (!Array.isArray(remoteArr) || !remoteArr.length) return;
-                        let added = 0;
-                        for (const e of remoteArr) {
-                            if (!e) continue;
-                            const full = e.f ? String(e.f).trim() : '';
-                            const key = full || ('SHORT:'+e.s+'|'+e.d+'|'+e.at);
-                            if (predictHitsSet.has(full) && full) continue;
-                            if (predictHitsSet.has(key)) continue;
-                            // check trùng full
-                            if (full && predictHits.some(x=>x.f===full)) continue;
-                            predictHits.push(e);
-                            predictHitsSet.add(full || key);
-                            if (full) predictHitsSet.add(full);
-                            added++;
-                        }
-                        if (added>0) {
-                            // sắp xếp mới nhất trước, giới hạn 2000
-                            predictHits.sort((a,b)=>(b.at||0)-(a.at||0));
-                            if (predictHits.length>2000) predictHits.length=2000;
-                            try { localStorage.setItem(LS_PREDICT_HITS, JSON.stringify(predictHits)); } catch(e){}
-                            try { renderAll(); } catch(e){}
-                        }
-                    }
-                    let predictHitSttSet = new Set();
-                    let predictHitFullSet = new Set();
-                    function rebuildPredictHitIndex() {
-                        predictHitSttSet = new Set();
-                        predictHitFullSet = new Set();
-                        try {
-                            for (const e of predictLog) {
-                                const ok = (e.hit===true) || (e.hit200===true) || (e.hit500===true);
-                                if (!ok) continue;
-                                if (e.forSTT) predictHitSttSet.add(String(e.forSTT).padStart(3,'0').slice(-3));
-                                if (e.actualSTT) predictHitSttSet.add(String(e.actualSTT).padStart(3,'0').slice(-3));
-                                if (e.forFullId) predictHitFullSet.add(String(e.forFullId).trim());
-                                if (e.actualFullId) predictHitFullSet.add(String(e.actualFullId).trim());
-                            }
-                        } catch(e){}
-                    }
-                    function isPredictHitCell(cell) { return false; }
-                    function findFullIdForHit(short, digit) {
-                        if (!short) return '';
-                        short = String(short).padStart(3,'0').slice(-3);
-                        // 1) tìm trong kho gameArchive (mới nhất trước)
-                        try {
-                            for (const e of gameArchive) {
-                                if (String(e.i).slice(-3)===short && String(e.d)===String(digit)) return String(e.i);
-                            }
-                        } catch(e){}
-                        // 2) tìm trong bảng hiện tại
-                        try {
-                            for (let i=cells.length-1;i>=0;i--) {
-                                const c = cells[i];
-                                if (!c.value) continue;
-                                if (String(c.stt).padStart(3,'0').slice(-3)===short && String(c.value)===String(digit) && c.sttFull) return String(c.sttFull);
-                            }
-                        } catch(e){}
-                        // 3) nếu short trùng với lastInsertedIssue
-                        try {
-                            if (lastInsertedIssue && String(lastInsertedIssue).slice(-3)===short) return String(lastInsertedIssue);
-                        } catch(e){}
-                        return '';
-                    }
-                    function fixPredictHitsMissingIds() {
-                        let fixed=0;
-                        for (const e of predictHits) {
-                            if (e.f && String(e.f).trim()!=='') continue;
-                            const full = findFullIdForHit(e.s, e.d);
-                            if (full) { e.f = full; fixed++; }
-                        }
-                        if (fixed>0) {
-                            // rebuild Set
-                            predictHitsSet = new Set();
-                            for (const e of predictHits) {
-                                const full = e.f ? String(e.f).trim() : '';
-                                const key = full || ('SHORT:'+e.s+'|'+e.d+'|'+e.at);
-                                predictHitsSet.add(key);
-                                if (full) predictHitsSet.add(full);
-                            }
-                            savePredictHits();
-                            try { renderAll(); updateHitCountDisplay(); } catch(e){}
-                        }
-                        return fixed;
-                    }
-                    function addPredictHitFromCell(cell, predBS) {
-                        if (!cell) return false;
-                        let full = cell.sttFull ? String(cell.sttFull).trim() : '';
-                        const short = cell.stt ? String(cell.stt).trim() : '';
-                        const digit = cell.value ? String(cell.value).trim() : '';
-                        if (!digit) return false;
-                        // nếu thiếu full thì thử tìm lại từ kho
-                        if (!full) full = findFullIdForHit(short, digit);
-                        if (full && predictHitsSet.has(full)) return false;
-                        // check trùng SHORT
-                        if (!full) {
-                            const shortPrefix = 'SHORT:'+short+'|'+digit+'|';
-                            for (const k of predictHitsSet) if (k.startsWith(shortPrefix)) {
-                                // nếu tìm được full mới thì cập nhật hit cũ thay vì tạo mới
-                                for (const e of predictHits) if (!e.f && e.s===short && e.d===digit) { 
-                                    const nf = findFullIdForHit(short, digit);
-                                    if (nf) { e.f=nf; savePredictHits(); }
-                                }
-                                return false;
-                            }
-                        }
-                        const entry = { f: full, s: short, d: digit, pred: predBS, at: Date.now() };
-                        const key = full || ('SHORT:'+short+'|'+digit+'|'+entry.at);
-                        predictHits.unshift(entry);
-                        if (predictHits.length>2000) predictHits.length=2000;
-                        predictHitsSet.add(key);
-                        if (full) predictHitsSet.add(full);
-                        savePredictHits();
-                        return true;
-                    }
-                    
                     // ===== 📜 LỊCH SỬ Ô DỰ ĐOÁN - KIỂM TRA ĐÚNG/SAI =====
                     const LS_PREDICT_LOG = 'vn168_predictLog_v1';
                     let predictLog = []; // [{at, forSTT, forFullId, lastSTT, lastFullId, pred L/N, conf, pctL, pctN, pattern, topMethod, actualDigit, actualBS, hit, resolvedAt, actualFullId}]
@@ -1050,17 +966,11 @@
                         e.resolvedAt = Date.now();
                         if (fId) e.actualFullId = String(fId);
                         if (sShort) e.actualSTT = String(sShort).padStart(3,'0').slice(-3);
-                        const p200 = normLN(e.pred200);
-                        const p500 = normLN(e.pred500);
                         const p = normLN(e.pred);
-                        e.hit200 = p200 ? (p200===actualBS) : null;
-                        e.hit500 = p500 ? (p500===actualBS) : null;
-                        // Nếu 200 & 500 cùng phía → lấy đó. Nếu lệch: KHÔNG gắn TRƯỢT cả dòng khi một bên đúng.
-                        if (p200 && p500) {
-                            if (p200===p500) e.hit = (p200===actualBS);
-                            else e.hit = (p200===actualBS || p500===actualBS); // lệch nhưng có bên đúng → không tính trượt oan
-                        } else if (p) e.hit = (p===actualBS);
-                        else e.hit = null; // đã có số trên bảng → không để CHỜ
+                        e.hit200 = null;
+                        e.hit500 = null;
+                        // CHỈ CÒN 1 DỰ ĐOÁN DUY NHẤT: đúng = trúng, sai = trượt, không có dự đoán = không tính
+                        e.hit = (p==='L'||p==='N') ? (p===actualBS) : null; // đã có số trên bảng → không để CHỜ
                         return e.hit;
                     }
                     function predictLogMatchesIssue(e, sttShort, fullId) {
@@ -1144,13 +1054,8 @@
                         if (changed) {
                             savePredictLog();
                             try { renderPredictLog(); } catch(e){}
-                            try { updateHitCountDisplay(); } catch(e){}
-                            try { if (typeof cells!=='undefined' && cells.length) { for (let i=0;i<TOTAL;i++) {
-                                const box = cells[i].valEl && cells[i].valEl.parentElement;
-                                if (!box) continue;
-                                if (cells[i].value && isPredictHitCell(cells[i])) box.classList.add('predict-hit');
-                                else box.classList.remove('predict-hit'); box.classList.remove('highlight'); box.classList.remove('after');
-                            } } } catch(e){}
+                            try { updateLastResolveLine(); } catch(e){}
+                            try { renderMatchBoxes(); } catch(e){}
                         }
                         return changed;
                     }
@@ -1240,7 +1145,6 @@
                                         let lastPredictLogFp = '';
                     function renderPredictLog() {
                         try { sortPredictLogBoardOrder(); } catch(e){}
-                        try { rebuildPredictHitIndex(); } catch(e){}
                         const listEl = document.getElementById('predictHistoryList');
                         const statsEl = document.getElementById('predictHistoryStats');
                         const countEl = document.getElementById('predictHistoryCount');
@@ -1293,30 +1197,14 @@
                                 rowClass+='pending';
                                 badge='<span class="ph-badge-pending">ra '+e.actualDigit+'</span>';
                             }
-                            const p200 = normLN(e.pred200);
-                            const p500 = normLN(e.pred500);
                             const pMain = normLN(e.pred);
                             const predCls = pMain==='L' ? 'L' : (pMain==='N' ? 'N' : '');
                             const predLabel = predText(pMain);
                             const pctL = (e.pctL!=null) ? e.pctL : 0;
                             const pctN = (e.pctN!=null) ? e.pctN : 0;
-                            let extraPred = '';
-                            if (p200 || p500) {
-                                extraPred = ' <span style="font-size:9px;color:#94a3b8">200:'+predText(p200||'?')+(e.actualDigit!=null?(e.hit200?'✅':'❌'):'')+' · 500:'+predText(p500||'?')+(e.actualDigit!=null?(e.hit500?'✅':'❌'):'')+'</span>';
-                            }
                             let actualTxt = '';
                             if (e.actualDigit!=null) {
                                 actualTxt = ' <span style="font-size:10px;color:#cfe8ff">ra <b>'+e.actualDigit+'</b> ('+predText(e.actualBS)+')</span>';
-                            }
-                            // lệch 200/500: không gắn TRƯỢT nếu một bên đúng
-                            if (e.actualDigit!=null && p200 && p500 && p200!==p500) {
-                                if (e.hit200 || e.hit500) {
-                                    rowClass = 'ph-row pending';
-                                    badge = '<span class="ph-badge-pending">⚡ LỆCH · '+(e.hit200?'200 đúng':'')+(e.hit200&&e.hit500?' ':'')+(e.hit500?'500 đúng':'')+'</span>';
-                                } else {
-                                    rowClass = 'ph-row miss';
-                                    badge = '<span class="ph-badge-miss">❌ CẢ HAI TRƯỢT</span>';
-                                }
                             }
                             htmlOut += '<div class="'+rowClass+'" style="justify-content:space-between">'
                                 + '<span><b style="color:#f9a825">STT '+e.forSTT+'</b> → <span class="ph-pred '+(predCls||'N')+'">'+predLabel+'</span>'+extraPred+actualTxt+'</span>'
@@ -1324,6 +1212,7 @@
                                 + '</div>';
                         }
                         listEl.innerHTML = htmlOut;
+                        try { updateLastResolveLine(); } catch(e){}
                     }
                     try { loadPredictLog(); } catch(e){}
                     try { dedupePredictLog(); } catch(e){}
@@ -1340,11 +1229,9 @@
                     
                     
                     // nạp ngay khi định nghĩa để renderCell dùng được
-                    try { loadPredictHits(); } catch(e){}
-                    try { rebuildPredictHitIndex(); } catch(e){}
                     
                     const CFG = {
-                        arOrigin: "https://383vn.com",
+                        arOrigin: "https://373vn.com",
                         apiResult: "https://vn168api.com/api/webapi/GetNoaverageEmerdList",
                         apiIssue: "https://vn168api.com/api/webapi/GetGameIssue",
                         apiBet: "https://vn168api.com/api/webapi/GameBetting",
@@ -1381,7 +1268,39 @@
                     // Hàng MỚI được chèn lên ĐẦU bảng (đó là các kỳ cũ hơn);
                     // các ô ĐÃ CÓ SỐ vẫn nằm ở CUỐI bảng (hàng mới nhất) — không xáo trộn dữ liệu.
                     // Mở rộng theo bước nhảy (gấp đôi, tối thiểu +100 hàng) để khỏi phải xây lại DOM liên tục.
-                    function expandBoardTo(targetRows) { return; /* Cố định đúng 5 hàng */ }
+                    function expandBoardTo(targetRows) {
+                        targetRows = Math.floor(targetRows);
+                        if (!(targetRows > boardRows)) return;
+                        targetRows = Math.min(MAX_BOARD_ROWS, Math.max(targetRows, boardRows * 2, boardRows + 100));
+                        const addRows = targetRows - boardRows;
+                        const frag = document.createDocumentFragment();
+                        const newCells = [];
+                        for (let r = 0; r < addRows; r++) {
+                            for (let c = 0; c < COLS; c++) {
+                                const box = document.createElement('div');
+                                box.className = 'grid-cell';
+                                const sttEl = document.createElement('span');
+                                sttEl.className = 'stt-label';
+                                const valEl = document.createElement('span');
+                                valEl.className = 'val-input';
+                                box.appendChild(sttEl);
+                                box.appendChild(valEl);
+                                frag.appendChild(box);
+                                newCells.push({ stt: null, sttFull: null, value: '', valEl: valEl, sttEl: sttEl });
+                            }
+                        }
+                        gridContainer.insertBefore(frag, gridContainer.firstChild);
+                        cells.unshift.apply(cells, newCells);   // hàng mới ở đầu mảng (trên bảng) — ô đã có số vẫn ở cuối
+                        boardRows = targetRows;
+                        TOTAL = boardRows * COLS;
+                        // ĐÃ BỎ ô xanh cuối bảng - không tô gì cả, chỉ tô xanh khi trúng
+                        for (let i = 0; i < TOTAL; i++) {
+                            const box = cells[i].valEl.parentElement;
+                            if (box) box.classList.remove('reference');
+                        }
+                        scrollGridToBottom('auto');
+                        try { renderLastRow(); } catch(e){}
+                    }
                     
                     // Chỉ vẽ lại một khoảng ô (thay vì renderAll cả 51.000 ô) — dùng khi nạp hàng loạt
                     function renderCellsRange(a, b) {
@@ -1395,69 +1314,26 @@
                         const box = cells[i].valEl.parentElement;
                         if (box) {
                             const full = cells[i].sttFull || '';
-                            box.title = full ? ('ID ' + full + ' · STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value);
-                            box.classList.remove('predict-hit'); box.classList.remove('highlight'); box.classList.remove('after');
+                            const ymd = full ? issueYmd(full) : '';
+                            let tip = full ? ('ID ' + full + (ymd ? ' · ngày ' + ymdPretty(ymd) + ' · STT ' + String(full).slice(-3) + ' · số ' + cells[i].value : '')) : ('STT ' + (cells[i].stt||'') + ' · số ' + cells[i].value + ' · (thiếu ID đầy đủ → có thể trùng ngày)');
+                            // nếu là ô cuối cùng (5,10): đối chiếu với lịch sử dự đoán rồi mới tô
+                            if (i === TOTAL-1) {
+                                try {
+                                    resolvePredictLogForCell(cells[i].stt, cells[i].sttFull||'', cells[i].value);
+                                } catch(e){}
+                            }
+                            // CHỈ tô: ô trùng giá trị ô (5,10) = vàng · ô ngay sau ô trùng = xanh
+                            box.classList.toggle('match-cell', i === matchIdxCur);
+                            box.classList.toggle('match-after', i === matchAfterIdxCur);
+                            if (i === matchIdxCur) tip += ' · 🟡 TRÙNG với ô (5,10)';
+                            else if (i === matchAfterIdxCur) tip += ' · 🔵 số ngay sau ô trùng';
+                            box.title = tip;
                         }
                     }
                     function renderAll() {
                         for (let i = 0; i < TOTAL; i++) renderCell(i);
                         try { renderLastRow(); } catch(e){}
-                        try { updateHitCountDisplay(); } catch(e){}
-                    }
-                    function updateHitCountDisplay() {
-                        const hc = document.getElementById('hitCount');
-                        if (!hc) return;
-                        try { rebuildPredictHitIndex(); } catch(e){}
-                        let visible = 0;
-                        for (let i=0;i<TOTAL;i++) if (cells[i].value && isPredictHitCell(cells[i])) visible++;
-                        const logHits = predictLog.filter(e=>e.hit===true).length;
-                        if (!logHits && !visible) { hc.textContent=''; return; }
-                        const missing = predictHits.filter(e=>!e.f || String(e.f).trim()==='').length;
-                        hc.innerHTML = '('+visible+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(missing?' · '+missing+' thiếu ID':'')+') '
-                            + '<button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> '
-                            + '<button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '
-                            + (missing ? '<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay();alert(\'Đã vá ID, còn thiếu \'+predictHits.filter(e=>!e.f).length)" style="font-size:9px;padding:1px 4px;background:#7f1d1d">🔧 Vá ID</button> ' : '')
-                            + '<span style="font-size:9px;color:#888">Cuộn bảng lên để thấy hết '+visible+' ô xanh</span>';
-                    }
-                    let lastHitScrollIdx = -1;
-                    function scrollToNextHit() {
-                        if (!predictHits.length) { alert('Chưa có ô xanh nào'); return; }
-                        // tìm tất cả index vàng trên bảng
-                        const hitIdxs = [];
-                        for (let i=0;i<TOTAL;i++) if (cells[i].value && isPredictHitCell(cells[i])) hitIdxs.push(i);
-                        if (!hitIdxs.length) { alert('Không có ô xanh nào trên bảng hiện tại (có '+predictHits.length+' tổng lưu nhưng đã bị lọc hoặc nằm ngoài 51k ô gần nhất). Bấm 📋 Danh sách để xem.'); return; }
-                        // tìm hit tiếp theo sau lastHitScrollIdx
-                        let nextIdx = hitIdxs.find(idx=> idx > lastHitScrollIdx);
-                        if (nextIdx===undefined) nextIdx = hitIdxs[0]; // quay vòng
-                        lastHitScrollIdx = nextIdx;
-                        try { scrollGridToCell(nextIdx, 'smooth'); } catch(e){ 
-                            const container = document.getElementById('gridContainer');
-                            const cellEl = cells[nextIdx]?.valEl?.parentElement;
-                            if (container && cellEl) container.scrollTop = cellEl.offsetTop - container.clientHeight/2;
-                        }
-                        // nháy vàng
-                        try {
-                            const box = cells[nextIdx].valEl.parentElement;
-                            if (box) { box.style.transition='all 0.3s'; const oldShadow=box.style.boxShadow; box.style.boxShadow='0 0 20px #4fc3f7, 0 0 30px #29b6f6'; setTimeout(()=>{ box.style.boxShadow=oldShadow; }, 1200); }
-                        } catch(e){}
-                    }
-                    function showHitsList() {
-                        if (!predictHits.length) { alert('Chưa có ô xanh nào'); return; }
-                        const missing = predictHits.filter(e=>!e.f || String(e.f).trim()==='').length;
-                        const recent = predictHits.slice(0,80);
-                        let txt = 'Tổng '+predictHits.length+' ô trúng đã lưu (mới nhất 80):\n';
-                        txt += 'Trong đó '+missing+' cái thiếu ID đầy đủ (chỉ có STT 3 số) do nhập tay hoặc lưu từ bản cũ.\n';
-                        if (missing>0) txt += '→ Bấm OK rồi chạy fixPredictHitsMissingIds() trong console hoặc bấm nút 🔧 Vá ID bên dưới để tự tìm lại ID từ kho.\n\n';
-                        txt += recent.map((e,i)=> (i+1)+'. ID '+(e.f||'(thiếu ID)')+' | STT '+(e.s||'?')+' | số '+e.d+' | dự đoán '+ (e.pred?bsLabel(e.pred):'?')+' | '+new Date(e.at||0).toLocaleString('vi-VN')).join('\n');
-                        txt += '\n\nTrên bảng hiện tại có '+ (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })() +' ô xanh.';
-                        txt += '\n\nNếu tổng 89 mà trên bảng chỉ 2-3 xanh: do bảng chỉ giữ 51k ô gần nhất và có thể đang lọc ngày. Các ô trúng cũ đã bị cuộn ra ngoài.';
-                        txt += '\n\nThiếu ID là do ô đó được thêm bằng tay (không có ID đầy đủ dạng 20260913...) hoặc từ bản lưu cũ. Đã fix để tự tìm lại ID từ kho gameArchive.';
-                        alert(txt);
-                        if (missing>0 && confirm('Có '+missing+' ô thiếu ID. Thử tự vá lại ID từ kho ngay bây giờ?')) {
-                            const fixed = fixPredictHitsMissingIds();
-                            alert('Đã vá được '+fixed+' ô. Còn thiếu '+(predictHits.filter(e=>!e.f).length)+' ô.\nNhững ô không vá được là do không tìm thấy trong kho 5000 trang (có thể đã bị lọc hoặc kho chưa tải đủ).');
-                            updateHitCountDisplay();
-                        }
+                        try { renderMatchBoxes(); } catch(e){}
                     }
                     function renderLastRow() {
                         const grid = document.getElementById('lastRowGrid');
@@ -1491,7 +1367,7 @@
                         } else {
                             for (let c=0;c<COLS;c++) { vals.push('·'); stts.push('?'); fulls.push(''); }
                         }
-                        // lấy dự đoán L/N gần nhất để so sánh với ô cuối (100,10)
+                        // lấy dự đoán L/N gần nhất để so sánh với ô cuối (5,10)
                         let predictedBS = null;
                         try { predictedBS = window.lastPredictBS || localStorage.getItem('vn168_lastPredictBS') || null; } catch(e){}
                         if (predictedBS && predictedBS!=='L' && predictedBS!=='N') predictedBS=null;
@@ -1534,7 +1410,7 @@
                             else if (isMatch) cmpText = '✅ KẾT QUẢ TRÙNG DỰ ĐOÁN: dự đoán '+bsLabel(predictedBS)+' · thực tế '+lastVal+' ('+bsLabel(actualBS)+') → ô cuối TÔ VÀNG';
                             else cmpText = '❌ KHÔNG trùng: dự đoán '+bsLabel(predictedBS)+' · thực tế '+lastVal+' ('+bsLabel(actualBS)+') → bỏ qua';
                             detail.textContent = '10 số hàng cuối: ['+vals.join(', ')+']  (trái→phải = cũ→mới)\n'
-                                + 'Ô (100,10) = số '+ lastVal +' · STT '+lastStt+' · ID '+(lastFull||'(thiếu ID)')+'\n'
+                                + 'Ô (5,10) = số '+ lastVal +' · STT '+lastStt+' · ID '+(lastFull||'(thiếu ID)')+'\n'
                                 + cmpText + '\n'
                                 + (source==='archive' ? 'Đang hiện từ KHO (bảng chưa xây)\n' : 'Hàng cuối STT từ '+stts[0]+' đến '+lastStt+'\n')
                                 + 'Chỉ tô VÀNG khi trúng dự đoán LỚN/NHỎ.';
@@ -1618,36 +1494,28 @@
                     
                     function pushValueRaw(digit, stt, ts, sttFull) {
                         boardCleared = false;
-                        // 1. DỊCH TRÁI TỪNG Ô (không render lại DOM toàn bộ, không nháy)
+                        undoStack.push({ snap: snapshot(), nextStt: nextStt, sttInput: sttInput.value });
                         for (let i = 0; i < TOTAL - 1; i++) {
                             cells[i].value = cells[i + 1].value;
                             cells[i].stt = cells[i + 1].stt;
                             cells[i].sttFull = cells[i + 1].sttFull;
-                            // Cập nhật text trực tiếp, không xóa DOM
-                            if (cells[i].valEl) cells[i].valEl.textContent = cells[i].value;
-                            if (cells[i].sttEl) cells[i].sttEl.textContent = cells[i].stt || '';
                         }
-                        // 2. Ô cuối cùng nhận kết quả mới
-                        const last = TOTAL - 1;
-                        cells[last].value = String(digit);
-                        cells[last].stt = stt;
-                        cells[last].sttFull = (sttFull !== undefined && sttFull !== null && String(sttFull) !== '') ? String(sttFull) : null;
-                        if (cells[last].valEl) cells[last].valEl.textContent = cells[last].value;
-                        if (cells[last].sttEl) cells[last].sttEl.textContent = cells[last].stt || '';
-                        
+                        cells[TOTAL - 1].value = String(digit);
+                        cells[TOTAL - 1].stt = stt;
+                        cells[TOTAL - 1].sttFull = (sttFull !== undefined && sttFull !== null && String(sttFull) !== '') ? String(sttFull) : null;
                         boardCount = Math.min(TOTAL, boardCount + 1);
-                        
-                        // 3. Cập nhật 3 ô soi số & đối chiếu lịch sử
+                        renderAll();
                         searchPattern();
+                        renderCellHistory();   // ô lịch sử 3 cột: cập nhật kỳ vừa rơi
+                        try { closeLogFromBoard(stt, sttFull||'', digit); } catch(e){}
+                        try { resolvePredictLogForCell(stt, sttFull||'', digit); } catch(e){}
+                        try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                         saveBoardLocal();
                         writeToFirebase();
                     }
                     
                     function extractToken(str) {
-                        let s = String(str || '').trim();
-                        if (s.toLowerCase().startsWith('bearer ')) {
-                            s = s.slice(7).trim();
-                        }
+                        const s = String(str || '');
                         const m = s.match(/eyJ[A-Za-z0-9\-_]+(?:\.[A-Za-z0-9\-_]+){1,3}/);
                         if (m) return m[0];
                         return s.replace(/[^\x00-\x7F]/g, '').trim();
@@ -1750,18 +1618,14 @@
                         const tok = extractToken(getToken() || '');
                         let res;
                         try {
-                            const originDomain = (document.getElementById('autoBetOrigin')?.value?.trim()) || CFG.arOrigin || 'https://383vn.com';
-                            const hdrs = {
-                                'Content-Type': 'application/json;charset=UTF-8',
-                                'Accept': 'application/json, text/plain, */*',
-                                'Authorization': 'Bearer ' + tok,
-                                'Ar-Origin': originDomain,
-                                'Origin': originDomain,
-                                'Referer': originDomain + '/'
-                            };
                             res = await fetch(url, {
                                 method: 'POST',
-                                headers: hdrs,
+                                headers: {
+                                    'Content-Type': 'application/json;charset=UTF-8',
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Authorization': 'Bearer ' + tok,
+                                    'Ar-Origin': CFG.arOrigin
+                                },
                                 body: JSON.stringify(body)
                             });
                         } catch (err) {
@@ -1993,7 +1857,7 @@
                         let d = null;
                         try {
                             const raw = localStorage.getItem(LS_BOARD) || '';
-                            if (raw.indexOf('v3|') === 0) {
+                            if (raw.indexOf('v3|') === 0) {                       // định dạng NÉN mới
                                 const p1 = raw.indexOf('|', 3), parts = raw.slice(p1 + 1).split(';');
                                 const arr = [];
                                 for (let k = 0; k < parts.length; k++) {
@@ -2001,57 +1865,49 @@
                                     arr.push({ v: f[0] || '', s: f[1] || '', f: f[2] || '' });
                                 }
                                 d = { lastIssue: raw.slice(3, p1) || null, cells: arr };
-                            } else if (raw) {
+                            } else if (raw) {                                      // định dạng CŨ (JSON) — vẫn đọc được
                                 d = JSON.parse(raw);
                             }
                         } catch (e) {}
                         if (!d || !Array.isArray(d.cells) || !d.cells.length) return;
-                        
-                        const saved = d.cells.slice(-TOTAL);
+                        // bảng lưu từ phiên CŨ có thể dài tới 51.000 ô → chỉ lấy 50 ô MỚI NHẤT
+                        let saved = d.cells;
+                        if (saved.length > TOTAL) saved = saved.slice(saved.length - TOTAL);
                         boardCount = 0;
-                        const offset = Math.max(0, TOTAL - saved.length);
                         for (let i = 0; i < TOTAL; i++) {
-                            cells[i].value = '';
-                            cells[i].stt = null;
-                            cells[i].sttFull = null;
-                        }
-                        for (let i = 0; i < saved.length; i++) {
-                            const tIdx = offset + i;
-                            if (tIdx >= TOTAL) break;
                             const src = saved[i];
                             if (!src) continue;
-                            cells[tIdx].value = src.v || '';
-                            cells[tIdx].stt = (src.s === '' || src.s == null) ? null : src.s;
-                            cells[tIdx].sttFull = src.f || null;
-                            if (cells[tIdx].value !== '') boardCount++;
+                            cells[i].value = src.v;
+                            cells[i].stt = src.s === '' ? null : src.s;
+                            cells[i].sttFull = src.f || null;
+                            if (cells[i].stt !== null && cells[i].stt !== '') boardCount++;
                         }
                         if (d.lastIssue) lastInsertedIssue = String(d.lastIssue);
                         const ls = cells[TOTAL - 1].stt;
                         if (ls !== null && ls !== '') {
-                            const n = parseInt(String(ls).replace(/[^0-9]/g,'').slice(-3), 10);
-                            if (Number.isInteger(n)) { nextStt = (n + 1) % 1000; if (sttInput) sttInput.value = String(nextStt).padStart(3,'0'); }
+                            const n = parseInt(ls, 10);
+                            if (Number.isInteger(n)) { nextStt = n + 1; sttInput.value = String(nextStt); }
                         }
                         renderAll();
                         searchPattern();
-                        setTimeout(() => scrollGridToBottom('auto'), 50);
                     }
                     
                     async function writeToFirebase() {
-                        if (!fbDB || bulkLoadMode) return;
+                        if (!fbDB || bulkLoadMode) return;   // đang tải hàng loạt: đồng bộ 1 lần khi xong
                         try {
-                            const lastCells = cells.slice(-TOTAL).map(c => ({
-                                v: c.value,
-                                s: c.stt === null ? '' : c.stt,
-                                f: c.sttFull || ''
-                            }));
                             await fbDB.collection(FB_COLLECTION).doc(FB_DOC).set({
                                 token: currentToken || getToken(),
                                 lastUpdated: Date.now(),
                                 board: {
                                     lastIssue: lastInsertedIssue || null,
                                     clearedAt: localClearedAt || 0,
-                                    cells: lastCells
-                                }
+                                    // Firestore giới hạn 1MB/tài liệu: chỉ đồng bộ CỬA SỔ 1000 Ô MỚI NHẤT
+                                    // (bảng đầy đủ 51.000 ô vẫn an toàn trong localStorage của máy này)
+                                    cells: cells.slice(-1000).map(c => ({ v: c.value, s: c.stt === null ? '' : c.stt, f: c.sttFull || '' }))
+                                },
+                                dayHistory: dayHistory.slice(0, HISTORY_MAX),
+                                cellHistory: cellHistory.slice(0, CELL_HIST_MAX),
+                                predictLog: predictLog.slice(0,500)
                             }, { merge: true });
                         } catch (e) {}
                     }
@@ -2066,43 +1922,67 @@
                                     currentToken = tok;
                                     const el = document.getElementById('tokenInput');
                                     if (el) el.value = tok;
-                                    try {
-                                        if (tok) localStorage.setItem('vn168_token', tok);
-                                    } catch (e) {}
+                                    const remember = document.getElementById('rememberToken');
+                                    if (remember && remember.checked) {
+                                        try {
+                                            if (tok) localStorage.setItem('vn168_token', tok);
+                                            else localStorage.removeItem('vn168_token');
+                                        } catch (e) {}
+                                    }
+                                    if (tok) autoStartBulkLoad('token đồng bộ từ Firebase');
                                 }
                             }
                             
+                            if ('dayHistory' in d) mergeRemoteHistory(d.dayHistory);
+                            
+                            if ('cellHistory' in d) mergeRemoteCellHistory(d.cellHistory);
+                    
+                            if ('predictLog' in d) mergeRemotePredictLog(d.predictLog);
+                            
                             const rb = d.board;
-                            if (rb && Array.isArray(rb.cells) && rb.cells.length > 0) {
-                                const remoteCells = rb.cells.slice(-TOTAL);
+                            if (rb && Array.isArray(rb.cells) && rb.cells.length >= TOTAL) {
                                 const remoteLast = rb.lastIssue ? String(rb.lastIssue) : null;
-                                const offset = Math.max(0, TOTAL - remoteCells.length);
+                                const localLast = lastInsertedIssue ? String(lastInsertedIssue) : null;
+                                const localEmpty = cells.every(c => c.value === '');
+                                const remoteClearedAt = rb.clearedAt ? Number(rb.clearedAt) : 0;
                                 
-                                for (let i = 0; i < TOTAL; i++) {
-                                    cells[i].value = '';
-                                    cells[i].stt = null;
-                                    cells[i].sttFull = null;
+                                let apply = false;
+                                if (boardCleared) {
+                                    apply = false;
+                                } else if (localClearedAt && remoteClearedAt && remoteClearedAt < localClearedAt) {
+                                    apply = false;
+                                } else if (remoteLast) {
+                                    if (!localLast) {
+                                        apply = localEmpty;
+                                    } else {
+                                        apply = isNewerIssue(remoteLast, localLast);
+                                    }
                                 }
-                                boardCount = 0;
-                                for (let i = 0; i < remoteCells.length; i++) {
-                                    const tIdx = offset + i;
-                                    if (tIdx >= TOTAL) break;
-                                    const src = remoteCells[i];
-                                    if (!src) continue;
-                                    cells[tIdx].value = src.v || '';
-                                    cells[tIdx].stt = (src.s === '' || src.s == null) ? null : src.s;
-                                    if (src.f) cells[tIdx].sttFull = String(src.f);
-                                    if (cells[tIdx].value !== '') boardCount++;
+                                
+                                if (apply) {
+                                    let remoteCells = rb.cells || [];
+                                    if (remoteCells.length > TOTAL) remoteCells = remoteCells.slice(remoteCells.length - TOTAL); // bảng dài (bản cũ) → lấy đuôi
+                                    const offset = Math.max(0, TOTAL - remoteCells.length);
+                                    for (let i = 0; i < remoteCells.length; i++) {
+                                        const tIdx = offset + i;
+                                        if (tIdx >= TOTAL) break;
+                                        const src = remoteCells[i];
+                                        if (!src) continue;
+                                        cells[tIdx].value = src.v;
+                                        cells[tIdx].stt = (src.s === '' || src.s==null) ? null : src.s;
+                                        if (src.f) cells[tIdx].sttFull = String(src.f);
+                                    }
+                                    if (remoteLast) lastInsertedIssue = remoteLast;
+                                    if (remoteClearedAt > localClearedAt) localClearedAt = remoteClearedAt;
+                                    const ls = cells[TOTAL - 1].stt;
+                                    if (ls !== null && ls !== '') {
+                                        const n = parseInt(String(ls).replace(/\D/g,'').slice(-3), 10);
+                                        if (Number.isInteger(n)) { nextStt = (n + 1) % 1000; sttInput.value = String(nextStt).padStart(3,'0'); }
+                                    }
+                                    renderAll();
+                                    searchPattern();
+                                    try { lastLiveSyncKey = ''; syncPredictLogLive(); } catch(e){}
                                 }
-                                if (remoteLast) lastInsertedIssue = remoteLast;
-                                const ls = cells[TOTAL - 1].stt;
-                                if (ls !== null && ls !== '') {
-                                    const n = parseInt(String(ls).replace(/[^0-9]/g,'').slice(-3), 10);
-                                    if (Number.isInteger(n)) { nextStt = (n + 1) % 1000; if (sttInput) sttInput.value = String(nextStt).padStart(3,'0'); }
-                                }
-                                renderAll();
-                                searchPattern();
-                                setTimeout(() => scrollGridToBottom('auto'), 50);
                             }
                         } finally {
                             applyingRemote = false;
@@ -2173,7 +2053,7 @@
                                     cells[start + k].value = dg;
                                     cells[start + k].stt = sttShort;
                                     cells[start + k].sttFull = issue;
-                                    recordCellNumber(sttShort, dg, rowTimeMs(row));   // mỗi kỳ trong batch cũng từng đi qua ô (100,10)
+                                    recordCellNumber(sttShort, dg, rowTimeMs(row));   // mỗi kỳ trong batch cũng từng đi qua ô (5,10)
                                 }
                                 
                                 lastInsertedIssue = String(rowIssue(batch[batch.length - 1]));
@@ -2371,7 +2251,7 @@
                                 cells[start + k].sttFull = batch[k].f || null;
                             }
                             if (cur.length === 0) {
-                                // bảng trống: toàn bộ là số mới qua ô (100,10) -> ghi (kèm thời gian rơi thật nếu API có)
+                                // bảng trống: toàn bộ là số mới qua ô (5,10) -> ghi (kèm thời gian rơi thật nếu API có)
                                 for (const e of batch) recordCellNumber(e.s, e.d, e.t || undefined);
                                 sortCellHistory();   // bảng mới nạp: sắp theo thời gian rơi
                             } else if (take.length) {
@@ -2914,7 +2794,7 @@
                             cells[start + k].sttFull = take[k].f || null;
                         }
                         boardCount = take.length;
-                        // ghi khung lịch sử (100,10) cho chính các kỳ cũ vừa chen thêm
+                        // ghi khung lịch sử (5,10) cho chính các kỳ cũ vừa chen thêm
                         const addedSet = new Set(older.slice(older.length - addedCount).map(keyOf));
                         for (const e of older) if (addedSet.has(keyOf(e))) appendOldCellNumber(e.s, e.d, e.t);
                         renderCellsRange(start, TOTAL - 1);
@@ -3211,6 +3091,234 @@
                         setInterval(() => autoStartBulkLoad('kiểm tra định kỳ'), 10000);   // lưới an toàn: token xuất hiện muộn vẫn nổ
                     })();
                     
+                    /* ================= 📋 BẢNG DỮ LIỆU GAME + TRA ĐOẠN 5 SỐ ================= */
+                    let dataTableMode = 'latest';      // 'latest' | 'segments'
+                    let dataTableSeg = null;           // {d1, d2}
+                    let dataTableLastLen = -1;
+
+                    // kho đang sắp MỚI -> CŨ → đảo thành CŨ -> MỚI để cắt đoạn 5 số liên tiếp
+                    function archiveChrono() {
+                        const out = [];
+                        for (let i = gameArchive.length - 1; i >= 0; i--) {
+                            const e = gameArchive[i];
+                            if (!e || !/^[0-9]$/.test(String(e.d))) continue;
+                            out.push(e);
+                        }
+                        return out;
+                    }
+                    async function gameLoad100Pages() {
+                        if (typeof gameAutoRunning !== 'undefined' && gameAutoRunning) {
+                            gpStatus('⏳ Đang tải dở — chờ xong đợt trước rồi bấm "⬇️ Tải 100 trang" lại.');
+                            return;
+                        }
+                        gpStatus('⬇️ Đang tải 100 trang (trang 2 → 100)…');
+                        try { await gameAutoFetch(100, { forceStart: 2, label: '⬇️ Tải 100 trang · ' }); }
+                        catch (e) { gpStatus('⚠️ Lỗi tải 100 trang: ' + e.message); }
+                        try { renderDataTable(dataTableMode); } catch (e) {}
+                        gpStatus('✓ Xong 100 trang — kho có ' + gameArchive.length + ' kỳ.'
+                            + (dataTableSeg ? (' · đang xem đoạn ' + dataTableSeg.prefix.join('')) : ' · nhập số để tra đoạn.'));
+                    }
+                    // Tìm mọi đoạn 5 số liên tiếp có 2 số đầu = d1, d2 (trả về mới nhất trước)
+                    /* ===== SỐ Ô NHẬP: 2..6 (mỗi ô 1 chữ số 0-9), đoạn = (số ô) + 3 số cuối ===== */
+                    const SEG_TAIL = 3;
+                    function segPrefixLen() {
+                        const el = document.getElementById('segLen');
+                        let n = parseInt(el && el.value, 10);
+                        if (!(n >= 2 && n <= 6)) n = 2;
+                        return n;
+                    }
+                    function segTotalLen() { return segPrefixLen() + SEG_TAIL; }
+                    function segInputIds() {
+                        const a = [];
+                        for (let i = 1; i <= segPrefixLen(); i++) a.push('segD' + i);
+                        return a;
+                    }
+                    function segPrefixDigits() {
+                        return segInputIds().map(function (id) {
+                            const e = document.getElementById(id);
+                            return e ? String(e.value || '').replace(/\D/g, '') : '';
+                        });
+                    }
+                    function renderSegInputs(keepValues) {
+                        const box = document.getElementById('segInputs');
+                        if (!box) return;
+                        const old = {};
+                        if (keepValues) segInputIds().forEach(function (id) {
+                            const e = document.getElementById(id); if (e) old[id] = e.value;
+                        });
+                        const n = segPrefixLen();
+                        let html = '';
+                        for (let i = 1; i <= n; i++) {
+                            html += '<input id="segD' + i + '" class="seg-in" maxlength="1" inputmode="numeric" placeholder="0-9"'
+                                + ' oninput="onSegInput(this)" value="' + (old['segD' + i] || '') + '">';
+                        }
+                        box.innerHTML = html;
+                        const info = document.getElementById('segLenInfo');
+                        if (info) info.textContent = '→ đoạn ' + segTotalLen() + ' số (' + n + ' số đầu nhập + ' + SEG_TAIL + ' số cuối tra)';
+                        const hdr = document.querySelector('#dataTablePanel .ch-head span');
+                        if (hdr) hdr.textContent = '📋 Tra đoạn ' + segTotalLen() + ' số trong kho';
+                    }
+                    function onSegLenChange() {
+                        try {
+                            renderSegInputs(false);
+                            dataTableSeg = null;
+                            renderDataTable('latest');
+                            const first = document.getElementById('segD1');
+                            if (first) { try { first.focus(); } catch (e) {} }
+                        } catch (e) {}
+                    }
+                    // Tìm mọi đoạn (n+3) số liền nhau có n số đầu đúng như nhập (mới nhất trước)
+                    function findSegments(prefix) {
+                        if (typeof prefix === 'string') prefix = [prefix];
+                        const n = prefix.length;
+                        const total = n + SEG_TAIL;
+                        const arr = archiveChrono();
+                        const out = [];
+                        for (let i = 0; i + total - 1 < arr.length; i++) {
+                            let ok = true;
+                            for (let k = 0; k < n; k++) {
+                                if (String(arr[i + k].d) !== String(prefix[k])) { ok = false; break; }
+                            }
+                            if (ok) {
+                                const digits = [];
+                                for (let k = 0; k < total; k++) digits.push(String(arr[i + k].d));
+                                out.push({ start: arr[i], digits: digits, end: arr[i + total - 1] });
+                            }
+                        }
+                        out.reverse();   // đoạn mới nhất lên đầu
+                        return out;
+                    }
+                    function onSegInput(el) {
+                        try {
+                            el.value = String(el.value || '').replace(/\D/g, '').slice(0, 1);
+                            const ids = segInputIds();
+                            const idx = ids.indexOf(el.id);
+                            // nhập xong 1 ô (trừ ô cuối) -> nhảy focus sang ô tiếp theo
+                            if (idx >= 0 && idx < ids.length - 1 && /^[0-9]$/.test(el.value)) {
+                                const nx = document.getElementById(ids[idx + 1]);
+                                if (nx) { try { nx.focus(); nx.select(); } catch (e2) {} }
+                            }
+                            // nhập đủ mọi ô -> hiện kết quả ngay
+                            const vals = segPrefixDigits();
+                            if (vals.length && vals.every(function (v) { return /^[0-9]$/.test(v); })) findSegmentsFromInput();
+                        } catch (e) {}
+                    }
+                    function clearSegInput() {
+                        segInputIds().forEach(function (id) {
+                            const e = document.getElementById(id); if (e) e.value = '';
+                        });
+                        dataTableSeg = null;
+                        renderDataTable('latest');
+                    }
+                    function findSegmentsFromInput() {
+                        const vals = segPrefixDigits();
+                        if (!vals.length || !vals.every(function (v) { return /^[0-9]$/.test(v); })) {
+                            const info = document.getElementById('segInfo');
+                            if (info) {
+                                info.style.color = '#f87171';
+                                info.textContent = '⚠️ Nhập đủ ' + segPrefixLen() + ' ô, mỗi ô một số từ 0 đến 9.';
+                            }
+                            return;
+                        }
+                        dataTableSeg = { prefix: vals, len: vals.length };
+                        renderDataTable('segments');
+                    }
+                    function renderDataTable(mode) {
+                        if (mode) dataTableMode = mode;
+                        const body = document.getElementById('dataTableBody');
+                        const cnt = document.getElementById('dataTableCount');
+                        const info = document.getElementById('segInfo');
+                        if (!body) return;
+                        if (cnt) cnt.textContent = gameArchive.length + ' kỳ trong kho';
+
+                        if (dataTableMode === 'segments' && dataTableSeg) {
+                            const prefix = dataTableSeg.prefix;
+                            const n = prefix.length;
+                            const total = n + SEG_TAIL;
+                            const key = prefix.join('');
+                            const segs = findSegments(prefix);
+                            // thống kê 3 số cuối (phần tra)
+                            const stat = [{}, {}, {}];
+                            for (const s of segs) {
+                                stat[0][s.digits[n]] = (stat[0][s.digits[n]] || 0) + 1;
+                                stat[1][s.digits[n + 1]] = (stat[1][s.digits[n + 1]] || 0) + 1;
+                                stat[2][s.digits[n + 2]] = (stat[2][s.digits[n + 2]] || 0) + 1;
+                            }
+                            const topOf = o => Object.keys(o).sort((x, y) => o[y] - o[x]).slice(0, 3);
+                            if (info) {
+                                info.style.color = segs.length ? '#4ade80' : '#f87171';
+                                info.textContent = segs.length
+                                    ? ('Tìm thấy ' + segs.length + ' đoạn ' + total + ' số bắt đầu bằng ' + key + '.')
+                                    : ('Không có đoạn ' + total + ' số nào bắt đầu bằng ' + key + ' trong kho đang có.');
+                            }
+                            let html = '<div class="dt-head-row"><span class="dt-i">Kỳ đầu đoạn</span><span class="dt-n">' + total + ' Ô SỐ</span><span class="dt-t">Kỳ cuối · giờ</span></div>';
+                            if (!segs.length) {
+                                html += '<div class="ch-empty">Không có đoạn nào — thử dãy số khác hoặc bấm "⬇️ Tải 100 trang".</div>';
+                            } else {
+                                html += '<div class="dt-sum">Có <b>' + segs.length + '</b> đoạn bắt đầu bằng <b>' + key + '</b>'
+                                    + ' · số thứ ' + (n + 1) + ' hay ra: <b class="dt-rest">' + (topOf(stat[0]).join(', ') || '-') + '</b>'
+                                    + ' · thứ ' + (n + 2) + ': <b class="dt-rest">' + (topOf(stat[1]).join(', ') || '-') + '</b>'
+                                    + ' · thứ ' + (n + 3) + ': <b class="dt-rest">' + (topOf(stat[2]).join(', ') || '-') + '</b></div>';
+                                const LIMIT = 500;
+                                for (let i = 0; i < segs.length && i < LIMIT; i++) {
+                                    const s = segs[i];
+                                    let boxes = '';
+                                    for (let k = 0; k < total; k++) {
+                                        boxes += '<span class="dt-box ' + (k < n ? 'hit' : 'rest') + '">' + s.digits[k] + '</span>';
+                                    }
+                                    html += '<div class="dt-row"><span class="dt-i">' + s.start.i + '</span>'
+                                        + '<span class="dt-n dt-boxes">' + boxes + '</span>'
+                                        + '<span class="dt-t">' + s.end.i + ' · ' + (s.end.t ? fmtTime(s.end.t) : '') + '</span></div>';
+                                }
+                                if (segs.length > LIMIT) {
+                                    html += '<div class="ch-empty">… chỉ hiện ' + LIMIT + ' đoạn mới nhất / ' + segs.length + ' đoạn.</div>';
+                                }
+                            }
+                            body.innerHTML = html;
+                            dataTableLastLen = gameArchive.length;
+                            return;
+                        }
+
+                        // ---- CHƯA nhập số -> bảng để trống, chỉ hiện dòng hướng dẫn ----
+                        if (info) {
+                            info.style.color = '#94a3b8';
+                            info.textContent = 'Nhập ' + segPrefixLen() + ' số (0-9) — nhập xong ô cuối là hiện các đoạn '
+                                + segTotalLen() + ' số bắt đầu bằng dãy đó, mới nhất ở trên.';
+                        }
+                        let html = '<div class="dt-head-row"><span class="dt-i">Kỳ đầu đoạn</span><span class="dt-n">' + segTotalLen() + ' Ô SỐ</span><span class="dt-t">Kỳ cuối · giờ</span></div>';
+                        html += '<div class="ch-empty">'
+                            + (gameArchive.length
+                                ? ('Kho đang có <b>' + gameArchive.length + '</b> kỳ — nhập ' + segPrefixLen() + ' số ở trên để tra đoạn ' + segTotalLen() + ' số.')
+                                : 'Kho trống — bấm "⬇️ Tải 100 trang" (cần token API).')
+                            + '</div>';
+                        body.innerHTML = html;
+                        dataTableLastLen = gameArchive.length;
+                    }
+                    function exportDataTable() {
+                        let text = '';
+                        const stamp = new Date().toLocaleString('vi-VN');
+                        if (dataTableMode === 'segments' && dataTableSeg) {
+                            const segs = findSegments(dataTableSeg.prefix);
+                            text = 'DOAN ' + segs[0].digits.length + ' SO BAT DAU BANG ' + dataTableSeg.prefix.join('')
+                                + ' | ' + segs.length + ' doan | ' + stamp + '\n'
+                                + 'ky_dau | ' + segs[0].digits.length + '_so | ky_cuoi\n'
+                                + segs.map(s => s.start.i + ' | ' + s.digits.join('') + ' | ' + s.end.i).join('\n');
+                        } else {
+                            text = 'KHO GAME | ' + gameArchive.length + ' ky | ' + stamp + '\n'
+                                + 'ky | so | gio\n'
+                                + gameArchive.map(e => e.i + ' | ' + e.d + ' | ' + (e.t ? fmtTime(e.t) : '')).join('\n');
+                        }
+                        const ok = () => gpStatus('📋 Đã copy bảng ra clipboard (' + text.split('\n').length + ' dòng) — dán vào file text/Excel.');
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(ok).catch(() => gpStatus('⚠️ Trình duyệt chặn clipboard.'));
+                        } else gpStatus('⚠️ Trình duyệt này không hỗ trợ clipboard API.');
+                    }
+                    // tự vẽ lại khi kho vừa được nạp thêm (tải 100 trang / tải nền)
+                    setInterval(function () {
+                        try {
+                            if (gameArchive.length !== dataTableLastLen) renderDataTable(dataTableMode);
+                        } catch (e) {}
+                    }, 2000);
                     function gameExportArchive() {
                         if (!gameArchive.length) { gpStatus('Kho đang trống.'); return; }
                         const lines = gameArchive.map(e => e.i + ' | ' + e.n + (e.t ? ' | ' + fmtTime(e.t) : ''));
@@ -3381,8 +3489,8 @@
                         const cb = document.getElementById('autoRefresh');
                         if (cb && cb.checked === false) return;
                         if (!getToken() || !tokenAlive()) return;
-                        fetchAndFill(true);
-                    }, 4000);
+                        fetchAndFill(true); // im lặng; có số mới thì bảng + lịch sử dự đoán chốt ngay
+                    }, 1000);
                     
                     loadToken();
                     
@@ -3422,194 +3530,18 @@
                     // ===== ĐÃ XOÁ LOGIC TÌM TRÙNG 4 Ô CUỐI theo yêu cầu user =====
                     // Giờ chỉ giữ: bảng + dự đoán L/N + ô xanh trúng giữ vĩnh viễn
                     // Không còn tô xanh trùng đoạn, không còn cuộn tới đoạn trùng, không còn 4 ô dự đoán sau trùng
-                    function digitToBS(d) {
-                        const n = parseInt(d, 10);
-                        return n >= 5 ? 'L' : 'N';
-                    }
-                    function bsLabel(k) { return k === 'L' ? 'LỚN' : 'NHỎ'; }
-                    function bsLabelFull(k) { return k === 'L' ? 'LỚN (≥5)' : 'NHỎ (<5)'; }
-                    function stt3n(v) {
-                        return String(v == null ? '' : v).replace(/[^0-9]/g, '').padStart(3, '0').slice(-3);
-                    }
-
                     function searchPattern() {
-                        try { updateTwoBoxesAndPredict(); } catch(e){ console.error('Lỗi updateTwoBoxesAndPredict:', e); }
+                        try { if (document.getElementById('predictNextPanel')) predictNextDebounced(); } catch(e){}
                         try { scrollGridToBottom('auto'); } catch(e){}
                     }
-
-                    let currentMatchIdx = -1;
-                    let currentAfterIdx = -1;
-
-                    function updateTwoBoxesAndPredict() {
-                        const boxMatchStt = document.getElementById('boxMatchStt');
-                        const boxMatchVal = document.getElementById('boxMatchVal');
-                        const boxMatchSub = document.getElementById('boxMatchSub');
-                        const boxAfterStt = document.getElementById('boxAfterStt');
-                        const boxAfterVal = document.getElementById('boxAfterVal');
-                        const boxAfterSub = document.getElementById('boxAfterSub');
-                        const boxPredictStt = document.getElementById('boxPredictStt');
-                        const boxPredictVal = document.getElementById('boxPredictVal');
-                        const boxPredictSub = document.getElementById('boxPredictSub');
-
-                        // 1. Tìm ô cuối cùng có số trên bảng (ô 10 hàng 5)
-                        let lastIdx = -1;
-                        for (let i = TOTAL - 1; i >= 0; i--) {
-                            if (cells[i] && /^[0-9]$/.test(String(cells[i].value))) {
-                                lastIdx = i;
-                                break;
-                            }
-                        }
-
-                        if (lastIdx === -1) {
-                            if (boxMatchStt) boxMatchStt.textContent = 'STT ---';
-                            if (boxMatchVal) boxMatchVal.textContent = '-';
-                            if (boxAfterStt) boxAfterStt.textContent = 'STT ---';
-                            if (boxAfterVal) boxAfterVal.textContent = '-';
-                            if (boxPredictStt) boxPredictStt.textContent = 'STT ---';
-                            if (boxPredictVal) boxPredictVal.textContent = '---';
-                            window.lastPredictBS = null;
-                            return;
-                        }
-
-                        const cellLast = cells[lastIdx];
-                        const x = String(cellLast.value);
-                        const sttLast = cellLast.stt != null ? String(cellLast.stt) : '?';
-                        const fullLast = cellLast.sttFull ? String(cellLast.sttFull) : '';
-
-                        // 2. Đối chiếu kết quả kỳ vừa ra với các mục đang chờ trong lịch sử
+                    function clearHighlights() {
+                        // chỉ xóa 2 class tô màu trùng (vàng/xanh), không còn logic tô màu cũ
                         try {
-                            const sLast3 = stt3n(sttLast);
-                            let logUpdated = false;
-                            for (let entry of predictLog) {
-                                if (entry && entry.actualDigit == null && stt3n(entry.forSTT) === sLast3) {
-                                    entry.actualDigit = x;
-                                    entry.actualBS = digitToBS(x);
-                                    entry.actualSTT = sLast3;
-                                    entry.actualFullId = fullLast;
-                                    entry.hit = (entry.actualBS === entry.pred);
-                                    logUpdated = true;
-                                    try { checkMartingaleResult(fullLast || sLast3, x); } catch(me){}
-                                }
-                            }
-                            if (logUpdated) {
-                                savePredictLog();
-                                renderSimplePredictLog();
-                            }
-                        } catch(e){}
-
-                        // 3. Tìm Ô TRÙNG VỚI Ô 10 HÀNG 5 (quét ngược từ lastIdx - 1 về trước)
-                        let matchIdx = -1;
-                        for (let i = lastIdx - 1; i >= 0; i--) {
-                            if (cells[i] && String(cells[i].value) === x) {
-                                matchIdx = i;
-                                break;
-                            }
-                        }
-
-                        // Tính STT kỳ tiếp theo
-                        let nextSttNum = '???';
-                        const nLast = parseInt(String(sttLast).replace(/[^0-9]/g, '').slice(-3), 10);
-                        if (!isNaN(nLast)) {
-                            nextSttNum = String((nLast + 1) % 1000).padStart(3, '0');
-                        }
-                        if (boxPredictStt) boxPredictStt.textContent = 'STT ' + nextSttNum;
-
-                        if (matchIdx === -1) {
-                            if (boxMatchStt) boxMatchStt.textContent = 'STT ---';
-                            if (boxMatchVal) boxMatchVal.textContent = '-';
-                            if (boxMatchSub) boxMatchSub.textContent = 'Không có ô trùng';
-                            if (boxAfterStt) boxAfterStt.textContent = 'STT ---';
-                            if (boxAfterVal) boxAfterVal.textContent = '-';
-                            if (boxAfterSub) boxAfterSub.textContent = '-';
-                            if (boxPredictVal) { boxPredictVal.textContent = '---'; boxPredictVal.style.color = '#94a3b8'; }
-                            window.lastPredictBS = null;
-                            return;
-                        }
-
-                        // Ô 1: Ô TRÙNG
-                        const cellMatch = cells[matchIdx];
-                        const sttMatch = cellMatch.stt != null ? String(cellMatch.stt) : '?';
-                        if (boxMatchStt) boxMatchStt.textContent = 'STT ' + sttMatch;
-                        if (boxMatchVal) boxMatchVal.textContent = x;
-                        if (boxMatchSub) boxMatchSub.textContent = 'Trùng ô 10 hàng 5';
-
-                        // Ô 2: Ô NGAY PHÍA SAU Ô TRÙNG (matchIdx + 1)
-                        const afterIdx = matchIdx + 1;
-                        const cellAfter = (afterIdx < TOTAL) ? cells[afterIdx] : null;
-
-                        // Chỉ cập nhật class highlight & after khi vị trí thay đổi (ĐỨNG YÊN HOÀN TOÀN, KHÔNG BỊ NHẤP NHÁY)
-                        if (currentMatchIdx !== matchIdx || currentAfterIdx !== afterIdx) {
                             for (let i = 0; i < TOTAL; i++) {
-                                const b = cells[i] && cells[i].valEl ? cells[i].valEl.parentElement : null;
-                                if (b) {
-                                    b.classList.remove('highlight');
-                                    b.classList.remove('after');
-                                    b.classList.remove('predict-hit');
-                                }
-                            }
-                            if (cellMatch && cellMatch.valEl) {
-                                cellMatch.valEl.parentElement.classList.add('highlight');
-                            }
-                            if (cellAfter && cellAfter.valEl) {
-                                cellAfter.valEl.parentElement.classList.add('after');
-                            }
-                            currentMatchIdx = matchIdx;
-                            currentAfterIdx = afterIdx;
-                        }
-
-                        if (!cellAfter || !/^[0-9]$/.test(String(cellAfter.value))) {
-                            if (boxAfterStt) boxAfterStt.textContent = 'STT ---';
-                            if (boxAfterVal) boxAfterVal.textContent = '-';
-                            if (boxAfterSub) boxAfterSub.textContent = 'Chưa có số';
-                            if (boxPredictVal) { boxPredictVal.textContent = '---'; boxPredictVal.style.color = '#94a3b8'; }
-                            window.lastPredictBS = null;
-                            return;
-                        }
-
-                        const afterVal = String(cellAfter.value);
-                        const afterStt = cellAfter.stt != null ? String(cellAfter.stt) : '?';
-                        const afterBS = digitToBS(afterVal); // L: Lớn (>=5), N: Nhỏ (<5)
-
-                        if (boxAfterStt) boxAfterStt.textContent = 'STT ' + afterStt;
-                        if (boxAfterVal) boxAfterVal.textContent = afterVal;
-                        if (boxAfterSub) {
-                            boxAfterSub.innerHTML = afterVal + ' ➜ <b style="color:' + (afterBS === 'L' ? '#4ade80' : '#fbbf24') + '">' + (afterBS === 'L' ? 'LỚN' : 'NHỎ') + '</b>';
-                        }
-
-                        // Ô 3: DỰ ĐOÁN NGƯỢC LẠI HOÀN TOÀN VỚI Ô SAU Ô TRÙNG:
-                        const predBS = (afterBS === 'L') ? 'N' : 'L';
-                        const predLabel = (predBS === 'L') ? 'LỚN' : 'NHỎ';
-                        const predColor = (predBS === 'L') ? '#4ade80' : '#fbbf24';
-
-                        window.lastPredictBS = predBS;
-                        window.lastPredictConf = 100;
-                        try { localStorage.setItem('vn168_lastPredictBS', predBS); } catch(e){}
-
-                        if (boxPredictVal) {
-                            boxPredictVal.textContent = predLabel;
-                            boxPredictVal.style.color = predColor;
-                        }
-                        if (boxPredictSub) {
-                            boxPredictSub.innerHTML = 'Đảo ' + (afterBS === 'L' ? 'LỚN' : 'NHỎ') + ' ➜ <b style="color:' + predColor + '">' + predLabel + '</b>';
-                        }
-
-                        // Ghi nhận dự đoán vào predictLog (khử trùng lặp)
-                        try {
-                            if (nextSttNum && nextSttNum !== '???') {
-                                const alreadyInLog = predictLog.some(e => e && stt3n(e.forSTT) === nextSttNum);
-                                if (!alreadyInLog) {
-                                    predictLog.unshift({
-                                        at: Date.now(),
-                                        forSTT: nextSttNum,
-                                        pred: predBS,
-                                        actualDigit: null,
-                                        actualBS: null,
-                                        hit: null
-                                    });
-                                    if (predictLog.length > 100) predictLog.length = 100;
-                                    savePredictLog();
-                                    renderSimplePredictLog();
-                                }
+                                const box = cells[i] && cells[i].valEl ? cells[i].valEl.parentElement : null;
+                                if (!box) continue;
+                                box.classList.remove('match-cell');
+                                box.classList.remove('match-after');
                             }
                         } catch(e){}
                     }
@@ -3617,13 +3549,79 @@
                     // ===== 🔮 DỰ ĐOÁN LỚN/NHỎ (≥5 / <5) - TỶ LỆ TRÚNG CAO NHẤT =====
                     // Người dùng chỉ cần biết số tiếp theo >=5 (LỚN/TÀI) hay <5 (NHỎ/XỈU)
                     // 7 phương pháp + ensemble + backtest, lý thuyết ngẫu nhiên 50%
+                    /* ===== CHỈ TÔ MÀU: ô trùng giá trị ô (5,10) + ô ngay sau ô trùng ===== */
+                    function matchLastIdx() {
+                        return (typeof TOTAL==='number' && TOTAL>0) ? TOTAL-1 : (cells.length-1);
+                    }
+                    function computeMatchIndices() {
+                        const li = matchLastIdx();
+                        matchIdxCur = -1; matchAfterIdxCur = -1;
+                        const last = cells[li];
+                        if (!last) return;
+                        const v = String(last.value||'');
+                        if (!/^[0-9]$/.test(v)) return;
+                        for (let i = li - 1; i >= 0; i--) {
+                            if (String(cells[i].value||'') === v) {
+                                matchIdxCur = i;
+                                matchAfterIdxCur = (i + 1 <= li) ? i + 1 : -1;
+                                return;
+                            }
+                        }
+                    }
+                    function matchBoxHtml(cell, idx, title, color, subColor) {
+                        if (!cell || idx < 0 || !/^[0-9]$/.test(String(cell.value||''))) {
+                            return '<div style="font-size:11px;color:#64748b">'+title+'<br><b>chưa có</b></div>';
+                        }
+                        const full = cell.sttFull ? String(cell.sttFull) : '';
+                        const stt = cell.stt===null || cell.stt==='' ? '' : String(cell.stt);
+                        return '<div style="font-size:11px;color:'+subColor+';font-weight:bold">'+title+'</div>'
+                            + '<div style="font-size:34px;font-weight:bold;color:'+color+';line-height:1.1;margin:2px 0">'+cell.value+'</div>'
+                            + '<div style="font-size:10px;color:#94a3b8">STT '+(stt||'?')+(full?' · ID '+full:'')+'</div>';
+                    }
+                    function renderMatchBoxes() {
+                        const prevM = matchIdxCur, prevA = matchAfterIdxCur;
+                        computeMatchIndices();
+                        const b1 = document.getElementById('matchBox1');
+                        const b2 = document.getElementById('matchBox2');
+                        const note = document.getElementById('matchNote');
+                        const cnt = document.getElementById('matchInfoCount');
+                        const li = matchLastIdx();
+                        const last = cells[li];
+                        if (b1) b1.innerHTML = matchBoxHtml(last, li, 'Ô 1 · Ô (5,10)', '#38bdf8', '#94a3b8');
+                        if (b2) b2.innerHTML = matchBoxHtml(cells[matchIdxCur], matchIdxCur, 'Ô 2 · Ô ngay sau ô trùng', '#a78bfa', '#94a3b8');
+                        if (note) {
+                            if (matchIdxCur < 0) note.textContent = 'Chưa có số ở ô (5,10) — nhập số hoặc lấy dữ liệu từ game trước.';
+                            else note.textContent = 'Ô cuối (5,10) = ' + last.value + ' · STT ' + (last.stt===null||last.stt===''?'?':last.stt)
+                                + ' · ô trùng gần nhất: ô thứ ' + (matchIdxCur+1) + ' (STT ' + (cells[matchIdxCur].stt===null||cells[matchIdxCur].stt===''?'?':cells[matchIdxCur].stt) + ')'
+                                + ' · ô ngay sau nó = ô thứ ' + (matchAfterIdxCur+1);
+                        }
+                        if (cnt) cnt.textContent = (last && /^[0-9]$/.test(String(last.value||''))) ? ('cuối = ' + last.value) : '—';
+                        // chỉ vẽ lại các ô bị đổi trạng thái tô màu
+                        for (const i of [prevM, prevA, matchIdxCur, matchAfterIdxCur]) {
+                            if (i >= 0 && cells[i]) { try { renderCell(i); } catch(e){} }
+                        }
+                    }
                     function getBoardDigits() {
-                        const out = [];
+                        // Bảng chỉ còn 5 hàng (50 ô) → nguồn dữ liệu cho DỰ ĐOÁN phải lấy từ:
+                        //   50 ô mới nhất trên bảng  +  TOÀN BỘ kho lịch sử đã tải (5000 trang)
+                        // để backtest 200/500 kỳ vẫn đủ mẫu.
+                        try {
+                            const list = (typeof histData === 'function') ? histData().list : null;
+                            if (list && list.length >= 20) {
+                                const out = [];
+                                for (let k = list.length - 1; k >= 0; k--) {   // list: mới→cũ ⇒ đảo thành cũ→mới
+                                    const d = String(list[k].d);
+                                    if (/^[0-9]$/.test(d)) out.push(d);
+                                }
+                                if (out.length >= 20) return out;
+                            }
+                        } catch (e) {}
+                        const out2 = [];
                         for (let i=0;i<TOTAL;i++) {
                             const v = cells[i].value;
-                            if (/^[0-9]$/.test(v)) out.push(v);
+                            if (/^[0-9]$/.test(v)) out2.push(v);
                         }
-                        return out;
+                        return out2;
                     }
                     function digitToBS(d) {
                         const n = parseInt(d,10);
@@ -3986,6 +3984,31 @@
                         if (isNaN(n)) return '';
                         return String((n+1)%1000).padStart(3,'0');
                     }
+                    /* ===== DÒNG "CHỐT KỲ": mỗi khi ô (5,10) xuất hiện số mới, lấy dự đoán đã lưu
+                              so với kết quả thật của game -> ghi TRÚNG / TRƯỢT vào lịch sử ===== */
+                    function updateLastResolveLine() {
+                        const el = document.getElementById('predictLastResolve');
+                        if (!el) return;
+                        let best = null;
+                        try {
+                            for (const e of predictLog) {
+                                if (!e || e.actualDigit == null) continue;
+                                if (!best || (e.resolvedAt || 0) > (best.resolvedAt || 0)) best = e;
+                            }
+                        } catch (e) {}
+                        if (!best) { el.textContent = 'Chưa chốt kỳ nào — chờ kỳ mới.'; return; }
+                        const p = normLN(best.pred);
+                        const lab = p === 'L' ? 'LỚN' : (p === 'N' ? 'NHỎ' : '?');
+                        const col = p === 'L' ? '#4ade80' : '#fbbf24';
+                        const act = predText(best.actualBS);
+                        const kq = best.hit === true
+                            ? '<b style="color:#4ade80">✅ TRÚNG — đã ghi vào lịch sử</b>'
+                            : (best.hit === false
+                                ? '<b style="color:#f87171">❌ TRƯỢT — đã ghi vào lịch sử</b>'
+                                : '<b style="color:#a78bfa">⏳ CHỜ</b>');
+                        el.innerHTML = 'Kỳ STT <b style="color:#f9a825">' + best.forSTT + '</b>: dự đoán <b style="color:' + col + '">' + lab + '</b>'
+                            + ' → game ra <b style="color:#cfe8ff">' + best.actualDigit + '</b> (' + act + ') · ' + kq;
+                    }
                     function livePredSides() {
                         let pred = window.lastPredictBS || window.lastPredictBS500 || window.lastPredictBS200 || '';
                         let p200 = window.lastPredictBS200 || '';
@@ -4190,6 +4213,7 @@
                             }
                         }, 400);
                     }
+                    let rMainLocal = null;
                     function fillDualPredictBoxes(r200, r500) {
                         try { updatePredictNextSttBar(); } catch(e){}
 
@@ -4216,54 +4240,39 @@
                                 + warn
                                 + '</div>';
                         }
-                        if (row) row.innerHTML = card(r200, 'BT 200 kỳ', 'nhạy · trend ngắn') + card(r500, 'BT 500 kỳ', 'ổn định · đoạn dài');
+                        const rShow = (typeof rMain !== 'undefined' && rMain) ? rMain : (r500 || r200);
+                        if (row) row.innerHTML = card(rShow, 'DỰ ĐOÁN KỲ TỚI', '1 dự đoán duy nhất · BT ' + (rShow && rShow.btN ? rShow.btN : btN) + ' kỳ');
                         if (bar) {
-                            const a = r200 && r200.ensembleBSDigit;
-                            const b = r500 && r500.ensembleBSDigit;
-                            const agree = a && b && a===b && a!=='?';
-                            bar.style.display = 'block';
-                            if (agree) {
-                                const lab = (a==='L') ? 'LỚN' : 'NHỎ';
-                                const col = a==='L' ? '#4ade80' : '#fbbf24';
-                                bar.style.background = a==='L' ? '#052e16' : '#2a1a00';
-                                bar.style.border = '1px solid '+col;
-                                bar.style.color = col;
-                                bar.textContent = '✅ CẢ HAI CÙNG ' + lab + '  (200 = 500)';
-                            } else {
-                                bar.style.background = '#3b1d0a';
-                                bar.style.border = '1px solid #f59e0b';
-                                bar.style.color = '#fbbf24';
-                                const l200 = r200 ? (r200.ensembleBSLabel||'?') : '?';
-                                const l500 = r500 ? (r500.ensembleBSLabel||'?') : '?';
-                                bar.textContent = '⚠️ LỆCH NHỊP  ·  200: ' + l200 + '  ≠  500: ' + l500;
-                            }
+                            const a = rShow && rShow.ensembleBSDigit;
+                            const lab = (a==='L') ? 'LỚN' : (a==='N' ? 'NHỎ' : '?');
+                            const col = a==='L' ? '#4ade80' : (a==='N' ? '#fbbf24' : '#94a3b8');
+                            bar.style.display = a ? 'block' : 'none';
+                            bar.style.background = a==='L' ? '#052e16' : '#2a1a00';
+                            bar.style.border = '1px solid '+col;
+                            bar.style.color = col;
+                            bar.textContent = 'DỰ ĐOÁN KỲ TỚI: ' + lab;
                         }
                         try { pushCurrentPredictToLog(r200, r500); } catch(e){ console.log('[SYNC-LOG]', e); }
                     }
                     function pushCurrentPredictToLog(r200, r500) {
                         const info = getNextPredictSttInfo();
                         if (!info || !info.nextStt || info.nextStt==='???') return;
-                        const d200 = r200 && (r200.ensembleBSDigit==='L'||r200.ensembleBSDigit==='N') ? r200.ensembleBSDigit : '';
-                        const d500 = r500 && (r500.ensembleBSDigit==='L'||r500.ensembleBSDigit==='N') ? r500.ensembleBSDigit : '';
-                        const main = d500 || d200;
+                        const rMain = (typeof rMainLocal!=='undefined' && rMainLocal) ? rMainLocal : (r500 || r200);
+                        const d = rMain && (rMain.ensembleBSDigit==='L'||rMain.ensembleBSDigit==='N') ? rMain.ensembleBSDigit : '';
+                        const main = d;
                         if (main!=='L' && main!=='N') return; // không ghi "?"
                         window.lastPredictBS = main;
                         window.lastPredictLabel = predText(main);
-                        window.lastPredictBS200 = d200 || main;
-                        window.lastPredictBS500 = d500 || main;
-                        window.lastPredictAgree = !!(d200 && d500 && d200===d500);
                         upsertPredictLogPending({
                             forSTT: info.nextStt,
                             forFullId: info.nextFull||'',
                             lastSTT: info.lastStt,
                             lastFullId: info.lastFull||'',
                             pred: main,
-                            pred200: d200 || main,
-                            pred500: d500 || main,
                             predLabel: predText(main),
-                            pctL: (r500 && r500.pctL!=null) ? r500.pctL : (r200 && r200.pctL) || 0,
-                            pctN: (r500 && r500.pctN!=null) ? r500.pctN : (r200 && r200.pctN) || 0,
-                            topMethod: '200:'+predText(d200||main)+' 500:'+predText(d500||main)
+                            pctL: (rMain && rMain.pctL!=null) ? rMain.pctL : 0,
+                            pctN: (rMain && rMain.pctN!=null) ? rMain.pctN : 0,
+                            topMethod: (rMain && rMain.topMethodBS && rMain.topMethodBS.name) ? rMain.topMethodBS.name : 'ensemble'
                         });
                         try { sortPredictLogBoardOrder(); } catch(e){}
                         try { renderPredictLog(); } catch(e){}
@@ -4284,7 +4293,7 @@
                             if (panel) panel.innerHTML = 'Chưa đủ dữ liệu (cần ít nhất 20 số trên bảng). Hiện có '+allDigits.length+'.';
                             if (cntEl) cntEl.textContent = 'chưa đủ';
                             const row0 = document.getElementById('predictDualRow');
-                            if (row0) row0.innerHTML = '<div style="flex:1;padding:10px;color:#64748b;font-size:11px;text-align:center">Chưa đủ dữ liệu để so 200 / 500</div>';
+                            if (row0) row0.innerHTML = '<div style="flex:1;padding:10px;color:#64748b;font-size:11px;text-align:center">Chưa đủ dữ liệu để dự đoán</div>';
                             try { syncPredictLogLive(); } catch(e){}
                             return null;
                         }
@@ -4580,7 +4589,7 @@
                             window.lastPredictBS500 = r500.ensembleBSDigit;
                             window.lastPredictAgree = (r200.ensembleBSDigit===r500.ensembleBSDigit && r200.ensembleBSDigit!=='?');
                         } catch(e){}
-                        try { fillDualPredictBoxes(r200, r500); } catch(e){ console.log('[DUAL]', e); }
+                        try { rMainLocal = rMain; fillDualPredictBoxes(r200, r500); } catch(e){ console.log('[DUAL]', e); }
                     
                     // === TÍNH STT TIẾP THEO ===
                         let lastCellForNext = null;
@@ -4617,7 +4626,7 @@
                     
                             let htmlOut = '<div style=\"font-size:11px;color:#94a3b8\">Mẫu '+pLen+' số: <span style=\"color:#f9a825;font-weight:bold\">'+pattern.join('')+'</span> · L/N: <span style=\"color:#a78bfa;font-weight:bold\">'+patternBS.join('')+'</span> · Tổng '+hist.length+' số · BT '+btN+' kỳ · Pool '+evaluatedAll.length+' → chọn <b style=\"color:#4ade80\">TOP '+TOP_K+'</b></div>';
                             htmlOut += '<div style=\"margin-top:6px;padding:6px 8px;background:#1e1b4b;border:1px solid #a78bfa;border-radius:6px;font-size:11px;color:#ddd6fe;line-height:1.4\">';
-                            htmlOut += '📍 Ô cuối (100,10): <b style=\"color:#f9a825\">STT '+lastSttShortDisp+'</b> ' + (lastFullForNext ? '(ID '+lastFullForNext+')' : '') + '<br>';
+                            htmlOut += '📍 Ô cuối (5,10): <b style=\"color:#f9a825\">STT '+lastSttShortDisp+'</b> ' + (lastFullForNext ? '(ID '+lastFullForNext+')' : '') + '<br>';
                             htmlOut += '➡️ Ô DỰ ĐOÁN TIẾP THEO = STT <b style=\"color:#4ade80\">'+nextSttShort+'</b> (sau '+lastSttShortDisp+') ' + (nextFullId ? '<span style=\"color:#a78bfa\">ID '+nextFullId+'</span>' : '') + '</div>';
                     
                             const bsConf = rMain.bsConf;
@@ -4764,6 +4773,82 @@
                     let autoBetLastPred = '';
                     let currentGameIssue = '';
                     let autoBetTimer = null;
+                    /* ---------- ⏱ ĐỒNG HỒ GAME ----------
+                       Chu kỳ 1 kỳ + thời điểm kỳ gần nhất rơi được TÍNH TỪ CHÍNH DỮ LIỆU GAME
+                       (kho 5000 trang + các ô mới nhất trên bảng) nên đồng hồ này chạy song song
+                       với đồng hồ đếm ngược của game. */
+                    let gameClock = { cycleSec: 28, lastDrawMs: 0, nextDrawMs: 0, ok: false };
+                    function syncGameClock(force) {
+                        try {
+                            const list = (typeof histData === 'function') ? histData().list : [];
+                            if (!list || !list.length) return;
+                            // list sắp MỚI -> CŨ; chỉ lấy các kỳ có giờ rơi thật
+                            const ts = [];
+                            for (let i = 0; i < list.length && ts.length < 80; i++) {
+                                const t = Number(list[i].t) || 0;
+                                if (t > 1e11 && t < Date.now() + 6e5) ts.push(t);
+                            }
+                            if (!ts.length) return;
+                            ts.sort((a, b) => a - b);
+                            const gaps = [];
+                            for (let i = 1; i < ts.length; i++) {
+                                const g = (ts[i] - ts[i - 1]) / 1000;
+                                if (g >= 5 && g <= 900) gaps.push(g);
+                            }
+                            if (gaps.length) {
+                                gaps.sort((a, b) => a - b);
+                                const med = gaps[Math.floor(gaps.length / 2)];
+                                const cyc = Math.max(10, Math.min(300, Math.round(med)));
+                                if (cyc !== gameClock.cycleSec || force) {
+                                    gameClock.cycleSec = cyc;
+                                    const iv = document.getElementById('autoBetInterval');
+                                    if (iv) iv.value = String(cyc);   // đồng bộ chu kỳ đặt cược = chu kỳ game
+                                }
+                            }
+                            gameClock.lastDrawMs = ts[ts.length - 1];
+                            gameClock.nextDrawMs = gameClock.lastDrawMs + gameClock.cycleSec * 1000;
+                            gameClock.ok = true;
+                        } catch (e) {}
+                    }
+                    function gameClockRemainSec() {
+                        if (!gameClock.ok || !gameClock.nextDrawMs) return null;
+                        const now = Date.now();
+                        let r = Math.ceil((gameClock.nextDrawMs - now) / 1000);
+                        let guard = 0;
+                        while (r <= 0 && guard++ < 600) {           // lỡ nhịp -> nhảy sang kỳ kế tiếp
+                            gameClock.nextDrawMs += gameClock.cycleSec * 1000;
+                            r = Math.ceil((gameClock.nextDrawMs - now) / 1000);
+                        }
+                        return Math.max(0, r);
+                    }
+                    function gameClockText() {
+                        const r = gameClockRemainSec();
+                        if (r === null) return '--:--';
+                        const m = Math.floor(r / 60), s = r % 60;
+                        return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+                    }
+                    function updateGameClockUI() {
+                        const el = document.getElementById('gameClockTime');
+                        if (el) {
+                            el.textContent = gameClockText();
+                            const r = gameClockRemainSec();
+                            el.style.color = (r !== null && r <= 5) ? '#f87171' : '#fbbf24';
+                        }
+                        const iss = document.getElementById('gameClockIssue');
+                        const cur = (typeof lastInsertedIssue !== 'undefined' && lastInsertedIssue) ? String(lastInsertedIssue)
+                            : ((typeof currentGameIssue !== 'undefined' && currentGameIssue) ? String(currentGameIssue) : '');
+                        if (iss && cur) iss.textContent = cur;
+                        const cyc = document.getElementById('gameClockCycle');
+                        if (cyc) cyc.textContent = String(gameClock.cycleSec);
+                        const st = document.getElementById('gameClockState');
+                        if (st) {
+                            if (!gameClock.ok) st.textContent = 'chưa có dữ liệu game → chạy mặc định ' + gameClock.cycleSec + 's';
+                            else st.textContent = 'đã đồng bộ với đồng hồ game · kỳ trước: '
+                                + new Date(gameClock.lastDrawMs).toLocaleTimeString('vi-VN');
+                        }
+                    }
+                    setInterval(function () { try { updateGameClockUI(); } catch (e) {} }, 250);
+                    setInterval(function () { try { syncGameClock(); } catch (e) {} }, 5000);
                     let autoBetCountdown = 28;
                     let autoBetLastBetTime = 0; // ms
                     // Martingale state - dãy tự nhập 1-2-5-12...
@@ -4935,6 +5020,36 @@
                             + '<br><span style="font-size:10px;color:#999">'+pending+'</span>'
                             + (isLast ? '<br>Nếu thua tiếp (hết dãy) → <b style="color:#fbbf24">quay lại đầu '+formatMoney(seq[0])+' (bước 1)</b>' : '<br>Nếu thua tiếp → '+formatMoney(nextAmt)+' (bước '+(step+2)+')');
                     }
+                    /* ---------- 🔔 NHẬP DÃY GẤP THẾP XONG -> HIỆN THÔNG BÁO ---------- */
+                    function showBetNotify(msg, color) {
+                        const el = document.getElementById('betNotify');
+                        if (!el) return;
+                        el.innerHTML = msg;
+                        el.style.borderColor = color || '#4da3ff';
+                        if (typeof autoBetLog === 'function') autoBetLog('🔔 ' + msg.replace(/<[^>]+>/g, ''));
+                    }
+                    function onMartingaleInput() {
+                        try {
+                            const en = document.getElementById('martingaleEnable');
+                            if (en) en.checked = true;                      // nhập dãy = bật gấp thếp
+                            updateMartingaleSeqPreview();
+                            const raw = parseMartingaleSequence(document.getElementById('martingaleSequence')?.value || '');
+                            if (!raw.length) {
+                                showBetNotify('⚠️ DÃY GẤP THẾP KHÔNG HỢP LỆ — hãy nhập lại, VD: <b>1k-2k-5k-12k-30k</b> hoặc <b>1000,2000,5000</b>.', '#f87171');
+                                return;
+                            }
+                            const seq = getMartingaleSequence();
+                            const total = seq.reduce((a, b) => a + (Number(b) || 0), 0);
+                            saveAutoBetConfig();
+                            updateAutoBetAmountDisplay();
+                            updateMartingaleStatus();
+                            showBetNotify('✅ ĐÃ NHẬN DÃY GẤP THẾP: <b style="color:#f0abfc">'
+                                + seq.map(formatMoney).join(' → ') + '</b><br>'
+                                + 'Tổng <b>' + seq.length + '</b> bước · nếu thua hết dãy tốn <b style="color:#fbbf24">'
+                                + formatMoney(total) + '</b> · thua thì nhảy bước tiếp, thắng thì về đầu dãy.<br>'
+                                + 'Bấm <b style="color:#4ade80">▶️ TỰ ĐỘNG ĐẶT CƯỢC</b> để chạy theo đồng hồ game.', '#d946ef');
+                        } catch (e) {}
+                    }
                     function resetMartingale() {
                         martingaleState.currentStep = 0;
                         martingaleState.pendingIssue = '';
@@ -4987,8 +5102,8 @@
                             const cfg = {
                                 amount: document.getElementById('autoBetAmount')?.value || '1000',
                                 minConf: document.getElementById('autoBetMinConf')?.value || '50',
-                                mapL: document.getElementById('autoBetMapL')?.value || '14',
-                                mapN: document.getElementById('autoBetMapN')?.value || '13',
+                                mapL: document.getElementById('autoBetMapL')?.value || 'L',
+                                mapN: document.getElementById('autoBetMapN')?.value || 'N',
                                 dry: document.getElementById('autoBetDry')?.checked ? '1':'0',
                                 enable: document.getElementById('autoBetEnable')?.checked ? '1':'0',
                                 interval: document.getElementById('autoBetInterval')?.value || '28',
@@ -4999,8 +5114,6 @@
                                 martEnable: document.getElementById('martingaleEnable')?.checked ? '1':'0',
                                 martSeq: document.getElementById('martingaleSequence')?.value || '1000,2000,5000,12000,30000',
                                 martKx: document.getElementById('martingaleKx1000')?.checked ? '1':'0',
-                                apiUrl: document.getElementById('autoBetApiUrl')?.value || 'https://vn168api.com/api/webapi/GameBetting',
-                                origin: document.getElementById('autoBetOrigin')?.value || 'https://383vn.com',
                             };
                             localStorage.setItem(LS_AUTOBET, JSON.stringify(cfg));
                             martingaleState.enabled = cfg.martEnable==='1';
@@ -5021,16 +5134,8 @@
                             const cfg = JSON.parse(raw);
                             if (cfg.amount) document.getElementById('autoBetAmount').value = cfg.amount;
                             if (cfg.minConf) document.getElementById('autoBetMinConf').value = cfg.minConf;
-                            if (cfg.mapL && cfg.mapL !== 'L' && cfg.mapL !== '13') {
-                                document.getElementById('autoBetMapL').value = cfg.mapL;
-                            } else {
-                                document.getElementById('autoBetMapL').value = '14';
-                            }
-                            if (cfg.mapN && cfg.mapN !== 'N' && cfg.mapN !== '15' && cfg.mapN !== '14') {
-                                document.getElementById('autoBetMapN').value = cfg.mapN;
-                            } else {
-                                document.getElementById('autoBetMapN').value = '13';
-                            }
+                            if (cfg.mapL) document.getElementById('autoBetMapL').value = cfg.mapL;
+                            if (cfg.mapN) document.getElementById('autoBetMapN').value = cfg.mapN;
                             if (cfg.interval) document.getElementById('autoBetInterval').value = cfg.interval;
                             if (cfg.template) document.getElementById('autoBetTemplate').value = cfg.template;
                             if (cfg.botToken) document.getElementById('tgBotToken').value = cfg.botToken;
@@ -5041,8 +5146,6 @@
                             if (cfg.martEnable!==undefined) document.getElementById('martingaleEnable').checked = cfg.martEnable==='1';
                             if (cfg.martSeq) document.getElementById('martingaleSequence').value = cfg.martSeq;
                             if (cfg.martKx!==undefined) document.getElementById('martingaleKx1000').checked = cfg.martKx==='1';
-                            if (cfg.apiUrl && document.getElementById('autoBetApiUrl')) document.getElementById('autoBetApiUrl').value = cfg.apiUrl;
-                            if (cfg.origin && document.getElementById('autoBetOrigin')) document.getElementById('autoBetOrigin').value = cfg.origin;
                             // legacy
                             if (cfg.martBase && !cfg.martSeq) {
                                 const base = Number(cfg.martBase)||1000;
@@ -5061,15 +5164,9 @@
                     }
                     function updateAutoBetStatus() {
                         const en = document.getElementById('autoBetEnable')?.checked;
-                        const statusBadge = document.getElementById('betStatusBadge');
-                        const statusText = document.getElementById('betLastResultText');
-                        if (statusBadge) {
-                            statusBadge.textContent = en ? '🟢 ĐANG BẬT (TỰ ĐẶT MỖI KỲ)' : '⏸️ ĐANG TẮT';
-                            statusBadge.style.color = en ? '#4ade80' : '#64748b';
-                        }
-                        if (statusText && en) {
-                            statusText.textContent = 'Hệ thống sẽ tự gửi lệnh cược mỗi khi đồng hồ chuyển sang kỳ mới...';
-                        }
+                        const el = document.getElementById('autoBetCount');
+                        if (el) el.textContent = en ? ('BẬT · ' + (typeof gameClock!=='undefined' ? gameClock.cycleSec : 28) + 's') : 'TẮT';
+                        if (el) el.style.color = en ? '#4ade80' : '#999';
                         updateAutoBetAmountDisplay();
                         restartAutoBetTimer();
                     }
@@ -5084,7 +5181,7 @@
                         const t = new Date().toLocaleString('vi-VN');
                         detail.innerHTML = '<b>Kỳ:</b> <span style="color:#ffd54a">'+issue+'</span> | <b style="color:'+(predBS==='L'?'#4ade80':'#fbbf24')+';font-size:14px">'+label+'</b><br>'
                             + '<b>💰 Tiền:</b> <span style="color:#4ade80;font-weight:bold;font-size:16px">'+formatMoney(amount)+'</span> <span style="color:#999">('+amount+')</span> | <b>'+status+'</b><br>'
-                            + '<span style="font-size:10px;color:#888">'+t+' | Mỗi 28s tự đặt 1 lần</span>';
+                            + '<span style="font-size:10px;color:#888">'+t+' | Mỗi '+(typeof gameClock!=='undefined'?gameClock.cycleSec:28)+'s theo đồng hồ game</span>';
                     }
                     // Lấy kỳ hiện tại
                     async function getCurrentIssue() {
@@ -5119,125 +5216,74 @@
                         }
                     }
                     function buildBetPayload(issue, predBS, amount) {
-                        let mapL = document.getElementById('autoBetMapL')?.value?.trim();
-                        let mapN = document.getElementById('autoBetMapN')?.value?.trim();
-                        // Quy chuẩn: LỚN = 14, NHỎ = 13
-                        if (!mapL || mapL === 'L' || mapL === '13') mapL = '14';
-                        if (!mapN || mapN === 'N' || mapN === '15' || mapN === '14') mapN = '13';
-                        let selectType = (predBS === 'L') ? mapL : mapN;
-                        selectType = Number(selectType) || (predBS === 'L' ? 14 : 13);
-
+                        const mapL = document.getElementById('autoBetMapL')?.value || 'L';
+                        const mapN = document.getElementById('autoBetMapN')?.value || 'N';
+                        const betType = predBS==='L' ? mapL : mapN;
+                        const tmplEl = document.getElementById('autoBetTemplate');
+                        let tmpl = tmplEl && tmplEl.value ? tmplEl.value.trim() : '';
+                        if (!tmpl) tmpl = '{"typeId":30,"issueNumber":"{ISSUE}","betType":"{BET_TYPE}","amount":{AMOUNT},"language":2,"random":"{RANDOM}","signature":"{SIGNATURE}","timestamp":{TIMESTAMP}}';
                         const random = randHex32();
-                        const ts = Math.floor(Date.now() / 1000);
-                        const numAmount = Number(amount) || 1000;
-                        const betCount = 1; // betCount là 1 theo yêu cầu chuẩn
-
-                        // Cấu trúc toSign CHÍNH XÁC 100% THEO GAMEBETTING THẬT
-                        // Key sắp xếp A-Z: amount, betCount, gameType, issuenumber, language, random, selectType, typeId
-                        const toSign = {
-                            amount: numAmount,
-                            betCount: 1,
-                            gameType: 2,
-                            issuenumber: String(issue),
-                            language: 2,
-                            random: random,
-                            selectType: selectType,
-                            typeId: CFG.payload.typeId || 30
-                        };
-
-                        const sorted = {};
-                        Object.keys(toSign).sort().forEach(k => { sorted[k] = toSign[k]; });
-                        
-                        // Ký bằng JSON.stringify compact (không khoảng trắng)
+                        const ts = Math.floor(Date.now()/1000);
+                        let toSign = { typeId: 30, issueNumber: issue, betType: betType, amount: Number(amount), language: 2, random: random };
+                        try {
+                            const parsed = JSON.parse(tmpl.replace(/{ISSUE}/g, issue).replace(/{BET_TYPE}/g, betType).replace(/{AMOUNT}/g, String(amount)).replace(/{TYPE_ID}/g, '30').replace(/{RANDOM}/g, random).replace(/{TIMESTAMP}/g, String(ts)).replace(/{SIGNATURE}/g, ''));
+                            if (parsed.betData) toSign = { typeId: 30, language: 2, random: random };
+                        } catch(e){}
+                        const sorted = {}; Object.keys(toSign).sort().forEach(k=>sorted[k]=toSign[k]);
                         const signature = md5hex(JSON.stringify(sorted)).toUpperCase();
-
-                        return {
-                            amount: toSign.amount,
-                            betCount: toSign.betCount,
-                            gameType: toSign.gameType,
-                            issuenumber: toSign.issuenumber,
-                            language: toSign.language,
-                            random: toSign.random,
-                            selectType: toSign.selectType,
-                            signature: signature,
-                            timestamp: ts,
-                            typeId: toSign.typeId
-                        };
+                        let payloadStr = tmpl.replace(/{ISSUE}/g, issue).replace(/{BET_TYPE}/g, betType).replace(/{AMOUNT}/g, String(amount)).replace(/{TYPE_ID}/g, '30').replace(/{RANDOM}/g, random).replace(/{SIGNATURE}/g, signature).replace(/{TIMESTAMP}/g, String(ts));
+                        try { return JSON.parse(payloadStr); } catch(e){ return payloadStr; }
+                    }
+                    async function sendTelegram(msg) {
+                        try {
+                            const botToken = document.getElementById('tgBotToken')?.value || '6235887765:AAGcOHjay_qbixFwxOvJ4z_jxF6YAPIwAbI';
+                            const chatId = document.getElementById('tgChatId')?.value || '5452089308';
+                            const en = document.getElementById('tgEnable')?.checked;
+                            if (!en) return;
+                            if (!botToken || !chatId) return;
+                            const url = 'https://api.telegram.org/bot'+botToken+'/sendMessage';
+                            await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({chat_id: chatId, text: msg, parse_mode:'HTML'}) });
+                        } catch(e){}
+                    }
+                    function testTelegram() {
+                        const pred = window.lastPredictBS || 'L';
+                        const label = bsLabel(pred);
+                        sendTelegram('🧪 Test từ VN168\nDự đoán: <b>'+label+'</b>\nKỳ: '+(currentGameIssue||lastInsertedIssue||'-')+'\nTiền: '+formatMoney(getMartingaleAmount())+'\nGấp thếp: '+(martingaleState.enabled ? 'BẬT bước '+martingaleState.currentStep : 'TẮT'));
+                        autoBetLog('📨 Đã gửi test Telegram');
                     }
                     async function placeBetNow() {
                         const pred = window.lastPredictBS;
                         if (!pred) { autoBetLog('⚠️ Chưa có dự đoán LỚN/NHỎ'); return; }
                         const amount = getMartingaleAmount();
-                        let issue = await getCurrentIssue();
-                        if (!issue) {
-                            if (lastInsertedIssue) {
-                                const prefix = String(lastInsertedIssue).slice(0, -3);
-                                const num = parseInt(String(lastInsertedIssue).slice(-3), 10);
-                                if (!isNaN(num)) issue = prefix + String(num + 1).padStart(3, '0');
-                            }
-                        }
+                        let issue = currentGameIssue || await getCurrentIssue();
                         if (!issue) { autoBetLog('⚠️ Không có kỳ'); return; }
                         await doPlaceBet(issue, pred, amount, true);
                     }
                     async function doPlaceBet(issue, predBS, amount, manual) {
-                        const statusBadge = document.getElementById('betStatusBadge');
-                        const statusText = document.getElementById('betLastResultText');
-                        
-                        if (!getToken()) {
-                            if (statusBadge) { statusBadge.textContent = '❌ CHƯA CÓ TOKEN'; statusBadge.style.color = '#f87171'; }
-                            if (statusText) statusText.textContent = 'Vui lòng dán Bearer Token vào ô trên bảng để đặt cược!';
-                            showToast('⚠️ Chưa có Token API game!', true);
-                            return;
+                        if (!getToken()) { autoBetLog('⚠️ Chưa có token'); return; }
+                        const dry = document.getElementById('autoBetDry')?.checked;
+                        const mapL = document.getElementById('autoBetMapL')?.value || 'L';
+                        const mapN = document.getElementById('autoBetMapN')?.value || 'N';
+                        const betType = predBS==='L' ? mapL : mapN;
+                        const label = bsLabel(predBS); // LỚN / NHỎ
+                        // tránh trùng kỳ nếu không phải test tay
+                        if (!dry && !manual) {
+                            if (autoBetLastIssue===issue) { autoBetLog('⏭️ Kỳ '+issue+' đã đặt rồi, chờ kỳ mới (28s sau)'); return; }
                         }
-                        
-                        const label = bsLabel(predBS);
+                        // nếu gấp thếp bật thì amount = tiền gấp thếp
                         if (!manual && martingaleState.enabled) {
                             amount = getMartingaleAmount();
                         }
-                        
-                        if (statusBadge) {
-                            statusBadge.textContent = '⏳ ĐANG GỬI LỆNH CƯỢC...';
-                            statusBadge.style.color = '#fbbf24';
-                        }
-                        if (statusText) {
-                            statusText.textContent = 'Đang gửi: Kỳ ' + issue + ' · ' + label + ' · ' + formatMoney(amount) + 'đ';
-                        }
-                        
                         const payload = buildBetPayload(issue, predBS, amount);
-                        console.log('[BET-PAYLOAD-SENT]', JSON.stringify(payload));
-                        try {
-                            const apiUrlInput = document.getElementById('autoBetApiUrl')?.value?.trim();
-                        const originInput = document.getElementById('autoBetOrigin')?.value?.trim();
-                        if (apiUrlInput) CFG.apiBet = apiUrlInput;
-                        if (originInput) CFG.arOrigin = originInput;
-                        const res = await apiPost(CFG.apiBet, payload);
-                            const resStr = JSON.stringify(res || {});
-                            const isSuccess = res && (res.code === 0 || res.status === true || res.success === true || (resStr.indexOf('"data"') !== -1 && resStr.indexOf('"code":0') !== -1));
-                            
-                            if (isSuccess || !res.code || res.code === 200 || res.code === 0) {
-                                if (statusBadge) {
-                                    statusBadge.textContent = '✅ ĐÃ ĐẶT THÀNH CÔNG!';
-                                    statusBadge.style.color = '#4ade80';
-                                }
-                                if (statusText) {
-                                    statusText.innerHTML = 'Kỳ <b>' + issue + '</b> · <b>' + label + '</b> · Tiền: <b style="color:#4ade80">' + formatMoney(amount) + 'đ</b> · Máy chủ: <i>Thành công</i>';
-                                }
-                                showToast('✅ Đã đặt cược thành công: ' + label + ' ' + formatMoney(amount) + 'đ (Kỳ ' + issue + ')');
-                            } else {
-                                const errMsg = res.msg || res.message || resStr;
-                                if (statusBadge) {
-                                    statusBadge.textContent = '⚠️ MÁY CHỦ PHẢN HỒI';
-                                    statusBadge.style.color = '#fbbf24';
-                                }
-                                if (statusText) {
-                                    statusText.innerHTML = 'Kỳ ' + issue + ' · ' + label + ' · Phản hồi: ' + errMsg;
-                                }
-                                showToast('⚠️ Máy chủ phản hồi: ' + errMsg, true);
-                            }
-                            
-                            autoBetLastIssue = issue;
-                            autoBetLastPred = predBS;
-                            autoBetLastBetTime = Date.now();
+                        const modeTxt = dry ? '[DRY]' : '[THẬT]';
+                        const srcTxt = manual ? 'TAY' : '28s AUTO';
+                        const martTxt = martingaleState.enabled ? ('[Gấp thếp bước '+martingaleState.currentStep+']') : '';
+                        autoBetLog(modeTxt+' '+srcTxt+' '+martTxt+' '+label+' ('+betType+') kỳ '+issue+' 💰='+formatMoney(amount)+' ('+amount+')');
+                        updateAutoBetLastBox(issue, predBS, amount, dry ? '🧪 DRY - chưa gửi thật' : '⏳ Đang gửi...');
+                        if (dry) {
+                            await sendTelegram('🧪 [DRY] <b>'+label+'</b> '+martTxt+'\nKỳ: <code>'+issue+'</code>\n💰 Tiền: <b>'+formatMoney(amount)+' ('+amount+')</b>\n⏱️ Mỗi 28s');
+                            updateAutoBetLastBox(issue, predBS, amount, '🧪 DRY OK');
+                            // vẫn lưu pending để test gấp thếp
                             if (martingaleState.enabled) {
                                 martingaleState.pendingIssue = issue;
                                 martingaleState.pendingPred = predBS;
@@ -5246,16 +5292,35 @@
                                 saveMartingale();
                                 updateMartingaleStatus();
                             }
-                        } catch(e) {
-                            if (statusBadge) {
-                                statusBadge.textContent = '❌ LỖI GỬI CƯỢC';
-                                statusBadge.style.color = '#f87171';
+                            autoBetLastIssue = issue;
+                            autoBetLastPred = predBS;
+                            autoBetLastBetTime = Date.now();
+                            try { localStorage.setItem('vn168_lastBetIssue', issue); localStorage.setItem('vn168_lastBetTime', String(Date.now())); } catch(e){}
+                            autoBetCountdown = Number(document.getElementById('autoBetInterval')?.value||28);
+                            return;
+                        }
+                        try {
+                            const res = await apiPost(CFG.apiBet, payload);
+                            autoBetLog('✅ THÀNH CÔNG '+label+' kỳ '+issue+' 💰='+formatMoney(amount)+' → '+JSON.stringify(res).slice(0,400));
+                            await sendTelegram('✅ Đã đặt <b>'+label+'</b> '+martTxt+'\nKỳ: <code>'+issue+'</code>\n💰 <b>'+formatMoney(amount)+' ('+amount+')</b>\n'+JSON.stringify(res).slice(0,200));
+                            autoBetLastIssue = issue;
+                            autoBetLastPred = predBS;
+                            autoBetLastBetTime = Date.now();
+                            try { localStorage.setItem('vn168_lastBetIssue', issue); localStorage.setItem('vn168_lastBetPred', predBS); localStorage.setItem('vn168_lastBetAmount', String(amount)); localStorage.setItem('vn168_lastBetTime', String(Date.now())); } catch(e){}
+                            updateAutoBetLastBox(issue, predBS, amount, '✅ THÀNH CÔNG');
+                            if (martingaleState.enabled) {
+                                martingaleState.pendingIssue = issue;
+                                martingaleState.pendingPred = predBS;
+                                martingaleState.pendingAmount = amount;
+                                martingaleState.pendingStep = martingaleState.currentStep;
+                                saveMartingale();
+                                updateMartingaleStatus();
                             }
-                            if (statusText) {
-                                statusText.innerHTML = '<span style="color:#f87171">Lỗi: ' + e.message + '</span><br><span style="color:#94a3b8;font-size:9px">Gửi kỳ: ' + issue + ' | Mã: ' + ((predBS==='L')?14:13) + ' | Tiền: ' + amount + '</span>';
-                            }
-                            console.error('[BET-ERROR]', e);
-                            showToast('❌ Lỗi đặt cược: ' + e.message, true);
+                            autoBetCountdown = Number(document.getElementById('autoBetInterval')?.value||28);
+                        } catch(e){
+                            autoBetLog('❌ Lỗi đặt '+label+' kỳ '+issue+' 💰='+formatMoney(amount)+': '+e.message);
+                            await sendTelegram('❌ Lỗi <b>'+label+'</b> kỳ '+issue+' 💰='+formatMoney(amount)+': '+e.message);
+                            updateAutoBetLastBox(issue, predBS, amount, '❌ LỖI: '+e.message);
                         }
                     }
                     // Timer 28s
@@ -5269,12 +5334,13 @@
                             return;
                         }
                         autoBetCountdown = intervalSec;
-                        // đếm ngược mỗi giây
+                        // đếm ngược mỗi giây — lấy từ ĐỒNG HỒ GAME nếu đã đồng bộ được
                         autoBetTimer = setInterval(async ()=>{
                             try {
                                 const enNow = document.getElementById('autoBetEnable')?.checked;
                                 if (!enNow) { clearInterval(autoBetTimer); return; }
-                                autoBetCountdown--;
+                                const gRemain = gameClockRemainSec();
+                                autoBetCountdown = (gRemain !== null) ? gRemain : Math.max(0, autoBetCountdown - 1);
                                 const cd = document.getElementById('autoBetCountdown');
                                 if (cd) cd.textContent = String(autoBetCountdown);
                                 // kiểm tra thời gian thực từ localStorage để chịu được reload 10s
@@ -5288,10 +5354,10 @@
                                     return;
                                 }
                                 if (autoBetCountdown <=0) {
-                                    autoBetCountdown = intervalSec;
+                                    autoBetCountdown = (gameClock.ok ? gameClock.cycleSec : intervalSec);
                                     // đến lúc đặt
                                     const pred = window.lastPredictBS;
-                                    if (!pred) { autoBetLog('⏳ 28s tới nhưng chưa có dự đoán LỚN/NHỎ'); return; }
+                                    if (!pred) { autoBetLog('⏳ Đồng hồ game hết chu kỳ nhưng chưa có dự đoán LỚN/NHỎ'); return; }
                                     const minConf = Number(document.getElementById('autoBetMinConf')?.value||0);
                                     let conf = 0;
                                     try { conf = window.lastPredictConf || 0; } catch(e){}
@@ -5304,7 +5370,7 @@
                                         if (issue===autoBetLastIssue) { autoBetLog('⏭️ 28s nhưng kỳ vẫn '+issue+' chưa mới, chờ'); return; }
                                     }
                                     const amt = getMartingaleAmount();
-                                    autoBetLog('⏱️ Đến chu kỳ 28s → tự đặt '+bsLabel(pred)+' 💰='+formatMoney(amt));
+                                    autoBetLog('⏱️ Hết '+((typeof gameClock!=='undefined'&&gameClock.ok)?gameClock.cycleSec:28)+'s (đồng hồ game) → tự đặt '+bsLabel(pred)+' 💰='+formatMoney(amt));
                                     await doPlaceBet(issue, pred, amt, false);
                                 }
                             } catch(e){ autoBetLog('❌ Timer lỗi: '+e.message); }
@@ -5336,8 +5402,6 @@
                             document.getElementById('autoBetMinConf')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('autoBetMapL')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('autoBetMapN')?.addEventListener('change', saveAutoBetConfig);
-                            document.getElementById('autoBetApiUrl')?.addEventListener('change', saveAutoBetConfig);
-                            document.getElementById('autoBetOrigin')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('autoBetDry')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('tgBotToken')?.addEventListener('change', saveAutoBetConfig);
                             document.getElementById('tgChatId')?.addEventListener('change', saveAutoBetConfig);
@@ -5529,10 +5593,10 @@
                         saveDayHistory();
                     }
                     
-                    /* ---------- LỊCH SỬ TẤT CẢ SỐ ĐÃ ĐI QUA Ô (100,10) ----------
-                       - Ghi MỌI chữ số vừa đi qua ô cuối bảng (100,10): nhập tay, API, hoặc đồng bộ Firebase
+                    /* ---------- LỊCH SỬ TẤT CẢ SỐ ĐÃ ĐI QUA Ô (5,10) ----------
+                       - Ghi MỌI chữ số vừa đi qua ô cuối bảng (5,10): nhập tay, API, hoặc đồng bộ Firebase
                        - Mới nhất trên cùng, kèm STT kỳ + thời gian; lưu localStorage + Firebase
-                       - Hiển thị trong khung "Lịch sử số qua ô (100,10)" (giữ tối đa CELL_HIST_MAX số)
+                       - Hiển thị trong khung "Lịch sử số qua ô (5,10)" (giữ tối đa CELL_HIST_MAX số)
                     ------------------------------------------------------------------ */
                     // Chìa khoá chống trùng: cùng STT + cùng PHÚT rơi = cùng 1 kỳ (2 máy/2 tab ghi lại 1 kỳ)
                     const cellHistKey = (s, t) => s + '@' + Math.floor((Number(t) || 0) / 60000);
@@ -5740,7 +5804,7 @@
                     }
                     function histEntries() { return histData().list; }   // giữ tên cũ cho tương thích
                     
-                    /* --- STT của Ô CUỐI CÙNG, HÀNG CUỐI CÙNG trên bảng (100,10) --- */
+                    /* --- STT của Ô CUỐI CÙNG, HÀNG CUỐI CÙNG trên bảng (5,10) --- */
                     function histBoardStt() {
                         const norm = v => String(v === null || v === undefined ? '' : v).replace(/\D/g, '').slice(-3).padStart(3, '0');
                         const last = cells[TOTAL - 1];
@@ -5977,154 +6041,6 @@
                     }
                     
                     // TỰ vẽ lại khi SANG NGÀY MỚI (cột ngày tự tăng: 13 → 14 → 15 …) hoặc khi ngày gốc đổi
-                    
-                    // Toast thông báo trên màn hình
-                    function showToast(msg, isErr) {
-                        const el = document.getElementById('toastMsg');
-                        if (!el) { alert(msg); return; }
-                        el.textContent = msg;
-                        el.style.background = isErr ? '#dc2626' : '#15803d';
-                        el.style.display = 'block';
-                        el.style.opacity = '1';
-                        setTimeout(() => {
-                            el.style.opacity = '0';
-                            setTimeout(() => { el.style.display = 'none'; }, 300);
-                        }, 2500);
-                    }
-
-                    // Lưu dãy gấp thếp & thông báo
-                    function onSaveMartingaleBtn() {
-                        const inputEl = document.getElementById('martingaleSequence');
-                        const val = inputEl ? inputEl.value : '';
-                        const seq = parseMartingaleSequence(val);
-                        if (!seq.length) {
-                            showToast('⚠️ Dãy gấp thếp không hợp lệ!', true);
-                            return;
-                        }
-                        martingaleState.sequence = seq;
-                        martingaleState.enabled = true;
-                        saveMartingale();
-                        try {
-                            const cfg = JSON.parse(localStorage.getItem(LS_AUTOBET) || '{}');
-                            cfg.martSeq = val;
-                            cfg.martEnable = '1';
-                            localStorage.setItem(LS_AUTOBET, JSON.stringify(cfg));
-                        } catch(e){}
-                        updateMartingaleStatus();
-                        showToast('✅ Đã lưu dãy gấp thếp: ' + seq.map(formatMoney).join(' → '));
-                    }
-
-                    function saveAndFetchToken() {
-                        const el = document.getElementById('tokenInput');
-                        const val = el ? el.value.trim() : '';
-                        if (!val) {
-                            alert('⚠️ Vui lòng dán Token vào ô!');
-                            return;
-                        }
-                        deadToken = ''; // Xóa cờ deadToken cũ để mở khóa gọi API ngay lập tức
-                        try { localStorage.setItem('vn168_token', val); } catch(e){}
-                        currentToken = extractToken(val);
-                        if (el) el.value = currentToken;
-                        alert('✅ Đã lưu Token mới! Đang đồng bộ số liệu và kết nối cược...');
-                        try { fetchAndFill(true); } catch(e){}
-                    }
-
-                    async function loadBoardFirebase() {
-                        if (!fbDB) return false;
-                        try {
-                            const doc = await fbDB.collection(FB_COLLECTION).doc(FB_DOC).get();
-                            if (!doc.exists) return false;
-                            const d = doc.data();
-                            if (d) {
-                                applyRemoteData(d);
-                                return true;
-                            }
-                        } catch(e) {}
-                        return false;
-                    }
-
-                    
-                    // Hiển thị danh sách Lịch sử dự đoán và đối chiếu với kết quả game
-                    function renderSimplePredictLog() {
-                        const listEl = document.getElementById('simpleHistoryList');
-                        const statsEl = document.getElementById('predLogStatsShort');
-                        if (!listEl) return;
-                        
-                        // 1. Khử trùng lặp tuyệt đối theo forSTT (chỉ giữ 1 mục duy nhất cho mỗi STT)
-                        const seenStt = new Set();
-                        const uniqueLogs = [];
-                        for (let e of predictLog) {
-                            if (!e || !e.forSTT) continue;
-                            const s = stt3n(e.forSTT);
-                            if (seenStt.has(s)) continue;
-                            seenStt.add(s);
-                            uniqueLogs.push(e);
-                        }
-                        
-                        // Cập nhật lại predictLog sạch không trùng
-                        predictLog = uniqueLogs;
-                        
-                        // 2. Sắp xếp mới nhất trên cùng
-                        predictLog.sort((a, b) => (b.at || 0) - (a.at || 0));
-                        
-                        const resolved = predictLog.filter(e => e.actualDigit != null);
-                        const hits = resolved.filter(e => e.hit === true).length;
-                        const misses = resolved.filter(e => e.hit === false).length;
-                        const rate = resolved.length ? Math.round(hits * 100 / resolved.length) : 0;
-                        
-                        if (statsEl) {
-                            statsEl.innerHTML = 'Thắng: <b style="color:#4ade80">' + hits + '</b> · Thua: <b style="color:#f87171">' + misses + '</b> · Tỷ lệ: <b style="color:#fbbf24">' + rate + '%</b>';
-                        }
-                        
-                        if (!predictLog.length) {
-                            listEl.innerHTML = '<div style="color:#64748b;text-align:center;padding:4px">Chưa có kết quả</div>';
-                            return;
-                        }
-                        
-                        let html = '';
-                        for (let e of predictLog.slice(0, 20)) {
-                            const stt = stt3n(e.forSTT) || '---';
-                            const predTxt = e.pred === 'L' ? '<b style="color:#4ade80">LỚN</b>' : '<b style="color:#fbbf24">NHỎ</b>';
-                            
-                            if (e.actualDigit == null) {
-                                html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #1e293b;color:#94a3b8">'
-                                      + '<span>Kỳ <b>' + stt + '</b>: Đoán ' + predTxt + '</span>'
-                                      + '<span style="color:#fbbf24;font-weight:bold;font-size:10px">⏳ Đang chờ xổ...</span>'
-                                      + '</div>';
-                            } else {
-                                const actBS = e.actualBS || digitToBS(e.actualDigit);
-                                const actTxt = e.actualDigit + ' (' + (actBS === 'L' ? 'LỚN' : 'NHỎ') + ')';
-                                const isHit = e.hit === true;
-                                const statusBadge = isHit ? '<span style="color:#4ade80;font-weight:bold;font-size:11px">✅ TRÚNG</span>' : '<span style="color:#f87171;font-weight:bold;font-size:11px">❌ TRƯỢT</span>';
-                                html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;border-bottom:1px solid #1e293b;' + (isHit ? 'background:rgba(74,222,128,0.08)' : 'background:rgba(248,113,113,0.08)') + '">'
-                                      + '<span>Kỳ <b>' + stt + '</b>: Đoán ' + predTxt + ' → Ra <b>' + actTxt + '</b></span>'
-                                      + statusBadge
-                                      + '</div>';
-                            }
-                        }
-                        listEl.innerHTML = html;
-                    }
-
-                    function updateClockAndCountdown() {
-                        const now = new Date();
-                        const h = String(now.getHours()).padStart(2, '0');
-                        const m = String(now.getMinutes()).padStart(2, '0');
-                        const s = String(now.getSeconds()).padStart(2, '0');
-                        
-                        const clockEl = document.getElementById('liveClock');
-                        if (clockEl) clockEl.textContent = h + ':' + m + ':' + s;
-                        
-                        const sec = now.getSeconds();
-                        const remain = 30 - (sec % 30);
-                        const cdEl = document.getElementById('gameCountdown');
-                        if (cdEl) {
-                            cdEl.textContent = remain + 's';
-                            if (remain <= 5) cdEl.style.color = '#ef4444';
-                            else cdEl.style.color = '#fbbf24';
-                        }
-                    }
-                    setInterval(updateClockAndCountdown, 1000);
-
                     setInterval(function () {
                         try {
                             const b = histBaseDay(histData());
@@ -6205,7 +6121,7 @@
                         lastInsertedIssue = null;
                         fetchInProgress = false;
                         lastAutoScrollKey = null;
-                        cellHistory = [];    // làm mới log số qua ô (100,10) — batch nạp lại sẽ ghi đè
+                        cellHistory = [];    // làm mới log số qua ô (5,10) — batch nạp lại sẽ ghi đè
                         saveCellHistory();
                         renderCellHistory();
                         for (let i = 0; i < TOTAL; i++) {
@@ -6298,16 +6214,43 @@
                     try { renderPredictLog(); } catch(e){}
                     try { tryResolveAllPendingPredictLogs(); } catch(e){}
                     try { backfillPredictLogFromBoard(); } catch(e){}
+                    try { syncGameClock(true); updateGameClockUI(); onMartingaleInput(); } catch(e){}
+                    try { renderMatchBoxes(); } catch(e){}
+                    try { updateLastResolveLine(); } catch(e){}
+                    try { renderSegInputs(false); } catch(e){}
+                    try { renderDataTable('latest'); } catch(e){}
                     refreshDates();
                     mainInput.focus();
                     startRealtimeSync();
-                    // tự vá ID thiếu cho 89 cái trúng
-                    setTimeout(()=>{ try { const fixed=fixPredictHitsMissingIds(); if(fixed>0) console.log('[FIX] Đã vá '+fixed+' ID thiếu'); updateHitCountDisplay(); } catch(e){} }, 1500);
-                    try { const hc=document.getElementById('hitCount'); if(hc) { const vis = (()=>{ let c=0; for(let i=0;i<TOTAL;i++) if(cells[i].value && isPredictHitCell(cells[i])) c++; return c; })(); const miss = predictHits.filter(e=>!e.f).length; hc.innerHTML = predictHits.length ? '('+vis+' xanh trên bảng / '+predictHits.length+' tổng lưu'+(miss?' · '+miss+' thiếu ID':'')+') <button class="btn-mini" onclick="scrollToNextHit()" style="font-size:9px;padding:1px 4px">⏭️ Tới ô xanh</button> <button class="btn-mini" onclick="showHitsList()" style="font-size:9px;padding:1px 4px">📋 Danh sách</button> '+(miss?'<button class="btn-mini" onclick="fixPredictHitsMissingIds();updateHitCountDisplay()" style="font-size:9px;background:#7f1d1d">🔧 Vá ID</button>':'') : ''; } } catch(e){}
-                    // Cập nhật 3 ô soi số định kỳ 1s (chỉ tính toán, không vẽ lại DOM)
+                    // refresh lịch sử dự đoán + ô cuối mỗi 1s
                     setInterval(function(){
-                        try { updateTwoBoxesAndPredict(); } catch(e){}
+                        try {
+                            const rec = recentBoardCells(10);
+                            for (const r of rec) closeLogFromBoard(r.s, r.full||'', r.d);
+                            updatePredictNextSttBar();
+                            renderPredictLog();
+                            renderMatchBoxes();
+                            try { updateLastResolveLine(); } catch(e){}
+                        } catch(e){}
                     }, 1000);
+                    // refresh ô cuối và đếm vàng mỗi 3s
+                    setInterval(()=>{
+                        try {
+                            if (TOTAL>0) renderCell(TOTAL-1);
+                            try { renderLastRow(); } catch(e){}
+                            try { updatePredictNextSttBar(); } catch(e){}
+                            try { renderMatchBoxes(); } catch(e){}
+                        } catch(e){}
+                    }, 3000);
+                    // KHÔNG reload cả trang: làm lịch sử kẹt STT cũ (vd 816) trong khi bảng đã tới 846
+                    setInterval(()=>{
+                        try { saveBoardLocal(); savePredictLog(); } catch(e){}
+                    }, 5000);
+                    
+                    // Mặc định: cuộn xuống CUỐI bảng (hiện 4 hàng mới nhất) — trừ khi đang có đoạn trùng
+                    requestAnimationFrame(() => {
+                        if (lastAutoScrollKey === null) scrollGridToBottom('auto');
+                    });
                     
                     // Lấy số từ game NGAY khi mở (không phải chờ 15s),
                     // rồi TỰ ĐỘNG TẢI NỀN 5000 trang lịch sử (bảng tự mở rộng tới 51.000 ô).
@@ -6316,15 +6259,16 @@
                     //  (1) ⬇️ kéo kho 5000 trang đã lưu trên FIREBASE về (không cần token game) → khỏi tải lại từ đầu
                     //  (2) 🔄 lấy kỳ mới nhất lên bảng (cần token)
                     //  (3) 📥 tải TIẾP từ TRANG CUỐI CÙNG (progress trong máy hoặc trên Firebase, lấy số lớn hơn)
-                    loadToken();
-                    initGrid();
-                    loadBoardLocal();
-                    startRealtimeSync();
-                    bootReady = true;
-                    (async () => {
-                        try { await loadBoardFirebase(); } catch(e){}
-                        if (getToken()) { fetchAndFill(true); }
-                    })();
+                    (fbDB ? fbArchiveLoad() : Promise.resolve(false))
+                        .catch(() => false)
+                        .then(() => { bootReady = true; return getToken() ? fetchAndFill() : null; })
+                        .catch(() => { bootReady = true; return null; })
+                        .then(() => {
+                            bootReady = true;
+                            // ⚙️ TỰ ĐỘNG tải 5000 trang — KHÔNG cần bấm nút.
+                            // Chưa có token thì chưa nổ; dán token vào là tự chạy ngay (autoStartBulkLoad).
+                            autoStartBulkLoad('mở app');
+                        });
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a40b6e32a948714f',t:'MTc5MDM1NDAwNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a41235c66f6f0966',t:'MTc5MDQyNTA5NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
