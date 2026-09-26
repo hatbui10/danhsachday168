@@ -477,7 +477,7 @@
             /* kết quả: 5 ô số liền nhau */
             .dt-boxes { display:flex; gap:4px; }
             .dt-box { display:inline-flex; align-items:center; justify-content:center;
-                      width:27px; height:27px; border-radius:5px; font-weight:bold; font-size:15px;
+                      width:24px; height:24px; border-radius:4px; font-weight:bold; font-size:13px;
                       border:1px solid #334155; background:#0f172a; color:#94a3b8; }
             .dt-box.hit  { background:#4a1942; color:#f0abfc; border-color:#d946ef; }
             .dt-box.rest { background:#052e16; color:#4ade80; border-color:#22c55e; }
@@ -648,7 +648,7 @@
                         <button class="btn-mini" onclick="exportDataTable()">📤 Xuất bảng</button>
                     </div>
 
-                    <!-- 🔎 Ô NHẬP (2-6 ô) + 3 số cuối để tra -->
+                    <!-- 🔎 Ô NHẬP (2-6 ô) + 5 số phía sau để tra -->
                     <div style="background:#0b1220;border:1px solid #4c1d95;border-radius:8px;padding:6px 8px;margin-bottom:6px">
                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">
                             <label style="font-size:11px;color:#e9d5ff;font-weight:bold">Số ô nhập:</label>
@@ -659,7 +659,7 @@
                                 <option value="5">5 ô</option>
                                 <option value="6">6 ô</option>
                             </select>
-                            <span id="segLenInfo" style="font-size:10px;color:#94a3b8">→ đoạn 5 số (2 số đầu nhập + 3 số cuối tra)</span>
+                            <span id="segLenInfo" style="font-size:10px;color:#94a3b8">→ đoạn 7 số (2 số đầu nhập + 5 số phía sau)</span>
                         </div>
                         <div style="font-size:11px;color:#e9d5ff;font-weight:bold;margin-bottom:4px">🔎 Nhập các số đầu:</div>
                         <div id="segInputs" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></div>
@@ -3119,8 +3119,8 @@
                             + (dataTableSeg ? (' · đang xem đoạn ' + dataTableSeg.prefix.join('')) : ' · nhập số để tra đoạn.'));
                     }
                     // Tìm mọi đoạn 5 số liên tiếp có 2 số đầu = d1, d2 (trả về mới nhất trước)
-                    /* ===== SỐ Ô NHẬP: 2..6 (mỗi ô 1 chữ số 0-9), đoạn = (số ô) + 3 số cuối ===== */
-                    const SEG_TAIL = 3;
+                    /* ===== SỐ Ô NHẬP: 2..6 (mỗi ô 1 chữ số 0-9), đoạn = (số ô) + 5 số phía sau ===== */
+                    const SEG_TAIL = 5;   // hiện 5 số phía sau phần nhập
                     function segPrefixLen() {
                         const el = document.getElementById('segLen');
                         let n = parseInt(el && el.value, 10);
@@ -3237,14 +3237,20 @@
                             const total = n + SEG_TAIL;
                             const key = prefix.join('');
                             const segs = findSegments(prefix);
-                            // thống kê 3 số cuối (phần tra)
-                            const stat = [{}, {}, {}];
+                            // thống kê 5 số phía sau phần nhập
+                            const stat = [];
+                            for (let t = 0; t < SEG_TAIL; t++) stat.push({});
                             for (const s of segs) {
-                                stat[0][s.digits[n]] = (stat[0][s.digits[n]] || 0) + 1;
-                                stat[1][s.digits[n + 1]] = (stat[1][s.digits[n + 1]] || 0) + 1;
-                                stat[2][s.digits[n + 2]] = (stat[2][s.digits[n + 2]] || 0) + 1;
+                                for (let t = 0; t < SEG_TAIL; t++) {
+                                    const dg = s.digits[n + t];
+                                    stat[t][dg] = (stat[t][dg] || 0) + 1;
+                                }
                             }
                             const topOf = o => Object.keys(o).sort((x, y) => o[y] - o[x]).slice(0, 3);
+                            let statLine = '';
+                            for (let t = 0; t < SEG_TAIL; t++) {
+                                statLine += ' · số thứ ' + (n + t + 1) + ': <b class="dt-rest">' + (topOf(stat[t]).join(', ') || '-') + '</b>';
+                            }
                             if (info) {
                                 info.style.color = segs.length ? '#4ade80' : '#f87171';
                                 info.textContent = segs.length
@@ -3257,8 +3263,7 @@
                             } else {
                                 html += '<div class="dt-sum">Có <b>' + segs.length + '</b> đoạn bắt đầu bằng <b>' + key + '</b>'
                                     + ' · số thứ ' + (n + 1) + ' hay ra: <b class="dt-rest">' + (topOf(stat[0]).join(', ') || '-') + '</b>'
-                                    + ' · thứ ' + (n + 2) + ': <b class="dt-rest">' + (topOf(stat[1]).join(', ') || '-') + '</b>'
-                                    + ' · thứ ' + (n + 3) + ': <b class="dt-rest">' + (topOf(stat[2]).join(', ') || '-') + '</b></div>';
+                                    + statLine + '</div>';
                                 const LIMIT = 500;
                                 for (let i = 0; i < segs.length && i < LIMIT; i++) {
                                     const s = segs[i];
@@ -6271,4 +6276,4 @@
                         });
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a41235c66f6f0966',t:'MTc5MDQyNTA5NA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4123f1acbeb9840',t:'MTc5MDQyNTQ3Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
