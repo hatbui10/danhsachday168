@@ -665,9 +665,10 @@
                         <div id="segInputs" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></div>
                         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px">
                             <button class="btn-mini" onclick="findSegmentsFromInput()" style="background:#4a1942;border-color:#d946ef;font-weight:bold">🔎 Tìm đoạn</button>
+                            <button class="btn-mini" onclick="segTakeLast()" style="background:#065f46;border-color:#34d399;font-weight:bold">🧾 Lấy số</button>
                             <button class="btn-mini" onclick="clearSegInput()">✖ Xoá</button>
                         </div>
-                        <div id="segInfo" style="font-size:10px;color:#94a3b8;margin-top:4px">Nhập các số (0-9) — nhập xong ô cuối là hiện kết quả.</div>
+                        <div id="segInfo" style="font-size:10px;color:#94a3b8;margin-top:4px">Chọn số ô nhập hoặc bấm "🧾 Lấy số" — các số cuối cùng trong kho sẽ tự điền và hiện kết quả.</div>
                     </div>
 
                     <div id="dataTableBody" style="max-height:340px;overflow-y:auto;background:#0d0d0d;border:1px solid #2a2a4a;border-radius:4px;font-family:monospace;font-size:11px"></div>
@@ -3158,13 +3159,37 @@
                         const hdr = document.querySelector('#dataTablePanel .ch-head span');
                         if (hdr) hdr.textContent = '📋 Tra đoạn ' + segTotalLen() + ' số trong kho';
                     }
+                    // Lấy N số cuối cùng trong kho điền vào các ô nhập -> hiện kết quả luôn
+                    function segTakeLast() {
+                        const info = document.getElementById('segInfo');
+                        const n = segPrefixLen();
+                        const arr = gameArchive.filter(function (e) { return /^[0-9]$/.test(String(e.d)); });
+                        if (!arr.length || arr.length < n) {
+                            dataTableSeg = null;
+                            renderDataTable('latest');
+                            if (info) {
+                                info.style.color = '#f87171';
+                                info.textContent = '⚠️ Kho chưa đủ ' + n + ' kỳ để lấy số — bấm "⬇️ Tải 100 trang" trước.';
+                            }
+                            return false;
+                        }
+                        const ids = segInputIds();
+                        for (let i = 0; i < n; i++) {
+                            const e = document.getElementById(ids[i]);
+                            if (e) e.value = String(arr[i].d);
+                        }
+                        findSegmentsFromInput();
+                        return true;
+                    }
                     function onSegLenChange() {
                         try {
                             renderSegInputs(false);
                             dataTableSeg = null;
-                            renderDataTable('latest');
-                            const first = document.getElementById('segD1');
-                            if (first) { try { first.focus(); } catch (e) {} }
+                            // chọn xong số ô -> tự lấy các số cuối cùng trong bảng -> hiện kết quả, khỏi nhập tay
+                            if (!segTakeLast()) {
+                                const first = document.getElementById('segD1');
+                                if (first) { try { first.focus(); } catch (e) {} }
+                            }
                         } catch (e) {}
                     }
                     // Tìm mọi đoạn (n+3) số liền nhau có n số đầu đúng như nhập (mới nhất trước)
@@ -6276,4 +6301,4 @@
                         });
                 </script>
    
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a4123f1acbeb9840',t:'MTc5MDQyNTQ3Ng=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></html>
+</html>
